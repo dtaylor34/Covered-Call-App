@@ -1,0 +1,162 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# CURSOR RULES — Covered Calls Manager
+# ═══════════════════════════════════════════════════════════════════════════════
+# Cursor reads this file AUTOMATICALLY on every interaction.
+# It enforces that the AI always checks project docs before touching code.
+# ═══════════════════════════════════════════════════════════════════════════════
+
+## ⛔ MANDATORY — DO THIS BEFORE ANY CODE CHANGE
+
+You are working on the Covered Calls Manager application.
+Before writing, modifying, deleting, or suggesting ANY code, you MUST:
+
+1. **Read `docs/PRD.md`** — This is the single source of truth for all features,
+   architecture, data model, roles, and requirements. Never contradict it.
+   If the user requests something that conflicts with the PRD, flag the conflict
+   and ask if they want to update the PRD first.
+
+2. **Read `docs/CHANGELOG.md`** — Check the current version and what has been
+   built. Do not re-implement existing features. Do not break them.
+
+3. **Read `docs/DEPLOYMENT.md`** — Understand the release process. All changes
+   must follow the versioned deploy strategy. Never suggest raw `firebase deploy`.
+
+If ANY of these files are missing or empty, STOP and tell the developer.
+
+---
+
+## Project Identity
+
+- **App:** Covered Calls Manager
+- **Type:** Educational paper-trading web app
+- **Stack:** React 18 + Vite + Firebase (Auth, Firestore, Hosting, Functions) + Stripe
+- **Hosting:** Firebase Hosting with versioned releases and instant rollback
+- **IDE:** Cursor with enforced PRD compliance
+- **Users receive updates:** Instantly on next page load (no app store, no downloads)
+
+---
+
+## How Updates Work
+
+This is a web application hosted on Firebase Hosting. When code is deployed:
+- The new version goes live immediately at the production URL
+- All users get the update on their next page load or refresh
+- There is NO app store review, no user-side update button, no download
+- Firebase Hosting keeps a history of every deployment
+- Any previous version can be restored in under 60 seconds via rollback script
+- Preview channels let you test a build at a temporary URL before going live
+
+**The deploy/rollback process is documented in `docs/DEPLOYMENT.md`.**
+**Never bypass it.**
+
+---
+
+## Code Change Protocol
+
+### Before You Write Code:
+1. Read PRD.md — identify which section this change relates to
+2. Read CHANGELOG.md — confirm the current version
+3. Determine version bump type:
+   - **PATCH** (x.x.1) — bug fix, copy change, style tweak
+   - **MINOR** (x.1.0) — new feature, new component, new admin capability
+   - **MAJOR** (1.0.0) — breaking schema change, major redesign, new platform
+
+### While Writing Code:
+- Import `{ T }` from theme.js for all style values — no hardcoded colors
+- Auth logic goes through AuthContext.jsx — never bypass it
+- Firestore writes in admin go through AdminPanel.jsx
+- New features get their own component file — don't bloat existing files
+- All components are inline-styled React (no CSS files)
+
+### After Writing Code:
+1. Add a CHANGELOG entry with the new version number
+2. Describe what changed, what was added, what was fixed
+3. Note any Firestore schema additions (new fields are safe, renames are not)
+4. If the PRD needs updating (new feature, changed requirement), update it
+5. Remind the developer to test with emulators before deploying
+
+---
+
+## Architecture Rules — Do Not Violate
+
+### File Responsibilities (Single Source of Truth)
+| File | Owns | Never Put Here |
+|------|------|---------------|
+| `firebase.js` | Firebase config + emulator detection | Business logic |
+| `theme.js` | Design tokens + role definitions + permissions | Component code |
+| `App.jsx` | Route definitions + protection wrappers | Business logic, UI |
+| `AuthContext.jsx` | All auth state, login, signup, logout, role, trial | UI components |
+| `AdminPanel.jsx` | All admin Firestore reads/writes | User-facing features |
+| `Dashboard.jsx` | Main app wrapper + trial banner | Admin features |
+
+### Firestore Schema Discipline
+The schema is documented in PRD.md Section 5. These rules are absolute:
+- ✅ **Adding new fields** to existing documents — always safe
+- ⛔ **Renaming fields** — NEVER (breaks existing user data)
+- ⛔ **Removing fields** — NEVER without a migration in `scripts/migrations/`
+- ⛔ **Changing field types** — NEVER without a migration
+- ✅ **Adding new collections** — safe, document in PRD
+
+### Security Rules
+- No API keys or secrets in frontend code
+- All payment operations happen in Cloud Functions
+- Firestore rules enforce role-based access server-side
+
+---
+
+## Forbidden Actions
+
+- ⛔ Do NOT suggest `firebase deploy` directly — use `scripts/deploy.sh`
+- ⛔ Do NOT remove or weaken the trial system or paywall
+- ⛔ Do NOT change the role hierarchy (owner > admin > moderator > user)
+- ⛔ Do NOT put Stripe/Slack secrets in frontend code
+- ⛔ Do NOT rename or remove Firestore fields without a migration
+- ⛔ Do NOT modify firebase.js unless changing project config
+- ⛔ Do NOT modify firestore.rules without updating PRD Section 7
+- ⛔ Do NOT skip the preview channel step before production deploy
+- ⛔ Do NOT create code that only works in one environment (local vs prod)
+
+---
+
+## Response Format for Code Changes
+
+Every response that includes code changes MUST follow this structure:
+
+```
+## Change Summary
+- **PRD Section:** (which section this relates to)
+- **Current Version:** (from CHANGELOG.md)
+- **New Version:** (proposed bump)
+- **Type:** PATCH | MINOR | MAJOR
+- **Schema Changes:** None | Added field X to collection Y
+
+## What Changed
+(description)
+
+## Code
+(the actual changes)
+
+## CHANGELOG Entry
+(ready to paste into CHANGELOG.md)
+
+## Deploy Steps
+1. Test locally with emulators
+2. Preview: bash scripts/preview.sh
+3. Verify at preview URL
+4. Deploy: bash scripts/deploy.sh
+```
+
+---
+
+## Quick Reference
+
+| Task | Command |
+|------|---------|
+| Start local dev | `npm run dev` + `firebase emulators:start` |
+| Run both at once | `npm run dev:full` |
+| Preview a build | `bash scripts/preview.sh` |
+| Deploy to production | `bash scripts/deploy.sh` |
+| Rollback to previous | `bash scripts/rollback.sh` |
+| Rollback to specific | `bash scripts/rollback.sh v1.2.0` |
+| View deploy history | `firebase hosting:channel:list` |
+| View emulator data | http://localhost:4000 |
