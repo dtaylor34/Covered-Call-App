@@ -9,7 +9,8 @@ import {
 } from "firebase/firestore";
 import { db } from "../firebase";
 import { useAuth } from "../contexts/AuthContext";
-import { T, ROLES, hasPermission, STATUS_STYLES } from "../theme";
+import { ROLES, hasPermission, STATUS_STYLES } from "../theme";
+import { useTheme } from "../contexts/ThemeContext";
 import AdminAnalytics from "../components/AdminAnalytics";
 
 // ── Helpers ──
@@ -24,21 +25,25 @@ const trialLeft = (ts) => Math.max(0, Math.ceil(7 - (Date.now() - new Date(ts).g
 
 // ── Small reusable components ──
 function Pill({ label, color, bg }) {
+  const { T } = useTheme();
   return <span style={{ display: "inline-block", padding: "3px 10px", borderRadius: 5, background: bg, color, fontSize: 10, fontWeight: 700, fontFamily: T.fontMono, letterSpacing: 0.8 }}>{label}</span>;
 }
 
 function Btn({ children, onClick, disabled, variant = "accent", style: xs }) {
+  const { T } = useTheme();
   const [h, setH] = useState(false);
   const v = { accent: { bg: T.accent, c: "#06090f", hbg: "#00e8bb" }, outline: { bg: "transparent", c: T.accent, hbg: T.accentDim, bdr: T.accent }, pro: { bg: T.pro, c: "#fff", hbg: "#6366f1" }, warn: { bg: T.warn, c: "#fff", hbg: "#d97706" }, danger: { bg: T.danger, c: "#fff", hbg: "#dc2626" }, ghost: { bg: "transparent", c: T.textDim, hbg: "rgba(255,255,255,0.04)" } }[variant];
   return <button onClick={onClick} disabled={disabled} onMouseEnter={() => setH(true)} onMouseLeave={() => setH(false)} style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6, padding: "10px 20px", borderRadius: T.r, background: h ? v.hbg : v.bg, color: v.c, border: v.bdr ? `1px solid ${v.bdr}` : "none", fontSize: 13, fontWeight: 700, fontFamily: T.fontBody, cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.4 : 1, transition: "all 0.15s", ...xs }}>{children}</button>;
 }
 
 function SmallBtn({ label, color, onClick }) {
+  const { T } = useTheme();
   const [h, setH] = useState(false);
   return <button onClick={onClick} onMouseEnter={() => setH(true)} onMouseLeave={() => setH(false)} style={{ padding: "5px 12px", borderRadius: 5, background: h ? `${color}20` : "rgba(255,255,255,0.02)", border: `1px solid ${h ? `${color}40` : T.border}`, color: h ? color : T.textDim, fontSize: 10, fontWeight: 600, fontFamily: T.fontBody, cursor: "pointer", transition: "all 0.12s", whiteSpace: "nowrap" }}>{label}</button>;
 }
 
 function Modal({ open, onClose, title, children }) {
+  const { T } = useTheme();
   if (!open) return null;
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.75)", backdropFilter: "blur(8px)" }} onClick={onClose}>
@@ -54,6 +59,7 @@ function Modal({ open, onClose, title, children }) {
 }
 
 function StatCard({ label, value, sub, color, icon }) {
+  const { T } = useTheme();
   return (
     <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rL, padding: "18px 20px", flex: 1, minWidth: 140 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
@@ -70,6 +76,7 @@ function StatCard({ label, value, sub, color, icon }) {
 // MAIN ADMIN PANEL
 // ═════════════════════════════════════════════════════════════════════════════
 export default function AdminPanel() {
+  const { T } = useTheme();
   const { role, email: adminEmail, uid: adminUid, name: adminName, logout } = useAuth();
   const [view, setView] = useState("dashboard");
   const [users, setUsers] = useState([]);

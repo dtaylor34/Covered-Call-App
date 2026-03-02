@@ -24,9 +24,10 @@ import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { AnalyticsEvents } from "../services/analytics";
-import { T } from "../theme";
+import { useTheme } from "../contexts/ThemeContext";
 
 export default function SearchHistory() {
+  const { T } = useTheme();
   const {
     searchHistory,
     deleteFromSearchHistory,
@@ -354,6 +355,7 @@ export default function SearchHistory() {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function HistoryRow({ entry, isChecked, onToggleCheck, onDelete, onOpen, formatTime, formatFullDate, deleting, isLast }) {
+  const { T } = useTheme();
   const [hovered, setHovered] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
@@ -552,6 +554,7 @@ function HistoryRow({ entry, isChecked, onToggleCheck, onDelete, onOpen, formatT
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function Checkbox({ checked, indeterminate, onChange }) {
+  const { T } = useTheme();
   const borderColor = checked || indeterminate ? T.accent : "rgba(255,255,255,0.15)";
   const bgColor = checked ? T.accent : indeterminate ? T.accent : "transparent";
 

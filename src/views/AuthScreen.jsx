@@ -6,9 +6,10 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { AnalyticsEvents, analytics } from "../services/analytics";
-import { T } from "../theme";
+import { useTheme } from "../contexts/ThemeContext";
 
 export default function AuthScreen() {
+  const { T } = useTheme();
   const [mode, setMode] = useState("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");

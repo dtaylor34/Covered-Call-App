@@ -16,6 +16,7 @@ import {
   doc, getDoc, setDoc, updateDoc,
 } from "firebase/firestore";
 import { auth, db, googleProvider, appleProvider } from "../firebase";
+import { useTheme } from "./ThemeContext";
 
 const AuthContext = createContext(null);
 
@@ -45,10 +46,18 @@ function getTrialInfo(trialStartISO) {
 }
 
 export function AuthProvider({ children }) {
+  const { setTheme } = useTheme();
   const [user, setUser] = useState(null);
   const [userData, setUserData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+
+  // ── Sync Firestore theme to ThemeContext on login (cross-device) ──
+  useEffect(() => {
+    if (userData?.theme) {
+      setTheme(userData.theme);
+    }
+  }, [userData?.theme, setTheme]);
 
   // ── Listen for auth state changes ──
   useEffect(() => {
@@ -99,6 +108,8 @@ export function AuthProvider({ children }) {
       notifyEducation: true,
       promoCode: null,
       promoAppliedAt: null,
+      plan: "basic",
+      theme: "dark",
       searchHistory: [],
       watchlist: [],
     };
@@ -306,12 +317,56 @@ export function AuthProvider({ children }) {
     }
   }, [user]);
 
+  // ── Update plan tier ──
+  const updatePlan = useCallback(async (plan) => {
+    if (!user) return;
+    try {
+      const userRef = doc(db, "users", user.uid);
+      await updateDoc(userRef, { plan });
+      setUserData((prev) => prev ? { ...prev, plan } : prev);
+    } catch (err) {
+      console.warn("Plan update failed:", err.message);
+    }
+  }, [user]);
+
+  // ── Update theme preference (syncs to Firestore for cross-device) ──
+  const updateUserTheme = useCallback(async (theme) => {
+    if (!user) return;
+    try {
+      const userRef = doc(db, "users", user.uid);
+      await updateDoc(userRef, { theme });
+      setUserData((prev) => prev ? { ...prev, theme } : prev);
+    } catch (err) {
+      console.warn("Theme update failed:", err.message);
+    }
+  }, [user]);
+
+  // ── Update profile fields ──
+  const updateProfile = useCallback(async (fields) => {
+    if (!user) return;
+    try {
+      const userRef = doc(db, "users", user.uid);
+      const safeFields = {};
+      const allowed = ["name", "experienceLevel", "investmentGoal", "portfolioSize",
+        "newsletterOptIn", "updateFrequency", "notifyNewFeatures", "notifyMarketAlerts", "notifyEducation"];
+      for (const key of allowed) {
+        if (fields[key] !== undefined) safeFields[key] = fields[key];
+      }
+      if (Object.keys(safeFields).length === 0) return;
+      await updateDoc(userRef, safeFields);
+      setUserData((prev) => prev ? { ...prev, ...safeFields } : prev);
+    } catch (err) {
+      console.warn("Profile update failed:", err.message);
+    }
+  }, [user]);
+
   // ── Derived state ──
   const role = userData?.role || null;
   const isAdmin = role === "owner" || role === "admin" || role === "moderator";
   const isOwner = role === "owner";
   const trialInfo = getTrialInfo(userData?.trialStart);
   const subscriptionStatus = userData?.subscriptionStatus || "trial";
+  const plan = userData?.plan || "basic";
 
   // Check if user has a free-access promo code
   const hasFreeAccessCode = FREE_ACCESS_CODES.includes(
@@ -326,10 +381,11 @@ export function AuthProvider({ children }) {
   const value = {
     user, userData, loading, error,
     signup, login, signInWithGoogle, signInWithApple, logout, refreshUserData, setError,
-    addToSearchHistory, updateSearchHistoryEntry, deleteFromSearchHistory, clearSearchHistory, updateWatchlist,
+    addToSearchHistory, updateSearchHistoryEntry, deleteFromSearchHistory, clearSearchHistory,
+    updateWatchlist, updatePlan, updateUserTheme, updateProfile,
     searchHistory: userData?.searchHistory || [],
     watchlist: userData?.watchlist || [],
-    role, isAdmin, isOwner, trialInfo,
+    role, isAdmin, isOwner, trialInfo, plan,
     subscriptionStatus, isTrialExpired, hasAccess, hasFreeAccessCode, onboardingComplete,
     uid: user?.uid || null,
     email: user?.email || null,

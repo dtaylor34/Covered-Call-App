@@ -5,9 +5,10 @@
 import { useState } from "react";
 import { useAuth } from "../contexts/AuthContext";
 import { getFunctions, httpsCallable } from "firebase/functions";
-import { T } from "../theme";
+import { useTheme } from "../contexts/ThemeContext";
 
 export default function PaywallScreen() {
+  const { T } = useTheme();
   const { email, logout, trialInfo, subscriptionStatus } = useAuth();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);

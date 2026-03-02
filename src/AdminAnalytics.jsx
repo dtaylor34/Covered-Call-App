@@ -603,6 +603,7 @@ function UsersTab({ stats }) {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function StreamTab({ events }) {
+  const { T } = useTheme();
   const recent = events.slice(0, 100);
 
   const typeStyles = {
@@ -684,6 +685,7 @@ function StreamTab({ events }) {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function MiniStat({ label, value, icon, color }) {
+  const { T } = useTheme();
   return (
     <div style={{
       background: T.card, border: `1px solid ${T.border}`, borderRadius: T.r,
@@ -703,6 +705,7 @@ function MiniStat({ label, value, icon, color }) {
 }
 
 function HeaderCell({ children, align }) {
+  const { T } = useTheme();
   return (
     <span style={{
       fontSize: 10, fontWeight: 700, letterSpacing: 1,
@@ -715,6 +718,7 @@ function HeaderCell({ children, align }) {
 }
 
 function Row({ label, value, color }) {
+  const { T } = useTheme();
   return (
     <div style={{ display: "flex", justifyContent: "space-between", padding: "2px 0" }}>
       <span style={{ color: T.textDim }}>{label}</span>
@@ -724,6 +728,7 @@ function Row({ label, value, color }) {
 }
 
 function RankedList({ items, emptyMessage, color }) {
+  const { T } = useTheme();
   if (items.length === 0) {
     return <div style={{ fontSize: 12, color: T.textMuted, padding: "8px 0" }}>{emptyMessage}</div>;
   }
@@ -754,6 +759,7 @@ function RankedList({ items, emptyMessage, color }) {
 }
 
 function BarChart({ data }) {
+  const { T } = useTheme();
   if (data.length === 0) return null;
   const max = Math.max(...data.map((d) => d.value), 1);
   const barWidth = Math.max(12, Math.min(40, Math.floor(600 / data.length)));

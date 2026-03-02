@@ -14,10 +14,28 @@ Format follows [Semantic Versioning](https://semver.org/):
 ## [Unreleased]
 _Changes that are ready but not yet deployed._
 
+---
+
+## [2.0.0] — 2026-03-02
+
+### Added
+- **Theme system:** ThemeContext, theme refactor (docs/THEME_REFACTOR_README.md), shared design tokens
+- **Dashboard tabs:** Glossary, Profile, Risk, Setup, Transactions, Working tabs; NewTabPreview component
+- **Hooks:** useFeatureAccess, usePersistedState for feature gating and persisted UI state
+- **Docs:** UPGRADE_README.md for upgrade flow and messaging
+
+### Changed
+- AuthScreen, PaywallScreen, OnboardingScreen, Dashboard — layout and copy updates
+- AdminPanel, AdminAnalytics, CoveredCallsDashboard, SearchHistory — theme and structure
+- main.jsx — ThemeProvider wiring; theme.js — token updates
+
 ### Fixed
-- **Firestore rules:** `getUserRole()` now handles missing user docs (e.g. new auth before Firestore doc exists); uses `exists(path)` before `get(path)` to avoid permission-denied on read.
-- **Emulator config:** App uses emulators only when `VITE_USE_EMULATORS=true` (no localhost auto-detect); `.env.local` no longer overrides `.env` with placeholder values or emulator flag, so production Firebase is used by default on localhost.
-- **firebase.js:** Comment added explaining the harmless Auth iframe "Could not connect" message when using production Auth from localhost.
+- **Firestore rules:** `getUserRole()` handles missing user docs (exists before get)
+- **Emulator config:** Emulators only when `VITE_USE_EMULATORS=true`; `.env.local` no longer overrides production config
+- **firebase.js:** Comment for Auth iframe "Could not connect" in dev
+
+### Deploy Notes
+- MAJOR version: theme and layout changes; test onboarding and paywall flows after deploy.
 
 ---
 
@@ -108,6 +126,8 @@ auditLog/{auto-id}: action, performedBy{uid,email,role},
 
 | Version | Date       | Type  | Summary                              |
 |---------|------------|-------|--------------------------------------|
+| 2.0.0   | 2026-03-02 | MAJOR | Theme refactor, new tabs, OAuth, FAMILY34, upgrade flow |
+| 1.1.0   | 2026-03-01 | MINOR | Mobile layout, Google/Apple auth, FAMILY34, smart paywall |
 | 1.0.0   | 2026-02-27 | MAJOR | Initial release: auth, trial, admin  |
 
 ---

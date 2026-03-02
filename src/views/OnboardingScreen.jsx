@@ -15,7 +15,7 @@ import { doc, updateDoc, getDoc } from "firebase/firestore";
 import { db } from "../firebase";
 import { useAuth } from "../contexts/AuthContext";
 import { AnalyticsEvents, analytics } from "../services/analytics";
-import { T } from "../theme";
+import { useTheme } from "../contexts/ThemeContext";
 
 const STEPS = [
   { key: "profile", label: "Your Profile", icon: "👤" },
@@ -24,6 +24,7 @@ const STEPS = [
 ];
 
 export default function OnboardingScreen() {
+  const { T } = useTheme();
   const { user, email, refreshUserData } = useAuth();
   const navigate = useNavigate();
   const [step, setStep] = useState(0);
@@ -296,6 +297,7 @@ export default function OnboardingScreen() {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function StepProfile({ profile, setProfile }) {
+  const { T } = useTheme();
   const update = (key, val) => setProfile((p) => ({ ...p, [key]: val }));
 
   return (
@@ -314,7 +316,7 @@ function StepProfile({ profile, setProfile }) {
         onChange={(e) => update("displayName", e.target.value)}
         placeholder="Full name"
         maxLength={60}
-        style={inputStyle()}
+        style={inputStyle(T)}
       />
 
       {/* Experience Level */}
@@ -360,7 +362,7 @@ function StepProfile({ profile, setProfile }) {
       <select
         value={profile.portfolioSize}
         onChange={(e) => update("portfolioSize", e.target.value)}
-        style={{ ...inputStyle(), cursor: "pointer" }}
+        style={{ ...inputStyle(T), cursor: "pointer" }}
       >
         <option value="">Prefer not to say</option>
         <option value="under10k">Under $10,000</option>
@@ -378,6 +380,7 @@ function StepProfile({ profile, setProfile }) {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function StepPreferences({ preferences, setPreferences }) {
+  const { T } = useTheme();
   const toggle = (key) => setPreferences((p) => ({ ...p, [key]: !p[key] }));
   const update = (key, val) => setPreferences((p) => ({ ...p, [key]: val }));
 
@@ -457,6 +460,7 @@ function StepPreferences({ preferences, setPreferences }) {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function StepPromo({ promoCode, setPromoCode, applyPromo, promoError, promoSuccess, profile, preferences }) {
+  const { T } = useTheme();
   return (
     <div>
       <h2 style={{ fontSize: 18, fontWeight: 700, color: T.text, fontFamily: T.fontDisplay, marginBottom: 4 }}>
@@ -474,7 +478,7 @@ function StepPromo({ promoCode, setPromoCode, applyPromo, promoError, promoSucce
           onChange={(e) => setPromoCode(e.target.value.toUpperCase())}
           placeholder="e.g. LAUNCH50"
           maxLength={20}
-          style={{ ...inputStyle(), flex: 1, fontFamily: T.fontMono, letterSpacing: 1 }}
+          style={{ ...inputStyle(T), flex: 1, fontFamily: T.fontMono, letterSpacing: 1 }}
         />
         <button
           onClick={applyPromo}
@@ -539,6 +543,7 @@ function StepPromo({ promoCode, setPromoCode, applyPromo, promoError, promoSucce
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function FieldLabel({ children, style = {} }) {
+  const { T } = useTheme();
   return (
     <label style={{
       display: "block", fontSize: 11, fontWeight: 600, letterSpacing: 0.8,
@@ -551,6 +556,7 @@ function FieldLabel({ children, style = {} }) {
 }
 
 function SelectCard({ selected, onClick, label, desc }) {
+  const { T } = useTheme();
   return (
     <button onClick={onClick} style={{
       padding: "12px 14px", borderRadius: T.r, textAlign: "left",
@@ -565,6 +571,7 @@ function SelectCard({ selected, onClick, label, desc }) {
 }
 
 function ToggleRow({ checked, onChange, label, desc }) {
+  const { T } = useTheme();
   return (
     <div
       onClick={onChange}
@@ -596,6 +603,7 @@ function ToggleRow({ checked, onChange, label, desc }) {
 }
 
 function SummaryRow({ label, value, accent }) {
+  const { T } = useTheme();
   return (
     <div style={{ display: "flex", justifyContent: "space-between", padding: "4px 0" }}>
       <span style={{ fontSize: 12, color: T.textDim }}>{label}</span>
@@ -607,7 +615,7 @@ function SummaryRow({ label, value, accent }) {
   );
 }
 
-function inputStyle() {
+function inputStyle(T) {
   return {
     width: "100%", padding: "11px 14px", borderRadius: T.r,
     background: "rgba(255,255,255,0.03)", border: `1px solid ${T.border}`,

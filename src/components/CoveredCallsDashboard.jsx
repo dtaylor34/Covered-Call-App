@@ -16,11 +16,12 @@ import { useSearchParams, useLocation } from "react-router-dom";
 import { useStockQuote, useCoveredCalls } from "../hooks/useMarketData";
 import { useAuth } from "../contexts/AuthContext";
 import { AnalyticsEvents } from "../services/analytics";
-import { T } from "../theme";
+import { useTheme } from "../contexts/ThemeContext";
 
 const POPULAR = ["AAPL", "MSFT", "NVDA", "GOOGL", "AMZN", "META", "TSLA", "SPY"];
 
-export default function CoveredCallsDashboard() {
+export default function CoveredCallsDashboard({ onPositionChange }) {
+  const { T } = useTheme();
   const [searchParams, setSearchParams] = useSearchParams();
   const location = useLocation();
 
@@ -41,6 +42,22 @@ export default function CoveredCallsDashboard() {
 
   // Debounce ref to avoid rapid Firestore writes
   const saveTimeout = useRef(null);
+
+  // ── Propagate active position to parent (for Working tab, etc.) ──
+  useEffect(() => {
+    if (onPositionChange) {
+      onPositionChange({
+        symbol: activeSymbol,
+        contract: selectedContract ? {
+          strike: selectedContract.strike,
+          premium: selectedContract.premium != null ? selectedContract.premium * 100 : null,
+          expiration: selectedContract.expiration,
+          score: selectedContract.compositeScore,
+          stockPrice: quote?.price || scores?.underlyingPrice || 0,
+        } : null,
+      });
+    }
+  }, [activeSymbol, selectedContract, quote?.price]); // eslint-disable-line
 
   // ── On initial load from history, clean URL params ──
   useEffect(() => {
@@ -148,9 +165,10 @@ export default function CoveredCallsDashboard() {
         background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rL,
         padding: "20px 24px", marginBottom: 16,
       }}>
-        <form onSubmit={handleSearch} style={{ display: "flex", gap: 10, alignItems: "center" }}>
+        <form role="search" aria-label="Search stock symbols" onSubmit={handleSearch} style={{ display: "flex", gap: 10, alignItems: "center" }}>
           <input
             type="text"
+            aria-label="Stock ticker symbol"
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value.toUpperCase())}
             placeholder="Enter ticker symbol (e.g. AAPL)"
@@ -162,7 +180,7 @@ export default function CoveredCallsDashboard() {
               outline: "none",
             }}
           />
-          <button type="submit" disabled={quoteLoading || scoresLoading} style={{
+          <button type="submit" aria-label="Analyze covered calls" disabled={quoteLoading || scoresLoading} style={{
             padding: "10px 24px", borderRadius: 8, border: "none",
             background: T.accent, color: T.bg, fontSize: 13, fontWeight: 700,
             fontFamily: T.fontDisplay, cursor: "pointer",
@@ -176,7 +194,7 @@ export default function CoveredCallsDashboard() {
         <div style={{ display: "flex", gap: 6, marginTop: 12, flexWrap: "wrap" }}>
           <span style={{ fontSize: 11, color: T.textDim, lineHeight: "28px", marginRight: 4 }}>Popular:</span>
           {POPULAR.map((sym) => (
-            <button key={sym} onClick={() => handleQuickPick(sym)} style={{
+            <button key={sym} aria-label={`Analyze ${sym}`} onClick={() => handleQuickPick(sym)} style={{
               padding: "4px 12px", borderRadius: 6, border: `1px solid ${T.border}`,
               background: activeSymbol === sym ? T.accentDim : "transparent",
               color: activeSymbol === sym ? T.accent : T.textDim,
@@ -193,7 +211,7 @@ export default function CoveredCallsDashboard() {
           <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap", alignItems: "center" }}>
             <span style={{ fontSize: 11, color: T.textDim, lineHeight: "28px", marginRight: 4 }}>Recent:</span>
             {recentSymbols.map((sym) => (
-              <button key={sym} onClick={() => handleQuickPick(sym)} style={{
+              <button key={sym} aria-label={`Re-analyze ${sym}`} onClick={() => handleQuickPick(sym)} style={{
                 padding: "4px 12px", borderRadius: 6,
                 border: `1px solid ${activeSymbol === sym ? "rgba(129,140,248,0.3)" : T.border}`,
                 background: activeSymbol === sym ? T.proDim : "transparent",
@@ -205,7 +223,7 @@ export default function CoveredCallsDashboard() {
               </button>
             ))}
             {searchHistory.length > recentSymbols.length && (
-              <a href="/history" style={{
+              <a href="/history" aria-label="View full search history" style={{
                 fontSize: 11, color: T.pro, textDecoration: "none",
                 fontFamily: T.fontMono, marginLeft: 4,
               }}>
@@ -304,7 +322,7 @@ export default function CoveredCallsDashboard() {
                 {scores._stale && <span style={{ color: T.warn }}> · STALE DATA</span>}
               </div>
             </div>
-            <button onClick={() => { refresh(); AnalyticsEvents.scoresRefreshed(activeSymbol); }} disabled={scoresLoading} style={{
+            <button aria-label="Refresh covered call data" onClick={() => { refresh(); AnalyticsEvents.scoresRefreshed(activeSymbol); }} disabled={scoresLoading} style={{
               padding: "6px 14px", borderRadius: 6, border: `1px solid ${T.border}`,
               background: "transparent", color: T.textDim, fontSize: 11,
               cursor: "pointer", fontFamily: T.fontMono,
@@ -321,11 +339,11 @@ export default function CoveredCallsDashboard() {
             </div>
           ) : (
             <div style={{ overflowX: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+              <table aria-label="Covered call recommendations" style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                 <thead>
                   <tr style={{ borderBottom: `1px solid ${T.border}` }}>
                     {["Score", "Strike", "Exp", "DTE", "Premium", "Yield", "Annual", "Prob OTM", "Δ Delta", "IV"].map((h) => (
-                      <th key={h} style={{
+                      <th key={h} scope="col" style={{
                         padding: "10px 12px", textAlign: "right", fontSize: 10, fontWeight: 600,
                         color: T.textDim, fontFamily: T.fontMono, letterSpacing: 0.5,
                         textTransform: "uppercase", whiteSpace: "nowrap",
@@ -377,6 +395,7 @@ export default function CoveredCallsDashboard() {
 // ─── Stock Quote Card ───────────────────────────────────────────────────────
 
 function QuoteCard({ quote, loading }) {
+  const { T } = useTheme();
   const isUp = quote.change >= 0;
   const changeColor = isUp ? T.success : T.danger;
 
@@ -422,6 +441,7 @@ function QuoteCard({ quote, loading }) {
 }
 
 function QuoteStat({ label, value }) {
+  const { T } = useTheme();
   return (
     <div>
       <div style={{ fontSize: 10, color: T.textMuted, fontFamily: T.fontMono, letterSpacing: 0.5, textTransform: "uppercase" }}>
@@ -437,6 +457,7 @@ function QuoteStat({ label, value }) {
 // ─── Recommendation Row ─────────────────────────────────────────────────────
 
 function RecommendationRow({ rec, rank, isExpanded, isSelected, onToggle, underlyingPrice }) {
+  const { T } = useTheme();
   const scoreColor = rec.compositeScore >= 75 ? T.success
     : rec.compositeScore >= 50 ? T.accent
     : rec.compositeScore >= 30 ? T.warn
@@ -449,7 +470,12 @@ function RecommendationRow({ rec, rank, isExpanded, isSelected, onToggle, underl
   return (
     <>
       <tr
+        role="button"
+        tabIndex={0}
+        aria-expanded={isExpanded}
+        aria-label={`${rec.strike?.toFixed(2)} strike, ${rec.expiration?.slice(5)} expiry, score ${rec.compositeScore}. Click to ${isExpanded ? "collapse" : "expand"} details.`}
         onClick={onToggle}
+        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onToggle(); } }}
         style={{
           borderBottom: `1px solid ${T.border}`,
           cursor: "pointer",
@@ -492,6 +518,7 @@ function RecommendationRow({ rec, rank, isExpanded, isSelected, onToggle, underl
 }
 
 function Cell({ children, mono, accent }) {
+  const { T } = useTheme();
   return (
     <td style={{
       padding: "10px 12px", textAlign: "right", whiteSpace: "nowrap",
@@ -507,6 +534,7 @@ function Cell({ children, mono, accent }) {
 // ─── Expanded Details Panel ─────────────────────────────────────────────────
 
 function ExpandedDetails({ rec, underlyingPrice }) {
+  const { T } = useTheme();
   return (
     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16, fontSize: 12 }}>
       {/* Column 1: P&L */}
@@ -563,6 +591,7 @@ function ExpandedDetails({ rec, underlyingPrice }) {
 }
 
 function DetailRow({ label, value }) {
+  const { T } = useTheme();
   return (
     <div style={{ display: "flex", justifyContent: "space-between", padding: "3px 0", color: T.textDim }}>
       <span>{label}</span>
@@ -572,6 +601,7 @@ function DetailRow({ label, value }) {
 }
 
 function ScoreBar({ label, score }) {
+  const { T } = useTheme();
   const color = score >= 70 ? T.success : score >= 40 ? T.accent : T.warn;
   return (
     <div style={{ marginBottom: 6 }}>
