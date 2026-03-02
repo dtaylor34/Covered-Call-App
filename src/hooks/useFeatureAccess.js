@@ -1,14 +1,14 @@
-// ─── src/hooks/useFeatureAccess.js ───────────────────────────────────────────
+// --- src/hooks/useFeatureAccess.js -------------------------------------------
 // Tier-based feature gating. Reads user's plan from AuthContext and provides
 // canAccess(feature) checks. Locked features show blurred preview + upgrade.
 //
 // Plans: "basic" (default/trial), "advanced", "expert", "family" (FAMILY34)
-// Family code gets expert-level access.
-// ─────────────────────────────────────────────────────────────────────────────
+// Family code holders get expert-level access.
+// -----------------------------------------------------------------------------
 
 import { useAuth } from "../contexts/AuthContext";
 
-// ── Feature → minimum tier mapping ──
+// -- Feature -> minimum tier mapping --
 const FEATURE_TIERS = {
   // Basic (everyone)
   dashboard: "basic",
@@ -24,48 +24,48 @@ const FEATURE_TIERS = {
 
   // Expert
   setup: "expert",
-  customThemes: "expert",
+  customThemes: "basic",
   brokerGuides: "expert",
 };
 
-// ── Tier hierarchy (higher index = more access) ──
+// -- Tier hierarchy (higher index = more access) --
 const TIER_LEVELS = {
   basic: 0,
   advanced: 1,
   expert: 2,
 };
 
-// ── Tier display info ──
+// -- Tier display info --
 export const TIER_INFO = {
   basic: {
     label: "Basic",
     color: "#00d4aa",
     bg: "rgba(0,212,170,0.12)",
-    icon: "◉",
+    icon: "\u{25C6}",
     features: ["Dashboard", "Glossary", "Profile", "Search History (10)"],
   },
   advanced: {
     label: "Advanced",
     color: "#818cf8",
     bg: "rgba(129,140,248,0.12)",
-    icon: "◈",
+    icon: "\u{25C6}",
     features: ["Everything in Basic", "Working P&L Tab", "Risk Scenarios", "Transaction Log", "Unlimited Search History"],
   },
   expert: {
     label: "Expert",
     color: "#f59e0b",
     bg: "rgba(245,158,11,0.12)",
-    icon: "◆",
+    icon: "\u{25C6}",
     features: ["Everything in Advanced", "Broker Setup Guides", "Custom Themes", "Priority Support"],
   },
 };
 
-// ── Get the minimum tier required for a feature ──
+// -- Get the minimum tier required for a feature --
 export function getRequiredTier(feature) {
   return FEATURE_TIERS[feature] || "basic";
 }
 
-// ── Check if a tier level can access a feature ──
+// -- Check if a tier level can access a feature --
 export function tierCanAccess(plan, feature) {
   const requiredTier = getRequiredTier(feature);
   const userLevel = TIER_LEVELS[plan] ?? 0;
@@ -73,7 +73,7 @@ export function tierCanAccess(plan, feature) {
   return userLevel >= requiredLevel;
 }
 
-// ── Hook ──
+// -- Hook --
 export function useFeatureAccess() {
   const { userData, hasFreeAccessCode } = useAuth();
 

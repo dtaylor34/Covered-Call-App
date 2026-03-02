@@ -242,7 +242,7 @@ export default function Dashboard() {
                   background: "transparent",
                   border: "none",
                   borderBottom: isTabActive ? `2px solid ${T.accent}` : "2px solid transparent",
-                  color: isTabActive ? T.accent : isLocked ? T.textMuted : T.textDim,
+                  color: isTabActive ? T.accent : isLocked ? T.textDim : T.text,
                   fontSize: isMobile ? 10 : 11,
                   fontWeight: isTabActive ? 700 : 500,
                   fontFamily: T.fontMono,
