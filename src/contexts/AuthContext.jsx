@@ -1,19 +1,21 @@
 // ─── src/contexts/AuthContext.jsx ────────────────────────────────────────────
 // Provides auth state + Firestore user data to the entire app.
-// Handles: login, signup, logout, trial tracking, role detection,
-//          onboarding state, search history, and watchlist.
+// Handles: login, signup (email + Google + Apple), logout, trial tracking,
+//          role detection, onboarding state, search history, watchlist,
+//          and promo code access (e.g. FAMILY34 = free access).
 
 import { createContext, useContext, useState, useEffect, useCallback } from "react";
 import {
   onAuthStateChanged,
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
+  signInWithPopup,
   signOut,
 } from "firebase/auth";
 import {
-  doc, getDoc, setDoc, updateDoc, serverTimestamp,
+  doc, getDoc, setDoc, updateDoc,
 } from "firebase/firestore";
-import { auth, db } from "../firebase";
+import { auth, db, googleProvider, appleProvider } from "../firebase";
 
 const AuthContext = createContext(null);
 
@@ -25,6 +27,9 @@ export function useAuth() {
 
 const TRIAL_DAYS = 7;
 const MAX_SEARCH_HISTORY = 50;
+
+// Promo codes that grant permanent free access
+const FREE_ACCESS_CODES = ["FAMILY34"];
 
 function getTrialInfo(trialStartISO) {
   if (!trialStartISO) return { daysLeft: 0, expired: true, percentUsed: 100 };
@@ -71,47 +76,43 @@ export function AuthProvider({ children }) {
     return unsubscribe;
   }, []);
 
-  // ── Sign Up ──
-  // Creates auth account + minimal Firestore doc.
-  // Full profile completed in OnboardingScreen.
+  // ── Create Firestore user doc (shared by all signup methods) ──
+  const createUserDoc = useCallback(async (uid, email, name) => {
+    const userDoc = {
+      email,
+      name: name || email.split("@")[0],
+      trialStart: new Date().toISOString(),
+      subscriptionStatus: "trial",
+      monthlyRate: 10,
+      totalPaid: 0,
+      slackJoined: false,
+      createdAt: new Date().toISOString(),
+      lastActive: new Date().toISOString(),
+      onboardingComplete: false,
+      experienceLevel: null,
+      investmentGoal: null,
+      portfolioSize: null,
+      newsletterOptIn: true,
+      updateFrequency: "weekly",
+      notifyNewFeatures: true,
+      notifyMarketAlerts: true,
+      notifyEducation: true,
+      promoCode: null,
+      promoAppliedAt: null,
+      searchHistory: [],
+      watchlist: [],
+    };
+    await setDoc(doc(db, "users", uid), userDoc);
+    setUserData(userDoc);
+    return userDoc;
+  }, []);
+
+  // ── Email/Password Sign Up ──
   const signup = useCallback(async (email, password, name) => {
     setError(null);
     try {
       const cred = await createUserWithEmailAndPassword(auth, email, password);
-      const uid = cred.user.uid;
-
-      const userDoc = {
-        email,
-        name: name || email.split("@")[0],
-        trialStart: new Date().toISOString(),
-        subscriptionStatus: "trial",
-        monthlyRate: 10,
-        totalPaid: 0,
-        slackJoined: false,
-        createdAt: new Date().toISOString(),
-        lastActive: new Date().toISOString(),
-        // Onboarding
-        onboardingComplete: false,
-        // Profile (set during onboarding)
-        experienceLevel: null,
-        investmentGoal: null,
-        portfolioSize: null,
-        // Preferences (set during onboarding)
-        newsletterOptIn: true,
-        updateFrequency: "weekly",
-        notifyNewFeatures: true,
-        notifyMarketAlerts: true,
-        notifyEducation: true,
-        // Promo
-        promoCode: null,
-        promoAppliedAt: null,
-        // History
-        searchHistory: [],
-        watchlist: [],
-      };
-
-      await setDoc(doc(db, "users", uid), userDoc);
-      setUserData(userDoc);
+      await createUserDoc(cred.user.uid, email, name);
       return cred.user;
     } catch (e) {
       const msg = {
@@ -122,9 +123,9 @@ export function AuthProvider({ children }) {
       setError(msg);
       throw e;
     }
-  }, []);
+  }, [createUserDoc]);
 
-  // ── Sign In ──
+  // ── Email/Password Sign In ──
   const login = useCallback(async (email, password) => {
     setError(null);
     try {
@@ -142,6 +143,63 @@ export function AuthProvider({ children }) {
     }
   }, []);
 
+  // ── Google Sign In ──
+  const signInWithGoogle = useCallback(async () => {
+    setError(null);
+    try {
+      const result = await signInWithPopup(auth, googleProvider);
+      const uid = result.user.uid;
+      const email = result.user.email;
+      const name = result.user.displayName || email.split("@")[0];
+
+      // Check if user doc exists — if not, create one (first-time user)
+      const userRef = doc(db, "users", uid);
+      const snap = await getDoc(userRef);
+      if (!snap.exists()) {
+        await createUserDoc(uid, email, name);
+      } else {
+        setUserData(snap.data());
+      }
+      return result.user;
+    } catch (e) {
+      if (e.code === "auth/popup-closed-by-user") return null;
+      const msg = {
+        "auth/account-exists-with-different-credential": "An account already exists with this email using a different sign-in method",
+        "auth/popup-blocked": "Sign-in popup was blocked. Please allow popups and try again.",
+      }[e.code] || e.message;
+      setError(msg);
+      throw e;
+    }
+  }, [createUserDoc]);
+
+  // ── Apple Sign In ──
+  const signInWithApple = useCallback(async () => {
+    setError(null);
+    try {
+      const result = await signInWithPopup(auth, appleProvider);
+      const uid = result.user.uid;
+      const email = result.user.email;
+      const name = result.user.displayName || email?.split("@")[0] || "User";
+
+      const userRef = doc(db, "users", uid);
+      const snap = await getDoc(userRef);
+      if (!snap.exists()) {
+        await createUserDoc(uid, email, name);
+      } else {
+        setUserData(snap.data());
+      }
+      return result.user;
+    } catch (e) {
+      if (e.code === "auth/popup-closed-by-user") return null;
+      const msg = {
+        "auth/account-exists-with-different-credential": "An account already exists with this email using a different sign-in method",
+        "auth/popup-blocked": "Sign-in popup was blocked. Please allow popups and try again.",
+      }[e.code] || e.message;
+      setError(msg);
+      throw e;
+    }
+  }, [createUserDoc]);
+
   // ── Sign Out ──
   const logout = useCallback(async () => {
     await signOut(auth);
@@ -156,16 +214,12 @@ export function AuthProvider({ children }) {
   }, [user]);
 
   // ── Add to search history ──
-  // Creates or updates a history entry for this symbol.
-  // If the symbol already exists, bumps it to the top and preserves its context.
   const addToSearchHistory = useCallback(async (symbol, context = {}) => {
     if (!user || !symbol) return;
     const sym = symbol.toUpperCase().trim();
     try {
       const userRef = doc(db, "users", user.uid);
       const currentHistory = userData?.searchHistory || [];
-
-      // Find existing entry to preserve its saved context
       const existing = currentHistory.find((h) => h.symbol === sym);
       const filtered = currentHistory.filter((h) => h.symbol !== sym);
 
@@ -173,11 +227,8 @@ export function AuthProvider({ children }) {
         symbol: sym,
         searchedAt: existing?.searchedAt || new Date().toISOString(),
         lastUpdatedAt: new Date().toISOString(),
-        // Merge: existing context → new context override
         stockPrice: context.stockPrice ?? existing?.stockPrice ?? null,
         selectedContract: context.selectedContract ?? existing?.selectedContract ?? null,
-        // selectedContract shape: { contractSymbol, strike, expiration, premium,
-        //   compositeScore, annualizedReturn, premiumYield, probabilityOTM, delta }
       };
 
       const updated = [entry, ...filtered].slice(0, MAX_SEARCH_HISTORY);
@@ -189,8 +240,6 @@ export function AuthProvider({ children }) {
   }, [user, userData?.searchHistory]);
 
   // ── Update an existing history entry's research context ──
-  // Called when the user selects or changes a contract on the dashboard.
-  // Does NOT bump position — just patches the data in-place.
   const updateSearchHistoryEntry = useCallback(async (symbol, context) => {
     if (!user || !symbol) return;
     const sym = symbol.toUpperCase().trim();
@@ -199,7 +248,6 @@ export function AuthProvider({ children }) {
       const currentHistory = userData?.searchHistory || [];
       const idx = currentHistory.findIndex((h) => h.symbol === sym);
       if (idx === -1) {
-        // Entry doesn't exist yet — create it via addToSearchHistory instead
         return addToSearchHistory(sym, context);
       }
 
@@ -219,7 +267,6 @@ export function AuthProvider({ children }) {
   }, [user, userData?.searchHistory, addToSearchHistory]);
 
   // ── Delete specific items from search history ──
-  // Accepts an array of symbol strings to remove.
   const deleteFromSearchHistory = useCallback(async (symbols) => {
     if (!user || !symbols || symbols.length === 0) return;
     const toRemove = new Set(symbols.map((s) => s.toUpperCase().trim()));
@@ -265,21 +312,28 @@ export function AuthProvider({ children }) {
   const isOwner = role === "owner";
   const trialInfo = getTrialInfo(userData?.trialStart);
   const subscriptionStatus = userData?.subscriptionStatus || "trial";
-  const isTrialExpired = subscriptionStatus === "trial" && trialInfo.expired;
-  const hasAccess = subscriptionStatus === "active" || (subscriptionStatus === "trial" && !trialInfo.expired);
+
+  // Check if user has a free-access promo code
+  const hasFreeAccessCode = FREE_ACCESS_CODES.includes(
+    (userData?.promoCode || "").toUpperCase()
+  );
+
+  const isTrialExpired = subscriptionStatus === "trial" && trialInfo.expired && !hasFreeAccessCode;
+  const hasAccess = subscriptionStatus === "active" || hasFreeAccessCode ||
+    (subscriptionStatus === "trial" && !trialInfo.expired);
   const onboardingComplete = userData?.onboardingComplete ?? false;
 
   const value = {
     user, userData, loading, error,
-    signup, login, logout, refreshUserData, setError,
+    signup, login, signInWithGoogle, signInWithApple, logout, refreshUserData, setError,
     addToSearchHistory, updateSearchHistoryEntry, deleteFromSearchHistory, clearSearchHistory, updateWatchlist,
     searchHistory: userData?.searchHistory || [],
     watchlist: userData?.watchlist || [],
     role, isAdmin, isOwner, trialInfo,
-    subscriptionStatus, isTrialExpired, hasAccess, onboardingComplete,
+    subscriptionStatus, isTrialExpired, hasAccess, hasFreeAccessCode, onboardingComplete,
     uid: user?.uid || null,
     email: user?.email || null,
-    name: userData?.name || user?.email?.split("@")[0] || null,
+    name: userData?.name || user?.displayName || user?.email?.split("@")[0] || null,
   };
 
   return (

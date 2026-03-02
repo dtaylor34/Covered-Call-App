@@ -15,6 +15,8 @@ You need a **separate** Firebase project from your dev/emulator one.
 4. Once created, click **Build → Authentication**
    - Click **Get Started**
    - Enable **Email/Password** provider
+   - Enable **Google** provider (click Google → Enable → Save)
+   - Enable **Apple** provider (requires Apple Developer account, can skip initially)
 5. Click **Build → Firestore Database**
    - Click **Create Database**
    - Choose **Start in production mode**
@@ -121,6 +123,10 @@ cd ..
 ---
 
 ## STEP 6: Deploy Everything (10 min)
+
+> **Important:** Cloud Functions require the **Blaze (pay-as-you-go)** plan.
+> Upgrade at: Firebase Console → bottom of left sidebar → Upgrade.
+> Free tier is generous — you'll pay $0-5/month for your first 100 users.
 
 ### 6a. Log in to Firebase CLI
 ```bash
@@ -234,26 +240,133 @@ Once everything works in test mode:
 
 ---
 
+## Completed — Production Launch Status
+
+| Step | Item | Status |
+|------|------|--------|
+| 1 | Firebase project (covered-calls-prod) | ✅ Done |
+| 2 | Custom domain | ⏭ Skipped (using .web.app) |
+| 3 | Environment variables (.env) | ✅ Done |
+| 4 | Stripe account + product + webhook | ✅ Done |
+| 5 | Dependencies installed | ✅ Done |
+| 6a | Firebase CLI login | ✅ Done |
+| 6b | Firestore rules deployed | ✅ Done |
+| 6c | Cloud Functions deployed | ✅ Done |
+| 6d | Frontend built and deployed | ✅ Done |
+| 7 | Custom domain | ⏭ Later |
+| 8 | Owner account created | ✅ Done |
+| 9 | Full flow tested (signup, trial, payment, admin) | ✅ Done |
+| 10 | Stripe live mode | ✅ Live (real Amex charged $1) |
+
+---
+
 ## What You Now Have
 
 | Feature | Status |
 |---------|--------|
 | **PWA** — installable from browser, works fullscreen on mobile | ✅ |
-| **Auth** — email/password signup with auto-redirect | ✅ |
+| **Auth** — email/password + Google + Apple sign-in | ✅ |
 | **Onboarding** — 3-step flow with promo code support | ✅ |
-| **7-day trial** — hard paywall after expiration | ✅ |
+| **FAMILY34 promo code** — permanent free access for family | ✅ |
+| **7-day trial** — smart paywall with days remaining | ✅ |
 | **Stripe payments** — checkout, subscription management, webhooks | ✅ |
 | **Dashboard** — scored covered call recommendations | ✅ |
 | **Research history** — full context saved per search | ✅ |
 | **Analytics** — custom events, admin dashboard with 5 tabs | ✅ |
 | **Admin panel** — user management, role-based access | ✅ |
 | **Financial disclaimer** — visible on dashboard | ✅ |
-| **Versioned deploys** — rollback scripts included | ✅ |
+| **Versioned deploys** — Git tags + rollback scripts | ✅ |
+| **GitHub repo** — private, v1.0.0 tagged | ✅ |
 
 ---
 
-## Files Added/Changed in This Update
+## NEXT: App Marketplace Setup
 
+When you're ready to distribute beyond the web, here are the marketplaces
+and what's required for each.
+
+### Apple App Store + TestFlight + Sign in with Apple
+
+Everything is under one account: the **Apple Developer Program**.
+
+| What | Link | Cost |
+|------|------|------|
+| Enroll in Developer Program | https://developer.apple.com/programs/enroll/ | $99/year |
+| TestFlight (beta testing) | https://developer.apple.com/testflight/ | Free (included) |
+| App Store Connect (manage apps) | https://appstoreconnect.apple.com | Free (included) |
+| Compare memberships | https://developer.apple.com/support/compare-memberships/ | — |
+
+**What this unlocks:**
+- Sign in with Apple on your web app (already coded, needs this account to activate)
+- TestFlight beta testing (up to 100 internal testers, no review needed)
+- App Store distribution (review required, 1-7 days)
+- Apple takes 15-30% of in-app subscription revenue
+
+**Enrollment requirements (individual/sole proprietor):**
+- Apple ID with two-factor authentication
+- Government-issued photo ID
+- $99 USD annual fee
+- Approval takes 1-5 business days
+
+**Enrollment requirements (organization/LLC):**
+- All of the above, plus:
+- D-U-N-S Number (free from Dun & Bradstreet)
+- Legal entity name matching D-U-N-S records
+- Business website with your domain
+- Approval takes 1-4 weeks
+
+### Google Play Store (Android)
+
+| What | Link | Cost |
+|------|------|------|
+| Google Play Console signup | https://play.google.com/console | $25 one-time |
+| Getting started guide | https://support.google.com/googleplay/android-developer/answer/6112435 | — |
+| Account requirements | https://support.google.com/googleplay/android-developer/answer/13628312 | — |
+
+**What this unlocks:**
+- Publish Android apps on Google Play Store
+- Internal testing, closed testing, open testing tracks
+- Google takes 15% of subscription revenue (first $1M/year)
+
+**Enrollment requirements:**
+- Google account with 2-step verification
+- Government-issued photo ID
+- $25 one-time registration fee
+- Personal accounts: 12 testers must test for 14 days before publishing
+- Organization accounts: D-U-N-S Number required
+
+### Other Marketplaces (Optional, Lower Priority)
+
+| Marketplace | Cost | Notes |
+|-------------|------|-------|
+| Amazon Appstore | Free | Reaches Fire tablets + some Android. Same APK as Play Store. |
+| Samsung Galaxy Store | Free | Pre-installed on Samsung devices. Same APK as Play Store. |
+| Microsoft Store | Free | Windows desktop/tablet. PWA works natively here. |
+
+**Recommendation:** Start with Apple ($99/yr) since it unlocks Sign in with Apple
+for your current web app AND future iOS distribution. Add Google Play ($25)
+when ready to wrap with Capacitor for Android. Skip others until traction.
+
+### Distribution Tiers (from GTM Strategy)
+
+| Tier | Platform | Wrapper | Revenue Share | Status |
+|------|----------|---------|---------------|--------|
+| **Tier 1** | Web (PWA) | None — direct to browser | Stripe only (~5%) | ✅ LIVE |
+| **Tier 2** | Android | Capacitor → Google Play | Stripe (~5%) or Google (15%) | 🔜 Next |
+| **Tier 3** | iOS | Capacitor → App Store | Apple (15-30%) requires StoreKit | 🔜 After Android |
+
+### Key Insight: Your Architecture Advantage
+
+Since your app is a web app wrapped in a native shell, most updates deploy
+through Firebase Hosting — no app store review needed. You only resubmit to
+Apple/Google when changing the native wrapper itself (permissions, SDK version).
+All feature work, UI changes, and bug fixes deploy instantly via Firebase.
+
+---
+
+## Files Added/Changed
+
+### v1.0.0 — Initial Production Release
 ```
 NEW:
   public/manifest.json          — PWA manifest
@@ -264,6 +377,8 @@ NEW:
   functions/.env.example        — Stripe env var template
   .env.example                  — Frontend Firebase config template
   docs/LAUNCH_CHECKLIST.md      — This file
+  docs/VERSIONING.md            — Git tagging and release workflow
+  docs/BRANCHING.md             — Feature branch and prototype workflow
 
 CHANGED:
   index.html                    — PWA meta tags, Apple meta tags, SW registration
@@ -273,13 +388,48 @@ CHANGED:
   src/views/Dashboard.jsx       — Manage Billing button, financial disclaimer
 ```
 
+### v1.1.0 — Mobile Layout, OAuth, FAMILY34, Trial Messaging
+```
+CHANGED:
+  src/firebase.js               — Fixed emulator auto-connect, added Google/Apple providers
+  src/contexts/AuthContext.jsx   — Google + Apple sign-in, FAMILY34 free access logic
+  src/views/AuthScreen.jsx      — Mobile-responsive stacking, OAuth buttons
+  src/views/PaywallScreen.jsx   — Trial days countdown, 3 messaging states
+```
+
 ---
 
 ## Common Issues
 
+**"Connected to Firebase Emulators" when running locally:**
+→ Delete `.env.local` if it exists — Vite loads it with higher priority than `.env`.
+→ Verify `VITE_USE_EMULATORS` is NOT set to `true` in any `.env*` file.
+→ Kill and restart `npm run dev` — Vite doesn't hot-reload env changes.
+
+**"permission-denied" on signup or onboarding:**
+→ Deploy Firestore rules: `firebase deploy --only firestore:rules`
+→ Check that `role` is NOT included in the signup user doc (rules block it).
+→ Delete the test user from Auth + Firestore and sign up fresh.
+
+**"apiKey=your-api-key" or "demo-api-key" in network requests:**
+→ Your `.env` values aren't loading. Check the file is named exactly `.env`
+  (not `.env.txt`), is in the project root, and has no quotes around values.
+→ Delete `node_modules/.vite` cache and restart `npm run dev`.
+
+**Cloud Functions deploy fails with "must be on Blaze plan":**
+→ Upgrade to Blaze at Firebase Console → left sidebar → Upgrade.
+→ Free tier covers most usage. You only pay for overages.
+
+**Cloud Functions deploy fails with "Couldn't find firebase-functions":**
+→ Run `cd functions && npm install && cd ..` then deploy again.
+
 **"Stripe is not configured" error on checkout:**
 → Check `functions/.env` has the correct `STRIPE_SECRET_KEY` and `STRIPE_PRICE_ID`.
 → Redeploy functions after changing env vars.
+
+**Stripe redirects to placeholder.com after checkout:**
+→ Update `APP_URL` in `functions/.env` to your real URL.
+→ Redeploy functions: `firebase deploy --only functions`
 
 **Webhook events not updating Firestore:**
 → Verify the webhook URL in Stripe matches your deployed function URL exactly.
