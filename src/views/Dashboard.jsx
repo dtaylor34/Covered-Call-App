@@ -250,7 +250,7 @@ export default function Dashboard() {
                   transition: "all 0.15s",
                   display: "flex", alignItems: "center", gap: 4,
                   whiteSpace: "nowrap", flexShrink: 0,
-                  opacity: isLocked ? 0.5 : 1,
+                  opacity: isLocked ? 0.7 : 1,
                 }}
               >
                 <span aria-hidden="true" style={{ fontSize: isMobile ? 11 : 12 }}>{tab.icon}</span>

@@ -40,7 +40,6 @@ export default function ProfileTab() {
   const [saved, setSaved] = useState(false);
 
   const isTrial = subscriptionStatus === "trial";
-  const canCustomTheme = canAccess("customThemes");
 
   const handleManageBilling = async () => {
     setBillingLoading(true);
@@ -67,7 +66,6 @@ export default function ProfileTab() {
   };
 
   const handleThemeChange = async (themeId) => {
-    if (!canCustomTheme && themeId !== "dark") return;
     try {
       setTheme(themeId);
       await updateUserTheme(themeId);
@@ -198,19 +196,16 @@ export default function ProfileTab() {
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
           <span style={{ fontSize: 16 }}>🎨</span>
           <h3 style={{ color: T.text, fontFamily: T.fontDisplay, fontSize: 16, margin: 0 }}>Theme</h3>
-          {!canCustomTheme && <Badge color={T.owner}>EXPERT</Badge>}
         </div>
 
         <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
           {THEME_OPTIONS.map((t) => {
             const isCurrent = themeName === t.id;
-            const isLocked = !canCustomTheme && t.id !== "dark";
             return (
-              <button key={t.id} aria-label={`Switch to ${t.label} theme${isLocked ? " (Expert plan required)" : ""}`} aria-pressed={isCurrent} onClick={() => !isLocked && handleThemeChange(t.id)} style={{
-                padding: "12px 20px", borderRadius: 10, cursor: isLocked ? "not-allowed" : "pointer",
+              <button key={t.id} aria-label={`Switch to ${t.label} theme`} aria-pressed={isCurrent} onClick={() => handleThemeChange(t.id)} style={{
+                padding: "12px 20px", borderRadius: 10, cursor: "pointer",
                 background: isCurrent ? T.accentDim : T.card,
                 border: `2px solid ${isCurrent ? T.accent : T.border}`,
-                opacity: isLocked ? 0.4 : 1,
                 display: "flex", alignItems: "center", gap: 10, transition: "all 0.2s",
               }}>
                 <div style={{
@@ -219,7 +214,6 @@ export default function ProfileTab() {
                 }} />
                 <div>
                   <div style={{ color: T.text, fontSize: 12, fontWeight: 600 }}>{t.icon} {t.label}</div>
-                  {isLocked && <div style={{ color: T.textMuted, fontSize: 9 }}>Expert only</div>}
                 </div>
               </button>
             );

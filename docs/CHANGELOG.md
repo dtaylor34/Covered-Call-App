@@ -16,6 +16,13 @@ _Changes that are ready but not yet deployed._
 
 ---
 
+## [2.0.2] — 2026-03-02
+
+### Changed
+- index.html, ThemeContext, ProfileTab, Dashboard — small updates and tweaks.
+
+---
+
 ## [2.0.1] — 2026-03-02
 
 ### Changed
@@ -133,6 +140,7 @@ auditLog/{auto-id}: action, performedBy{uid,email,role},
 
 | Version | Date       | Type  | Summary                              |
 |---------|------------|-------|--------------------------------------|
+| 2.0.2   | 2026-03-02 | PATCH | index.html, ThemeContext, ProfileTab, Dashboard tweaks |
 | 2.0.1   | 2026-03-02 | PATCH | Dashboard and useFeatureAccess tweaks |
 | 2.0.0   | 2026-03-02 | MAJOR | Theme refactor, new tabs, OAuth, FAMILY34, upgrade flow |
 | 1.1.0   | 2026-03-01 | MINOR | Mobile layout, Google/Apple auth, FAMILY34, smart paywall |

@@ -154,6 +154,15 @@ export function ThemeProvider({ children }) {
     } catch {}
   }, []);
 
+  // -- Sync document.body + meta theme-color to current palette --
+  useEffect(() => {
+    const palette = PALETTES[themeName] || PALETTES.dark;
+    document.body.style.backgroundColor = palette.bg;
+    document.body.style.color = palette.text;
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute("content", palette.bg);
+  }, [themeName]);
+
   const isMobile = windowWidth < BREAKPOINTS.mobile;
   const isTablet = windowWidth >= BREAKPOINTS.mobile && windowWidth < BREAKPOINTS.tablet;
   const isDesktop = windowWidth >= BREAKPOINTS.tablet;
