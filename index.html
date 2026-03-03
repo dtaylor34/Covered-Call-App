@@ -26,9 +26,16 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Material+Icons+Outlined" rel="stylesheet" />
     <style>
       * { margin: 0; padding: 0; box-sizing: border-box; }
-      body { background: #05070b; font-family: 'IBM Plex Sans', sans-serif; transition: background-color 0.3s ease, color 0.3s ease; }
+      body {
+        font-family: 'IBM Plex Sans', sans-serif;
+        transition: background-color 0.2s ease, color 0.2s ease;
+        /* ThemeContext sets --theme-bg and --theme-text on <html> so theme switches apply */
+        background: var(--theme-bg, #05070b);
+        color: var(--theme-text, #e2e8f0);
+      }
       ::selection { background: rgba(0,212,170,0.3); }
       ::-webkit-scrollbar { width: 6px; }
       ::-webkit-scrollbar-track { background: transparent; }

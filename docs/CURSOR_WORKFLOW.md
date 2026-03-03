@@ -61,7 +61,7 @@ Cursor will:
 ### 2. Review the Change
 
 Cursor shows you the code diff. Check:
-- Does it follow the theme (uses `T` tokens from theme.js)?
+- Does it follow the theme (functional components use `useTheme()` and `T`; class components use `T` from theme.js)?
 - Does it work with the existing AuthContext?
 - Does it add any Firestore schema changes?
 - Does it look correct?
@@ -129,7 +129,7 @@ Update PRD.md if it's a significant feature.
 
 ### "Change the design / rebrand"
 ```
-Tell Cursor → it updates theme.js + components → test locally → preview.sh → deploy.sh
+Tell Cursor → it updates ThemeContext.jsx palettes (and theme.js fallback if needed) + components → test locally → preview.sh → deploy.sh
 Version: MINOR (1.1.0 → 1.2.0)
 ```
 

@@ -274,7 +274,7 @@ This is why we use Git — it's the versioning system for Cloud Functions.
 - [ ] Code tested locally with emulators
 - [ ] CHANGELOG.md updated with new version and description
 - [ ] PRD.md updated if requirements changed
-- [ ] No hardcoded colors (use theme.js)
+- [ ] No hardcoded colors (use useTheme() / T tokens; theme.js only for ErrorBoundary fallback)
 - [ ] No API keys in frontend code
 - [ ] No Firestore field renames or removals
 - [ ] Preview channel tested (for MINOR/MAJOR)

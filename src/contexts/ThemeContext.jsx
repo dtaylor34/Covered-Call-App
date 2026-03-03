@@ -154,9 +154,12 @@ export function ThemeProvider({ children }) {
     } catch {}
   }, []);
 
-  // -- Sync document.body + meta theme-color to current palette --
+  // -- Sync theme to DOM: CSS variables (so index.html body uses them), body inline fallback, meta theme-color --
   useEffect(() => {
     const palette = PALETTES[themeName] || PALETTES.dark;
+    const root = document.documentElement;
+    root.style.setProperty("--theme-bg", palette.bg);
+    root.style.setProperty("--theme-text", palette.text);
     document.body.style.backgroundColor = palette.bg;
     document.body.style.color = palette.text;
     const meta = document.querySelector('meta[name="theme-color"]');

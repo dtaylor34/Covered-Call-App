@@ -7,10 +7,11 @@
 //   import { useTheme } from "../contexts/ThemeContext";
 //   const { T } = useTheme();
 //
-// The static T exported here reads localStorage on module load as a fallback.
+// The static T below is a dark-palette fallback; canonical palettes live in ThemeContext.jsx.
 // ─────────────────────────────────────────────────────────────────────────────
 
 // ── Static fallback palette (for class components / outside React tree) ──
+// Must match ThemeContext PALETTES.dark token set so any T.* used by ErrorBoundary exists.
 const DARK = {
   bg: "#05070b", surface: "#0a0e16", card: "#0e1320", cardHover: "#121828",
   border: "rgba(255,255,255,0.05)", borderActive: "rgba(255,255,255,0.12)",
@@ -20,7 +21,10 @@ const DARK = {
   warn: "#f59e0b", warnDim: "rgba(245,158,11,0.1)",
   danger: "#ef4444", dangerDim: "rgba(239,68,68,0.1)",
   success: "#22c55e", successDim: "rgba(34,197,94,0.1)",
+  slack: "#4A154B", slackDim: "rgba(74,21,75,0.15)",
   owner: "#f59e0b",
+  inputBg: "rgba(255,255,255,0.03)",
+  overlay: "rgba(5,7,11,0.85)",
 };
 
 const TYPOGRAPHY = {

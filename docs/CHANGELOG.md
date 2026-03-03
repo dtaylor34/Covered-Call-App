@@ -16,6 +16,18 @@ _Changes that are ready but not yet deployed._
 
 ---
 
+## [2.0.3] — 2026-03-03
+
+### Changed
+- **Working tab** in default view (basic tier) via useFeatureAccess.
+- **Market data label:** show "15min delay" only, with info icon + tooltip "15min delay using Yahoo" (Material Icons Outlined); tooltip positioned so it stays on screen.
+- **Theme docs:** THEME_REFACTOR_README (root/CSS variables, 25 tokens), theme.js fallback aligned with ThemeContext, CURSOR_WORKFLOW/DEPLOYMENT/UPGRADE_README updated for useTheme().
+
+### Added
+- Material Icons Outlined font in index.html for info icon.
+
+---
+
 ## [2.0.2] — 2026-03-02
 
 ### Changed
@@ -140,6 +152,7 @@ auditLog/{auto-id}: action, performedBy{uid,email,role},
 
 | Version | Date       | Type  | Summary                              |
 |---------|------------|-------|--------------------------------------|
+| 2.0.3   | 2026-03-03 | PATCH | Working in default view, 15min delay + tooltip, theme docs, Material Icons Outlined |
 | 2.0.2   | 2026-03-02 | PATCH | index.html, ThemeContext, ProfileTab, Dashboard tweaks |
 | 2.0.1   | 2026-03-02 | PATCH | Dashboard and useFeatureAccess tweaks |
 | 2.0.0   | 2026-03-02 | MAJOR | Theme refactor, new tabs, OAuth, FAMILY34, upgrade flow |

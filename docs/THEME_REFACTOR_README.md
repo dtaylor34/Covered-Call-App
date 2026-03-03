@@ -90,6 +90,21 @@ User logs in on new device
 - Module-scope `SCENARIOS` with T references in RiskTab — **moved inside component with useMemo**
 - Static palette loading in old `theme.js` — **replaced with context**
 
+## Root / index.html and CSS variables
+
+So the **whole page** (including the root `<body>`) follows the active theme when switching Light/Dark/High contrast:
+
+- **index.html** — `<body>` does **not** use a hardcoded background. It uses CSS variables with a dark default:
+  - `background: var(--theme-bg, #05070b);`
+  - `color: var(--theme-text, #e2e8f0);`
+  - Plus `transition` for smooth switches.
+- **ThemeContext** — In the same effect that runs when `themeName` changes, it:
+  - Sets `--theme-bg` and `--theme-text` on `document.documentElement` so the root picks them up.
+  - Sets `document.body.style.backgroundColor` and `document.body.style.color` as a fallback.
+  - Updates the `<meta name="theme-color">` so the browser chrome (e.g. mobile status bar) matches the theme.
+
+So clicking Light/Dark/High contrast updates context, localStorage, and Firestore, and the root background and text color update instantly without a full page reload.
+
 ## ThemeContext API
 
 ```jsx
@@ -109,9 +124,10 @@ const {
 
 ## Adding a New Theme
 
-1. Add palette to `PALETTES` in `ThemeContext.jsx` (must have all 26 color tokens)
-2. Add entry to `THEME_OPTIONS` array
-3. Done — every component picks it up automatically
+1. Add palette to `PALETTES` in `ThemeContext.jsx` (must have all 25 color tokens: bg, surface, card, cardHover, border, borderActive, text, textDim, textMuted, accent, accentDim, accentGlow, pro, proDim, warn, warnDim, danger, dangerDim, success, successDim, slack, slackDim, owner, inputBg, overlay).
+2. Add entry to `THEME_OPTIONS` array.
+3. Optionally add the same palette to the static `DARK` fallback in `theme.js` if you need ErrorBoundary to support the new theme (otherwise ErrorBoundary stays dark).
+4. Done — every component using `useTheme()` picks it up automatically.
 
 ## Deployment
 

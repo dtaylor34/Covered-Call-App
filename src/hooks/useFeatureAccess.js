@@ -10,14 +10,14 @@ import { useAuth } from "../contexts/AuthContext";
 
 // -- Feature -> minimum tier mapping --
 const FEATURE_TIERS = {
-  // Basic (everyone)
+  // Basic (default view — everyone)
   dashboard: "basic",
+  working: "basic",
   glossary: "basic",
   profile: "basic",
   searchHistory: "basic",
 
   // Advanced
-  working: "advanced",
   risk: "advanced",
   transactions: "advanced",
   unlimitedHistory: "advanced",
@@ -42,14 +42,14 @@ export const TIER_INFO = {
     color: "#00d4aa",
     bg: "rgba(0,212,170,0.12)",
     icon: "\u{25C6}",
-    features: ["Dashboard", "Glossary", "Profile", "Search History (10)"],
+    features: ["Dashboard", "Working P&L Tab", "Glossary", "Profile", "Search History (10)"],
   },
   advanced: {
     label: "Advanced",
     color: "#818cf8",
     bg: "rgba(129,140,248,0.12)",
     icon: "\u{25C6}",
-    features: ["Everything in Basic", "Working P&L Tab", "Risk Scenarios", "Transaction Log", "Unlimited Search History"],
+    features: ["Everything in Basic", "Risk Scenarios", "Transaction Log", "Unlimited Search History"],
   },
   expert: {
     label: "Expert",

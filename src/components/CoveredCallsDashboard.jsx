@@ -20,6 +20,59 @@ import { useTheme } from "../contexts/ThemeContext";
 
 const POPULAR = ["AAPL", "MSFT", "NVDA", "GOOGL", "AMZN", "META", "TSLA", "SPY"];
 
+function DelayInfoIcon() {
+  const { T } = useTheme();
+  const [show, setShow] = useState(false);
+  return (
+    <span
+      style={{ position: "relative", display: "inline-flex", cursor: "default", verticalAlign: "middle" }}
+      onMouseEnter={() => setShow(true)}
+      onMouseLeave={() => setShow(false)}
+      aria-label="15min delay using Yahoo"
+    >
+      <span
+        style={{
+          fontFamily: "'Material Icons Outlined'",
+          fontSize: 14,
+          width: 14,
+          height: 14,
+          opacity: 0.9,
+          color: "inherit",
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+        aria-hidden="true"
+      >
+        info
+      </span>
+      {show && (
+        <span
+          role="tooltip"
+          style={{
+            position: "absolute",
+            right: 0,
+            bottom: "100%",
+            marginBottom: 4,
+            padding: "6px 10px",
+            background: T.surface,
+            border: `1px solid ${T.border}`,
+            borderRadius: 6,
+            fontSize: 11,
+            color: T.text,
+            fontFamily: T.fontMono,
+            whiteSpace: "nowrap",
+            zIndex: 20,
+            boxShadow: "0 4px 12px rgba(0,0,0,0.25)",
+          }}
+        >
+          15min delay using Yahoo
+        </span>
+      )}
+    </span>
+  );
+}
+
 export default function CoveredCallsDashboard({ onPositionChange }) {
   const { T } = useTheme();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -317,8 +370,9 @@ export default function CoveredCallsDashboard({ onPositionChange }) {
               }}>
                 Covered Call Recommendations
               </h3>
-              <div style={{ fontSize: 11, color: T.textDim, marginTop: 2, fontFamily: T.fontMono }}>
-                {scores.recommendations.length} opportunities · {scores.provider} · {scores.delay}min delay
+              <div style={{ fontSize: 11, color: T.textDim, marginTop: 2, fontFamily: T.fontMono, display: "flex", alignItems: "center", gap: 4 }}>
+                {scores.recommendations.length} opportunities · {scores.delay}min delay
+                <DelayInfoIcon />
                 {scores._stale && <span style={{ color: T.warn }}> · STALE DATA</span>}
               </div>
             </div>
@@ -433,8 +487,9 @@ function QuoteCard({ quote, loading }) {
         <QuoteStat label="Div Yield" value={quote.dividendYield ? `${(quote.dividendYield * 100).toFixed(2)}%` : "—"} />
       </div>
 
-      <div style={{ fontSize: 10, color: T.textMuted, fontFamily: T.fontMono }}>
-        {quote.delay}min delay · {quote.provider}
+      <div style={{ fontSize: 10, color: T.textMuted, fontFamily: T.fontMono, display: "flex", alignItems: "center", gap: 4 }}>
+        {quote.delay}min delay
+        <DelayInfoIcon />
       </div>
     </div>
   );

@@ -86,11 +86,13 @@ The header and tab bar use a two-layer sticky system from the prototype:
 Scroll handler uses `passive: true` for performance and a ref for `lastScrollY` to avoid re-renders on every scroll event.
 
 ## Theme System Architecture
-Every component uses `import { T } from "../theme"` — this is unchanged. The difference is that `theme.js` now reads `localStorage.getItem("cc:theme")` on page load and exports the correct palette (dark/light/highContrast) instead of hardcoded dark tokens.
 
-All 26 color tokens (`T.bg`, `T.accent`, `T.danger`, etc.) exist in all 3 palettes. High contrast uses maximum contrast ratios: pure black bg, pure white text, vivid greens/reds/yellows. Light mode uses appropriate dark-on-light equivalents.
+**See `docs/THEME_REFACTOR_README.md` for the current theme system.** Summary:
 
-Theme changes trigger `window.location.reload()` from ProfileTab, which re-evaluates `theme.js` and picks up the new palette. Zero refactoring of existing components needed.
+- **Functional components** use `const { T } = useTheme()` from `ThemeContext.jsx`. Theme switching is instant (no reload).
+- **Three palettes:** dark, light, highContrast. All 25 color tokens exist in each; ThemeContext sets `--theme-bg` / `--theme-text` on the document root so `index.html` body follows the active theme.
+- **Persistence:** React context + localStorage (`cc:theme`) + Firestore (`userData.theme`) via AuthContext.
+- **Class components** (e.g. ErrorBoundary) still use the static `import { T } from "../theme"` fallback; `theme.js` exports a dark-only fallback and structural constants (ROLES, STATUS_STYLES, hasPermission).
 
 ## What's NOT Changed
 - App.jsx routing (no new routes needed)
