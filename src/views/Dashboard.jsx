@@ -21,10 +21,12 @@ import TransactionsTab from "../components/TransactionsTab";
 import GlossaryTab from "../components/GlossaryTab";
 import SetupTab from "../components/SetupTab";
 import ProfileTab from "../components/ProfileTab";
+import SelectionTab from "../components/SelectionTab";
 
 // ── Tab definitions ──
 const TABS = [
   { id: "dashboard", label: "Dashboard", icon: "◉", feature: "dashboard" },
+  { id: "selection", label: "Selection", icon: "🎯", feature: "selection" },
   { id: "working",   label: "Working",   icon: "📊", feature: "working" },
   { id: "risk",      label: "Risk",      icon: "⚠",  feature: "risk" },
   { id: "transactions", label: "Trades", icon: "📝", feature: "transactions" },
@@ -297,6 +299,11 @@ export default function Dashboard() {
         {/* Dashboard */}
         <div role="tabpanel" aria-label="Dashboard" style={{ display: activeTab === "dashboard" ? "block" : "none" }}>
           <CoveredCallsDashboard onPositionChange={handlePositionChange} />
+        </div>
+
+        {/* Selection (basic -- always unlocked) */}
+        <div role="tabpanel" aria-label="Position selection and analysis" style={{ display: activeTab === "selection" ? "block" : "none" }}>
+          <SelectionTab onNavigateToGlossary={() => setActiveTab("glossary")} />
         </div>
 
         {/* Working (tier-gated) */}

@@ -14,6 +14,14 @@ Format follows [Semantic Versioning](https://semver.org/):
 ## [Unreleased]
 _Changes that are ready but not yet deployed._
 
+### Added
+- **SelectionTab** component (symbol selection and options flow for covered calls).
+
+### Changed
+- ThemeContext refinements and structure.
+- useFeatureAccess and Dashboard tweaks.
+- index.html updates.
+
 ---
 
 ## [2.0.3] — 2026-03-03

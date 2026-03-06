@@ -12,6 +12,7 @@ import { useAuth } from "../contexts/AuthContext";
 const FEATURE_TIERS = {
   // Basic (default view — everyone)
   dashboard: "basic",
+  selection: "basic",
   working: "basic",
   glossary: "basic",
   profile: "basic",
