@@ -6,6 +6,8 @@ import { useAuth } from "../contexts/AuthContext";
 import { useFeatureAccess, TIER_INFO } from "../hooks/useFeatureAccess";
 import { getFunctions, httpsCallable } from "firebase/functions";
 import { useTheme, THEME_OPTIONS } from "../contexts/ThemeContext";
+import { doc, getDoc, updateDoc } from "firebase/firestore";
+import { db } from "../firebase";
 
 const Card = ({ children, style }) => {
   const { T } = useTheme();
@@ -31,7 +33,7 @@ export default function ProfileTab() {
   const { T, themeName, setTheme } = useTheme();
   const {
     email, name, userData, trialInfo, subscriptionStatus,
-    hasFreeAccessCode, updateProfile, updateUserTheme,
+    hasFreeAccessCode, updateProfile, updateUserTheme, currentUser,
   } = useAuth();
   const { plan, canAccess } = useFeatureAccess();
   const [billingLoading, setBillingLoading] = useState(false);
@@ -39,7 +41,62 @@ export default function ProfileTab() {
   const [nameInput, setNameInput] = useState(name || "");
   const [saved, setSaved] = useState(false);
 
+  // ── Promo Code State ──
+  const [promoCode, setPromoCode] = useState("");
+  const [promoLoading, setPromoLoading] = useState(false);
+  const [promoError, setPromoError] = useState(null);
+  const [promoSuccess, setPromoSuccess] = useState(null);
+
   const isTrial = subscriptionStatus === "trial";
+  const alreadyHasPromo = !!userData?.promoCode;
+
+  const applyPromo = async () => {
+    if (!promoCode.trim()) return;
+    setPromoError(null);
+    setPromoSuccess(null);
+    setPromoLoading(true);
+    try {
+      const promoRef = doc(db, "promoCodes", promoCode.toUpperCase().trim());
+      const promoSnap = await getDoc(promoRef);
+
+      if (!promoSnap.exists()) {
+        setPromoError("Invalid promo code. Check the code and try again.");
+        return;
+      }
+
+      const promoData = promoSnap.data();
+
+      if (!promoData.active) {
+        setPromoError("This promo code is no longer active.");
+        return;
+      }
+
+      if (promoData.expiresAt && new Date(promoData.expiresAt) < new Date()) {
+        setPromoError("This promo code has expired.");
+        return;
+      }
+
+      if (promoData.maxUses && promoData.usedCount >= promoData.maxUses) {
+        setPromoError("This promo code has reached its maximum uses.");
+        return;
+      }
+
+      // Write promo to user doc
+      const userRef = doc(db, "users", currentUser.uid);
+      await updateDoc(userRef, {
+        promoCode: promoCode.toUpperCase().trim(),
+        promoAppliedAt: new Date().toISOString(),
+      });
+
+      setPromoSuccess(promoData.description || `Promo applied! ${promoData.discountPercent || 0}% off.`);
+      setPromoCode("");
+    } catch (err) {
+      console.error("Promo code error:", err);
+      setPromoError("Could not verify promo code. Please try again.");
+    } finally {
+      setPromoLoading(false);
+    }
+  };
 
   const handleManageBilling = async () => {
     setBillingLoading(true);
@@ -134,6 +191,99 @@ export default function ProfileTab() {
           </span>
         </div>
       </Card>
+
+      {/* ── Promo Code (trial users only) ── */}
+      {isTrial && (
+        <Card>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
+            <span style={{ fontSize: 16 }}>🎟️</span>
+            <h3 style={{ color: T.text, fontFamily: T.fontDisplay, fontSize: 16, margin: 0 }}>Promo Code</h3>
+          </div>
+
+          {alreadyHasPromo ? (
+            /* Already applied — show current code */
+            <div style={{
+              display: "flex", alignItems: "center", gap: 12,
+              padding: "12px 16px", borderRadius: 8,
+              background: T.success + "12", border: `1px solid ${T.success}33`,
+            }}>
+              <span style={{ fontSize: 18 }}>✅</span>
+              <div>
+                <div style={{ color: T.success, fontSize: 12, fontWeight: 700, fontFamily: T.fontMono }}>
+                  {userData.promoCode} applied
+                </div>
+                <div style={{ color: T.textDim, fontSize: 11, marginTop: 2 }}>
+                  Applied {userData.promoAppliedAt
+                    ? new Date(userData.promoAppliedAt).toLocaleDateString()
+                    : "during onboarding"}
+                </div>
+              </div>
+            </div>
+          ) : (
+            /* No promo yet — show input */
+            <>
+              <div style={{ color: T.textDim, fontSize: 12, marginBottom: 12 }}>
+                Have a promo code? Enter it below to unlock a discount when you subscribe.
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <input
+                  aria-label="Enter promo code"
+                  value={promoCode}
+                  onChange={(e) => {
+                    setPromoCode(e.target.value.toUpperCase());
+                    setPromoError(null);
+                    setPromoSuccess(null);
+                  }}
+                  onKeyDown={(e) => e.key === "Enter" && applyPromo()}
+                  placeholder="e.g. FAMILY34"
+                  style={{
+                    flex: 1, padding: "9px 14px", borderRadius: 8, fontSize: 13,
+                    background: T.card, border: `1px solid ${promoError ? T.danger : promoSuccess ? T.success : T.border}`,
+                    color: T.text, fontFamily: T.fontMono, letterSpacing: 1,
+                    outline: "none", transition: "border-color 0.2s",
+                  }}
+                />
+                <button
+                  aria-label="Apply promo code"
+                  onClick={applyPromo}
+                  disabled={promoLoading || !promoCode.trim()}
+                  style={{
+                    padding: "9px 20px", borderRadius: 8, cursor: promoLoading || !promoCode.trim() ? "not-allowed" : "pointer",
+                    background: T.accentDim, border: `1px solid ${T.accent}44`,
+                    color: T.accent, fontSize: 12, fontWeight: 700,
+                    fontFamily: T.fontMono, opacity: promoLoading || !promoCode.trim() ? 0.5 : 1,
+                    transition: "all 0.2s",
+                  }}
+                >
+                  {promoLoading ? "Checking..." : "Apply"}
+                </button>
+              </div>
+
+              {/* Error message */}
+              {promoError && (
+                <div style={{
+                  marginTop: 8, padding: "8px 12px", borderRadius: 6,
+                  background: T.danger + "12", border: `1px solid ${T.danger}33`,
+                  color: T.danger, fontSize: 11,
+                }}>
+                  ❌ {promoError}
+                </div>
+              )}
+
+              {/* Success message */}
+              {promoSuccess && (
+                <div style={{
+                  marginTop: 8, padding: "8px 12px", borderRadius: 6,
+                  background: T.success + "12", border: `1px solid ${T.success}33`,
+                  color: T.success, fontSize: 11,
+                }}>
+                  ✅ {promoSuccess}
+                </div>
+              )}
+            </>
+          )}
+        </Card>
+      )}
 
       {/* Plan Selection */}
       <Card>

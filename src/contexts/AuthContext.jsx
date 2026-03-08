@@ -65,7 +65,13 @@ export function AuthProvider({ children }) {
       if (firebaseUser) {
         try {
           const userRef = doc(db, "users", firebaseUser.uid);
-          const snap = await getDoc(userRef);
+          let snap = await getDoc(userRef);
+          // Race condition guard: signup writes the doc then auth fires immediately.
+          // Retry once if the doc isn't committed yet.
+          if (!snap.exists()) {
+            await new Promise((r) => setTimeout(r, 1500));
+            snap = await getDoc(userRef);
+          }
           if (snap.exists()) {
             setUserData(snap.data());
             await updateDoc(userRef, { lastActive: new Date().toISOString() });
@@ -341,6 +347,17 @@ export function AuthProvider({ children }) {
     }
   }, [user]);
 
+  // ── Mark onboarding complete (Firestore + local state in one shot) ──
+  // Patches userData immediately so route guards see the change before navigate() fires.
+  const markOnboardingComplete = useCallback(async (fields = {}) => {
+    if (!user) return;
+    const now = new Date().toISOString();
+    const patch = { ...fields, onboardingComplete: true, onboardingCompletedAt: now };
+    const userRef = doc(db, "users", user.uid);
+    await updateDoc(userRef, patch);
+    setUserData((prev) => prev ? { ...prev, ...patch } : patch);
+  }, [user]);
+
   // ── Update profile fields ──
   const updateProfile = useCallback(async (fields) => {
     if (!user) return;
@@ -379,8 +396,8 @@ export function AuthProvider({ children }) {
   const onboardingComplete = userData?.onboardingComplete ?? false;
 
   const value = {
-    user, userData, loading, error,
-    signup, login, signInWithGoogle, signInWithApple, logout, refreshUserData, setError,
+    user, currentUser: user, userData, loading, error,
+    signup, login, signInWithGoogle, signInWithApple, logout, refreshUserData, markOnboardingComplete, setError,
     addToSearchHistory, updateSearchHistoryEntry, deleteFromSearchHistory, clearSearchHistory,
     updateWatchlist, updatePlan, updateUserTheme, updateProfile,
     searchHistory: userData?.searchHistory || [],

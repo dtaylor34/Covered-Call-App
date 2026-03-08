@@ -41,6 +41,21 @@
       ::-webkit-scrollbar-track { background: transparent; }
       ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 3px; }
     </style>
+    <!-- Instant theme paint — runs before React loads, eliminates white flash -->
+    <script>
+      (function() {
+        var PALETTES = {
+          dark:         { bg: "#0a0e17", text: "#e5e7eb" },
+          light:        { bg: "#f5f7fa", text: "#111827" },
+          highContrast: { bg: "#000000", text: "#ffffff" },
+        };
+        var stored = "dark";
+        try { stored = localStorage.getItem("cc:theme") || "dark"; } catch(e) {}
+        var p = PALETTES[stored] || PALETTES.dark;
+        document.documentElement.style.setProperty("--theme-bg",   p.bg);
+        document.documentElement.style.setProperty("--theme-text", p.text);
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

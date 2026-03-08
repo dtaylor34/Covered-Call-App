@@ -11,7 +11,7 @@
 
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { doc, updateDoc, getDoc } from "firebase/firestore";
+import { doc, getDoc } from "firebase/firestore";
 import { db } from "../firebase";
 import { useAuth } from "../contexts/AuthContext";
 import { AnalyticsEvents, analytics } from "../services/analytics";
@@ -25,7 +25,7 @@ const STEPS = [
 
 export default function OnboardingScreen() {
   const { T } = useTheme();
-  const { user, email, refreshUserData } = useAuth();
+  const { user, email, markOnboardingComplete } = useAuth();
   const navigate = useNavigate();
   const [step, setStep] = useState(0);
   const [saving, setSaving] = useState(false);
@@ -49,6 +49,28 @@ export default function OnboardingScreen() {
   });
 
   const [promoCode, setPromoCode] = useState("");
+
+  // ── Skip Onboarding ──
+  // Uses email prefix as name fallback so name field is never blank in Firestore.
+  const skipOnboarding = async () => {
+    if (!user) return;
+    setSaving(true);
+    try {
+      AnalyticsEvents.onboardingSkipped(STEPS[step].key);
+      const fallbackName = profile.displayName.trim() || user.email?.split("@")[0] || "User";
+      await markOnboardingComplete({
+        name: fallbackName,
+        searchHistory: [],
+        watchlist: [],
+      });
+      navigate("/", { replace: true });
+    } catch (err) {
+      console.error("Skip onboarding error:", err);
+      navigate("/", { replace: true });
+    } finally {
+      setSaving(false);
+    }
+  };
 
   // ── Navigation ──
   const canAdvance = () => {
@@ -108,53 +130,33 @@ export default function OnboardingScreen() {
   const completeOnboarding = async () => {
     if (!user) return;
     setSaving(true);
-
     try {
-      const userRef = doc(db, "users", user.uid);
-      const now = new Date().toISOString();
-
-      await updateDoc(userRef, {
-        // Profile
+      // markOnboardingComplete writes to Firestore AND patches local userData
+      // atomically — so when navigate() fires, route guards already see
+      // onboardingComplete: true and don't redirect back to /onboarding.
+      await markOnboardingComplete({
         name: profile.displayName.trim(),
         experienceLevel: profile.experienceLevel,
         investmentGoal: profile.investmentGoal || null,
         portfolioSize: profile.portfolioSize || null,
-
-        // Preferences
         newsletterOptIn: preferences.newsletterOptIn,
         updateFrequency: preferences.updateFrequency,
         notifyNewFeatures: preferences.notifyNewFeatures,
         notifyMarketAlerts: preferences.notifyMarketAlerts,
         notifyEducation: preferences.notifyEducation,
-
-        // Promo
         promoCode: promoCode.trim() ? promoCode.toUpperCase().trim() : null,
-        promoAppliedAt: promoCode.trim() ? now : null,
-
-        // Onboarding complete
-        onboardingComplete: true,
-        onboardingCompletedAt: now,
-
-        // Initialize search history
+        promoAppliedAt: promoCode.trim() ? new Date().toISOString() : null,
         searchHistory: [],
         watchlist: [],
       });
-
-      await refreshUserData();
       AnalyticsEvents.onboardingCompleted(!!promoCode.trim());
       navigate("/", { replace: true });
     } catch (err) {
       console.error("Onboarding save error:", err);
       analytics.error(err, { context: "onboarding_save", severity: "error", step: STEPS[step].key });
-      // Don't block — save what we can
+      // Fallback — at minimum mark onboarding done so user isn't stuck
       try {
-        const userRef = doc(db, "users", user.uid);
-        await updateDoc(userRef, {
-          name: profile.displayName.trim(),
-          onboardingComplete: true,
-          onboardingCompletedAt: new Date().toISOString(),
-        });
-        await refreshUserData();
+        await markOnboardingComplete({ name: profile.displayName.trim() });
         navigate("/", { replace: true });
       } catch {
         navigate("/", { replace: true });
@@ -280,7 +282,7 @@ export default function OnboardingScreen() {
 
         {/* ── Skip option ── */}
         <div style={{ textAlign: "center", marginTop: 16 }}>
-          <button onClick={() => { AnalyticsEvents.onboardingSkipped(STEPS[step].key); completeOnboarding(); }} style={{
+          <button onClick={skipOnboarding} disabled={saving} style={{
             background: "none", border: "none", color: T.textMuted,
             fontSize: 12, cursor: "pointer",
           }}>
