@@ -34,7 +34,7 @@ export default function AuthScreen() {
       if (mode === "signup") {
         await signup(email, password, name);
         AnalyticsEvents.signupCompleted();
-        navigate("/onboarding");
+        navigate("/checkout");
       } else {
         await login(email, password);
         AnalyticsEvents.loginCompleted();

@@ -198,6 +198,38 @@ in preview — they affect the same Firestore as production.
 
 ---
 
+## Cloud Functions config (secrets / .env)
+
+Stripe and app URL are read by Cloud Functions via env. Two options:
+
+**Production (recommended): Firebase secrets**
+
+```bash
+firebase functions:secrets:set STRIPE_SECRET_KEY
+firebase functions:secrets:set STRIPE_WEBHOOK_SECRET
+firebase functions:secrets:set STRIPE_PRICE_ID
+firebase functions:secrets:set APP_URL
+```
+
+Each command will prompt for the value. Use production values for live; keep
+`APP_URL=https://covered-calls-prod.web.app` (or your production Hosting URL).
+
+**Local / emulator: `functions/.env`**
+
+Copy `functions/.env.example` to `functions/.env` and fill in:
+
+```
+STRIPE_SECRET_KEY=sk_test_...
+STRIPE_WEBHOOK_SECRET=whsec_...
+STRIPE_PRICE_ID=price_1T8kwxRFlsXkYLZ30WQrZSEd
+APP_URL=https://covered-calls-prod.web.app
+```
+
+Firebase Functions v2 loads `.env` automatically when running or emulating locally.
+Do not commit `functions/.env`; it is gitignored.
+
+---
+
 ## Firebase Hosting Configuration
 
 The `firebase.json` hosting section should include:

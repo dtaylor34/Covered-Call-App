@@ -18,6 +18,7 @@ import OnboardingScreen from "./views/OnboardingScreen";
 import Dashboard from "./views/Dashboard";
 import AdminPanel from "./views/AdminPanel";
 import PaywallScreen from "./views/PaywallScreen";
+import CheckoutScreen from "./views/CheckoutScreen";
 import SearchHistory from "./views/SearchHistory";
 
 // ── Loading Screen ──
@@ -120,6 +121,11 @@ export default function App() {
         {/* ── Onboarding (auth required, shown once after signup) ── */}
         <Route path="/onboarding" element={
           <RequireAuth><OnboardingScreen /></RequireAuth>
+        } />
+
+        {/* ── Checkout (auth required, collect card after signup) ── */}
+        <Route path="/checkout" element={
+          <RequireAuth><CheckoutScreen /></RequireAuth>
         } />
 
         {/* ── Paywall ── */}
