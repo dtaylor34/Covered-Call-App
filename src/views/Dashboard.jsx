@@ -14,7 +14,10 @@ import { getFunctions, httpsCallable } from "firebase/functions";
 import { AnalyticsEvents } from "../services/analytics";
 import { useTheme } from "../contexts/ThemeContext";
 
+import { getFirestore, collection, addDoc, updateDoc, doc, serverTimestamp } from "firebase/firestore";
 import CoveredCallsDashboard from "../components/CoveredCallsDashboard";
+import SavedViewsList from "../components/SavedViewsList";
+import SaveViewModal from "../components/SaveViewModal";
 import WorkingTab from "../components/WorkingTab";
 import RiskTab from "../components/RiskTab";
 import TransactionsTab from "../components/TransactionsTab";
@@ -102,6 +105,11 @@ export default function Dashboard() {
   // Persisted active tab
   const [activeTab, setActiveTab] = usePersistedState("cc:tab", "dashboard");
 
+  // Dashboard sub-tabs: "finder" | "saved"
+  const [dashSubTab, setDashSubTab] = useState("finder");
+  const [showSaveModal, setShowSaveModal] = useState(false);
+  const [editingView, setEditingView] = useState(null);
+
   // Shared active position — flows from Dashboard → Working, Transactions, Setup
   const [activePosition, setActivePosition] = usePersistedState("cc:position", {
     symbol: null, contract: null,
@@ -148,6 +156,39 @@ export default function Dashboard() {
     } finally {
       setBillingLoading(false);
     }
+  };
+
+  // ── Save / Update a view to Firestore ──
+  const handleSaveView = async (name) => {
+    if (!currentUser?.uid || !activePosition?.symbol || !activePosition?.contract) return;
+    const db = getFirestore();
+    const payload = {
+      name,
+      symbol: activePosition.symbol,
+      stockPrice: activePosition.contract.stockPrice || null,
+      contract: {
+        strike: activePosition.contract.strike,
+        expiration: activePosition.contract.expiration,
+        premium: activePosition.contract.premium != null ? activePosition.contract.premium / 100 : null,
+        score: activePosition.contract.score,
+      },
+      updatedAt: serverTimestamp(),
+    };
+    if (editingView) {
+      await updateDoc(doc(db, "users", currentUser.uid, "savedViews", editingView.id), payload);
+    } else {
+      await addDoc(collection(db, "users", currentUser.uid, "savedViews"), {
+        ...payload, createdAt: serverTimestamp(),
+      });
+    }
+    setShowSaveModal(false);
+    setEditingView(null);
+    setDashSubTab("saved");
+  };
+
+  const handleEditView = (view) => {
+    setEditingView(view);
+    setDashSubTab("finder");
   };
 
   return (
@@ -296,9 +337,56 @@ export default function Dashboard() {
 
         {/* ── Tab Content (display toggle — all stay mounted) ── */}
 
-        {/* Dashboard */}
+        {/* Dashboard — with Position Finder / Saved Views sub-tabs */}
         <div role="tabpanel" aria-label="Dashboard" style={{ display: activeTab === "dashboard" ? "block" : "none" }}>
-          <CoveredCallsDashboard onPositionChange={handlePositionChange} />
+
+          {/* Sub-tab toggle */}
+          <div style={{ display: "flex", gap: 4, background: T.surface, borderRadius: 10, padding: 4, marginBottom: 16, border: `1px solid ${T.border}` }}>
+            {[{ id: "finder", label: "📊 Position Finder" }, { id: "saved", label: "📌 Saved Views" }].map(({ id, label }) => (
+              <button
+                key={id}
+                onClick={() => setDashSubTab(id)}
+                style={{
+                  flex: 1, padding: "9px 12px", borderRadius: 7, border: "none", cursor: "pointer",
+                  background: dashSubTab === id ? T.accentDim : "transparent",
+                  color: dashSubTab === id ? T.accent : T.textDim,
+                  fontWeight: dashSubTab === id ? 700 : 400,
+                  fontSize: isMobile ? 11 : 12, fontFamily: T.fontBody,
+                  transition: "all 0.15s",
+                }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {/* Position Finder */}
+          {dashSubTab === "finder" && (
+            <>
+              <CoveredCallsDashboard onPositionChange={handlePositionChange} />
+              {/* Save View button — only shown when a contract is selected */}
+              {activePosition?.contract && (
+                <div style={{ marginTop: 12 }}>
+                  <button
+                    onClick={() => { setEditingView(null); setShowSaveModal(true); }}
+                    style={{
+                      width: "100%", padding: 13, borderRadius: 10,
+                      background: T.accentDim, border: `1px solid ${T.accent}44`,
+                      color: T.accent, cursor: "pointer",
+                      fontFamily: T.fontBody, fontSize: 13, fontWeight: 700,
+                    }}
+                  >
+                    💾 Save This View
+                  </button>
+                </div>
+              )}
+            </>
+          )}
+
+          {/* Saved Views */}
+          {dashSubTab === "saved" && (
+            <SavedViewsList onEditView={handleEditView} />
+          )}
         </div>
 
         {/* Selection (basic -- always unlocked) */}
@@ -365,6 +453,17 @@ export default function Dashboard() {
         </aside>
 
       </main>
+
+      {/* ── Save View Modal ── */}
+      {showSaveModal && (
+        <SaveViewModal
+          position={activePosition}
+          editingView={editingView}
+          onSave={handleSaveView}
+          onClose={() => { setShowSaveModal(false); setEditingView(null); }}
+        />
+      )}
+
     </div>
   );
 }

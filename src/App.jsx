@@ -87,6 +87,14 @@ function RequireAdmin({ children }) {
   return children;
 }
 
+function RequireCheckout({ children }) {
+  const { user, userData, loading } = useAuth();
+  if (loading) return <LoadingScreen />;
+  if (!user) return <Navigate to="/login" replace />;
+  if (!userData?.stripeCustomerId) return <Navigate to="/checkout" replace />;
+  return children;
+}
+
 function RequireOnboarding({ children }) {
   const { user, onboardingComplete, loading } = useAuth();
   if (loading) return <LoadingScreen />;
@@ -96,9 +104,11 @@ function RequireOnboarding({ children }) {
 }
 
 function RequireAccess({ children }) {
-  const { user, hasAccess, isTrialExpired, onboardingComplete, loading } = useAuth();
+  const { user, hasAccess, isTrialExpired, onboardingComplete, userData, loading } = useAuth();
   if (loading) return <LoadingScreen />;
   if (!user) return <Navigate to="/login" replace />;
+  // Must complete checkout (card collection) before onboarding
+  if (!userData?.stripeCustomerId) return <Navigate to="/checkout" replace />;
   if (!onboardingComplete) return <Navigate to="/onboarding" replace />;
   if (isTrialExpired) return <Navigate to="/upgrade" replace />;
   return children;
@@ -120,7 +130,7 @@ export default function App() {
 
         {/* ── Onboarding (auth required, shown once after signup) ── */}
         <Route path="/onboarding" element={
-          <RequireAuth><OnboardingScreen /></RequireAuth>
+          <RequireCheckout><OnboardingScreen /></RequireCheckout>
         } />
 
         {/* ── Checkout (auth required, collect card after signup) ── */}

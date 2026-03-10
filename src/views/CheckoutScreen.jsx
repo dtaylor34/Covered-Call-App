@@ -8,7 +8,7 @@ import { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { getFunctions, httpsCallable } from "firebase/functions";
 import { doc, getDoc } from "firebase/firestore";
-import { db } from "../firebase";
+import { db, functions } from "../firebase";
 import { useAuth } from "../contexts/AuthContext";
 import { useTheme } from "../contexts/ThemeContext";
 
@@ -77,9 +77,12 @@ export default function CheckoutScreen() {
     setLoading(true);
     setError(null);
     try {
-      const functions = getFunctions();
       const createCheckout = httpsCallable(functions, "createCheckoutSession");
-      const result = await createCheckout({ promoCode: validatedPromo || "" });
+      const result = await createCheckout({
+        promoCode: validatedPromo || "",
+        successUrl: `${window.location.origin}/onboarding`,
+        cancelUrl: `${window.location.origin}/checkout?checkout=cancelled`,
+      });
       if (result.data?.url) {
         window.location.href = result.data.url;
       } else {
@@ -220,7 +223,7 @@ export default function CheckoutScreen() {
                       setPromoError(null);
                     }}
                     onKeyDown={(e) => e.key === "Enter" && applyPromo()}
-                    placeholder="e.g. FAMILY34"
+                    placeholder="e.g. CODE123"
                     maxLength={20}
                     style={{
                       flex: 1, padding: "10px 14px", borderRadius: 8, fontSize: 13,

@@ -11,7 +11,12 @@
     "dev:full": "concurrently \"npm run dev:emulators\" \"npm run dev\"",
     "seed": "node scripts/seed-firestore.js",
     "deploy:functions": "cd functions && npm run deploy",
-    "deploy": "firebase deploy"
+    "deploy": "firebase deploy",
+    "build:test": "vite build --mode test",
+    "build:prod": "vite build --mode production",
+    "deploy:test": "npm run build:test && firebase hosting:channel:deploy test --expires 30d",
+    "deploy:prod": "npm run build:prod && firebase deploy --only hosting",
+    "deploy:all:prod": "npm run build:prod && firebase deploy"
   },
   "dependencies": {
     "firebase": "^11.2.0",

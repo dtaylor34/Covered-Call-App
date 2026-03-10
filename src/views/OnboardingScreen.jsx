@@ -9,7 +9,7 @@
 //   3. Promo Code — optional code for discounts or extended trial
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { doc, getDoc } from "firebase/firestore";
 import { db } from "../firebase";
@@ -25,7 +25,7 @@ const STEPS = [
 
 export default function OnboardingScreen() {
   const { T } = useTheme();
-  const { user, email, markOnboardingComplete } = useAuth();
+  const { user, email, name, markOnboardingComplete } = useAuth();
   const navigate = useNavigate();
   const [step, setStep] = useState(0);
   const [saving, setSaving] = useState(false);
@@ -34,11 +34,21 @@ export default function OnboardingScreen() {
 
   // ── Form state ──
   const [profile, setProfile] = useState({
-    displayName: "",
+    displayName: name || "",
     experienceLevel: "",
     investmentGoal: "",
     portfolioSize: "",
   });
+
+  // Prefill name once userData loads from Firestore
+  useEffect(() => {
+    if (name) {
+      setProfile((prev) => ({
+        ...prev,
+        displayName: prev.displayName || name,
+      }));
+    }
+  }, [name]);
 
   const [preferences, setPreferences] = useState({
     newsletterOptIn: true,
@@ -527,13 +537,17 @@ function StepPromo({ promoCode, setPromoCode, applyPromo, promoError, promoSucce
             <div style={{ fontSize: 14, fontWeight: 700, color: T.text }}>7-Day Free Trial</div>
             <div style={{ fontSize: 11, color: T.textDim }}>Then $10/mo · Cancel anytime</div>
           </div>
-          <div style={{
-            padding: "6px 14px", borderRadius: 8,
-            background: T.accentDim, border: "1px solid rgba(0,212,170,0.15)",
-            fontSize: 11, fontWeight: 700, color: T.accent, fontFamily: T.fontMono,
-          }}>
-            NO CARD REQUIRED
-          </div>
+        </div>
+
+        {/* Card hint */}
+        <div style={{
+          marginTop: 12, padding: "10px 12px", borderRadius: 8,
+          background: "rgba(255,255,255,0.02)", border: `1px solid ${T.border}`,
+          fontSize: 11, color: T.textDim, lineHeight: 1.5,
+        }}>
+          💳 <strong style={{ color: T.text }}>Card saved.</strong> Your trial is active — no charge today.
+          You'll be billed <strong style={{ color: T.text }}>$10/mo</strong> automatically after your
+          7-day trial ends. Cancel anytime before then and you won't be charged.
         </div>
       </div>
     </div>

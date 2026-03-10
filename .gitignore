@@ -13,3 +13,4 @@ seed-data/
 .firebase/
 functions/node_modules/
 .DS_Store
+.env.test
