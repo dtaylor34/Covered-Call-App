@@ -9,11 +9,11 @@
 
 // ── Default scoring config (overridable via env) ──
 const DEFAULT_CONFIG = {
-  minOpenInterest: 100,
-  minVolume: 10,
+  minOpenInterest: 10,
   minDTE: 7,
   maxDTE: 60,
-  minStrikeRatio: 0.95, // Strike must be >= 95% of stock price (ATM or OTM)
+  minStrikeRatio: 0.95, // Strike must be >= 95% of stock price (ATM or near-ATM)
+  maxStrikeRatio: 1.20, // Strike must be <= 120% of stock price (not deep OTM)
   weights: {
     yield: 0.30,
     annualized: 0.20,
@@ -130,8 +130,9 @@ function passesFilters(call, stockPrice, cfg) {
   // Must be a call
   if (call.type !== "call") return false;
 
-  // Strike must be at or near the money (>= 95% of stock price by default)
+  // Strike must be at or near the money — not deep ITM or OTM
   if (call.strike < stockPrice * cfg.minStrikeRatio) return false;
+  if (call.strike > stockPrice * cfg.maxStrikeRatio) return false;
 
   // DTE range
   if (call.daysToExpiration < cfg.minDTE) return false;
@@ -146,10 +147,14 @@ function passesFilters(call, stockPrice, cfg) {
                    (call.lastPrice && call.lastPrice > 0);
   if (!hasPrice) return false;
 
-  // Liquidity: volume resets to 0 at market open each day, so treat 0 as
-  // "unknown" rather than "illiquid". Open interest is a better signal —
-  // require at least 10 (down from 100) to keep low-volume stocks viable.
-  if ((call.openInterest || 0) < 10) return false;
+  // Liquidity: open interest is the most reliable signal after hours
+  if ((call.openInterest || 0) < cfg.minOpenInterest) return false;
+
+  // Minimum meaningful premium — $0.01 is a dead/stale contract, not worth trading
+  const bestPrice = (call.bid > 0 && call.ask > 0)
+    ? (call.bid + call.ask) / 2
+    : call.lastPrice || call.bid || 0;
+  if (bestPrice < 0.05) return false;
 
   return true;
 }
