@@ -34,7 +34,7 @@ echo -e "${CYAN}═════════════════════�
 echo ""
 
 # ── Step 1: Extract version from CHANGELOG ──
-VERSION=$(grep -oP '## \[\K[0-9]+\.[0-9]+\.[0-9]+' docs/CHANGELOG.md | head -1)
+VERSION=$(grep -o '## \[[0-9]*\.[0-9]*\.[0-9]*\]' docs/CHANGELOG.md | head -1 | grep -o '[0-9]*\.[0-9]*\.[0-9]*')
 
 if [ -z "$VERSION" ]; then
   echo -e "${RED}✗ Could not find version in docs/CHANGELOG.md${NC}"
