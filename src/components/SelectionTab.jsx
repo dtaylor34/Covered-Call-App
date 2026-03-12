@@ -151,6 +151,8 @@ export default function SelectionTab({ onNavigateToGlossary, sharedSymbol, onSym
   const [optimizedFlash, setOptimizedFlash] = useState(false);
   const [showOptimizeInfo, setShowOptimizeInfo] = useState(false);
   const [activeInfoTip, setActiveInfoTip] = useState(null);
+  const [strikeRangeMin, setStrikeRangeMin] = useState(95);  // % of stock price
+  const [strikeRangeMax, setStrikeRangeMax] = useState(115); // % of stock price
 
   // ── Derived Data ──────────────────────────────────────────────────────────
   const visiblePresets = useMemo(() => {
@@ -720,22 +722,62 @@ export default function SelectionTab({ onNavigateToGlossary, sharedSymbol, onSym
                   </span>
                 )}
               </div>
+              {/* Strike Range Slider */}
+              <div style={{ marginBottom: 12, padding: "10px 14px", background: palette.inputBg, borderRadius: 8, border: `1px solid ${palette.borderLight}` }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                  <span style={{ color: palette.textDim, fontSize: 10, fontFamily: font, letterSpacing: "0.5px", textTransform: "uppercase" }}>
+                    Range Filter
+                  </span>
+                  <span style={{ color: palette.accent, fontSize: 11, fontFamily: font, fontWeight: 600 }}>
+                    ${(stock.price * strikeRangeMin / 100).toFixed(2)} – ${(stock.price * strikeRangeMax / 100).toFixed(2)}
+                  </span>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ fontSize: 10, color: palette.textMuted, fontFamily: font, minWidth: 28 }}>{strikeRangeMin}%</span>
+                  <div style={{ flex: 1, position: "relative", height: 20 }}>
+                    <div style={{ position: "absolute", top: "50%", left: 0, right: 0, height: 3, background: palette.borderLight, borderRadius: 2, transform: "translateY(-50%)" }} />
+                    <div style={{
+                      position: "absolute", top: "50%", height: 3, borderRadius: 2, background: palette.accent, transform: "translateY(-50%)",
+                      left: `${((strikeRangeMin - 85) / 55) * 100}%`,
+                      width: `${((strikeRangeMax - strikeRangeMin) / 55) * 100}%`,
+                    }} />
+                    <input type="range" min={85} max={140} step={1} value={strikeRangeMin}
+                      onChange={e => setStrikeRangeMin(Math.min(Number(e.target.value), strikeRangeMax - 2))}
+                      style={{ position: "absolute", width: "100%", opacity: 0, cursor: "pointer", zIndex: 2, height: "100%" }}
+                    />
+                    <input type="range" min={85} max={140} step={1} value={strikeRangeMax}
+                      onChange={e => setStrikeRangeMax(Math.max(Number(e.target.value), strikeRangeMin + 2))}
+                      style={{ position: "absolute", width: "100%", opacity: 0, cursor: "pointer", zIndex: 3, height: "100%" }}
+                    />
+                    <div style={{ position: "absolute", top: "50%", width: 12, height: 12, borderRadius: "50%", background: palette.accent, border: `2px solid ${palette.card}`, transform: "translate(-50%, -50%)", left: `${((strikeRangeMin - 85) / 55) * 100}%`, zIndex: 4, pointerEvents: "none" }} />
+                    <div style={{ position: "absolute", top: "50%", width: 12, height: 12, borderRadius: "50%", background: palette.accent, border: `2px solid ${palette.card}`, transform: "translate(-50%, -50%)", left: `${((strikeRangeMax - 85) / 55) * 100}%`, zIndex: 4, pointerEvents: "none" }} />
+                  </div>
+                  <span style={{ fontSize: 10, color: palette.textMuted, fontFamily: font, minWidth: 28 }}>{strikeRangeMax}%</span>
+                  <button onClick={() => { setStrikeRangeMin(95); setStrikeRangeMax(115); }} style={{
+                    fontSize: 9, color: palette.textMuted, fontFamily: font,
+                    background: "transparent", border: `1px solid ${palette.borderLight}`,
+                    borderRadius: 4, padding: "2px 6px", cursor: "pointer",
+                  }}>reset</button>
+                </div>
+              </div>
+
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                 {strikes.map(k => {
                   const prem = blackScholesCall(stock.price, k, timeToExpiry, riskFreeRate, stock.iv);
                   const otmPct = (k - stock.price) / stock.price * 100;
                   const otm = otmPct.toFixed(1);
                   const isBest = bestStrike && k === bestStrike.strike;
+                  const isOutOfRange = k < stock.price * (strikeRangeMin / 100) || k > stock.price * (strikeRangeMax / 100);
                   const isOutOfZone = otmPct < -1 || otmPct > 4;
                   const isSelected = strikePrice === k;
                   return (
                     <button key={k} onClick={() => setStrikePrice(k)} style={{
-                      background: isSelected ? (isBest ? palette.profit : palette.accent) : isOutOfZone ? (themeName === "dark" ? "#0d111744" : themeName === "highContrast" ? "#11111144" : "#e5e7eb88") : palette.inputBg,
-                      color: isSelected ? palette.bg : isOutOfZone ? palette.textMuted : palette.text,
-                      border: `1px solid ${isSelected ? (isBest ? palette.profit : palette.accent) : isBest ? palette.profit + "66" : isOutOfZone ? (themeName === "dark" || themeName === "highContrast" ? "#1f293744" : "#d1d5db66") : palette.borderLight}`,
+                      background: isSelected ? (isBest ? palette.profit : palette.accent) : (isOutOfRange || isOutOfZone) ? (themeName === "dark" ? "#0d111744" : themeName === "highContrast" ? "#11111144" : "#e5e7eb88") : palette.inputBg,
+                      color: isSelected ? palette.bg : (isOutOfRange || isOutOfZone) ? palette.textMuted : palette.text,
+                      border: `1px solid ${isSelected ? (isBest ? palette.profit : palette.accent) : isBest && !isOutOfRange ? palette.profit + "66" : (isOutOfRange || isOutOfZone) ? (themeName === "dark" || themeName === "highContrast" ? "#1f293744" : "#d1d5db66") : palette.borderLight}`,
                       padding: "10px 12px", borderRadius: 8, cursor: "pointer",
                       fontFamily: font, fontSize: 11, textAlign: "center", minWidth: 72,
-                      position: "relative", opacity: isSelected ? 1 : isOutOfZone ? 0.5 : 1,
+                      position: "relative", opacity: isSelected ? 1 : isOutOfRange ? 0.3 : isOutOfZone ? 0.5 : 1,
                       transition: "all 0.2s",
                     }}>
                       <div style={{ fontWeight: 700, fontSize: 13 }}>${k}</div>

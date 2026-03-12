@@ -120,28 +120,45 @@ exports.getCoveredCalls = onCall({ cors: true, timeoutSeconds: 60 }, async (requ
   const symbol = validateSymbol(request.data.symbol);
   const cacheKey = `scores_${symbol}`;
 
+  // ── Market hours check (US Eastern) ──
+  // NYSE/NASDAQ: Mon–Fri 9:30am–4:00pm ET
+  const nowET = new Date(new Date().toLocaleString("en-US", { timeZone: "America/New_York" }));
+  const day = nowET.getDay(); // 0=Sun, 6=Sat
+  const hour = nowET.getHours();
+  const minute = nowET.getMinutes();
+  const totalMinutes = hour * 60 + minute;
+  const isMarketHours = day >= 1 && day <= 5
+    && totalMinutes >= 9 * 60 + 30   // 9:30am
+    && totalMinutes < 16 * 60;        // 4:00pm
+
   const cached = await getCached(cacheKey, TTL.scores);
-  // Never serve a cached result with 0 recommendations — it likely means
-  // the cache was written during after-hours when bid=0 filtered everything out.
-  // Force a fresh fetch so the fixed scoring engine can re-run.
-  const cachedHasResults = cached?.recommendations?.length > 0;
-  if (cached && !cached._stale && cachedHasResults) {
+  const cachedHasResults = (cached?.recommendations?.length || 0) > 0;
+
+  // During market hours: serve fresh cache if valid
+  if (isMarketHours && cached && !cached._stale && cachedHasResults) {
     return cached;
   }
 
-  try {
-    // Fetch multi-expiration chain (covers 7–60 DTE range)
-    const chain = await getFullChain(symbol, 4);
+  // After hours: if we have a good cached result, serve it with asOfClose label
+  // rather than re-fetching (Yahoo returns bid=0 after hours → 0 results)
+  if (!isMarketHours && cachedHasResults) {
+    return { ...cached, _stale: false, _asOfClose: true };
+  }
 
-    // Run scoring engine
+  try {
+    const chain = await getFullChain(symbol, 4);
     const scores = scoreCoveredCalls(chain);
 
-    await setCache(cacheKey, scores);
+    // Only cache if we got real results — don't cache empty after-hours responses
+    if ((scores.recommendations?.length || 0) > 0) {
+      await setCache(cacheKey, scores);
+    }
     return scores;
   } catch (error) {
+    // Fall back to any cached data we have, even if stale
     const stale = await getCachedOrStale(cacheKey, TTL.scores);
     if (stale) {
-      return { ...stale, _stale: true, _error: "Provider temporarily unavailable" };
+      return { ...stale, _stale: true, _asOfClose: !isMarketHours, _error: "Provider temporarily unavailable" };
     }
     console.error(`getCoveredCalls error for ${symbol}:`, error);
     throw new HttpsError("unavailable", `Could not score covered calls for ${symbol}. Try again shortly.`);

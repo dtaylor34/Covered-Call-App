@@ -100,6 +100,12 @@ export default function CoveredCallsDashboard({ onPositionChange, sharedSymbol, 
   const { quote, loading: quoteLoading, error: quoteError } = useStockQuote(activeSymbol);
   const { scores, loading: scoresLoading, error: scoresError, refresh } = useCoveredCalls(activeSymbol);
 
+  // ── Scanner filters (applied client-side to recommendations) ──
+  const [strikeMin, setStrikeMin] = useState(95);  // % of stock price
+  const [strikeMax, setStrikeMax] = useState(120); // % of stock price
+  const [dteMin, setDteMin] = useState(7);
+  const [dteMax, setDteMax] = useState(60);
+
   // Debounce ref to avoid rapid Firestore writes
   const saveTimeout = useRef(null);
 
@@ -429,11 +435,23 @@ export default function CoveredCallsDashboard({ onPositionChange, sharedSymbol, 
       )}
 
       {/* ── Recommendations Table ── */}
-      {scores && scores.recommendations && (
+      {scores && scores.recommendations && (() => {
+        const stockPrice = scores.underlyingPrice || quote?.price || 1;
+        const filtered = scores.recommendations.filter(r =>
+          r.strike >= stockPrice * (strikeMin / 100) &&
+          r.strike <= stockPrice * (strikeMax / 100) &&
+          r.daysToExpiration >= dteMin &&
+          r.daysToExpiration <= dteMax
+        );
+        const strikeMinDollar = (stockPrice * strikeMin / 100).toFixed(2);
+        const strikeMaxDollar = (stockPrice * strikeMax / 100).toFixed(2);
+
+        return (
         <div style={{
           background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rL,
           overflow: "hidden",
         }}>
+          {/* Header */}
           <div style={{
             padding: "16px 24px", borderBottom: `1px solid ${T.border}`,
             display: "flex", justifyContent: "space-between", alignItems: "center",
@@ -446,9 +464,12 @@ export default function CoveredCallsDashboard({ onPositionChange, sharedSymbol, 
                 Covered Call Recommendations
               </h3>
               <div style={{ fontSize: 11, color: T.textDim, marginTop: 2, fontFamily: T.fontMono, display: "flex", alignItems: "center", gap: 4 }}>
-                {scores.recommendations.length} opportunities · {scores.delay}min delay
-                <DelayInfoIcon />
-                {scores._stale && <span style={{ color: T.warn }}> · STALE DATA</span>}
+                {filtered.length} opportunities ·{" "}
+                {scores._asOfClose
+                  ? <span style={{ color: T.warn }}>as of market close ⏱</span>
+                  : <>{scores.delay}min delay <DelayInfoIcon /></>
+                }
+                {scores._stale && !scores._asOfClose && <span style={{ color: T.warn }}> · STALE DATA</span>}
               </div>
             </div>
             <button aria-label="Refresh covered call data" onClick={() => { refresh(); AnalyticsEvents.scoresRefreshed(activeSymbol); }} disabled={scoresLoading} style={{
@@ -461,10 +482,117 @@ export default function CoveredCallsDashboard({ onPositionChange, sharedSymbol, 
             </button>
           </div>
 
-          {scores.recommendations.length === 0 ? (
+          {/* ── Filter Bar ── */}
+          <div style={{
+            padding: "12px 24px", borderBottom: `1px solid ${T.border}`,
+            background: T.surface, display: "flex", gap: 32, flexWrap: "wrap", alignItems: "flex-end",
+          }}>
+            {/* Strike Range */}
+            <div>
+              <div style={{ fontSize: 10, color: T.textDim, fontFamily: T.fontMono, marginBottom: 6, letterSpacing: 0.5, textTransform: "uppercase" }}>
+                Strike Range
+                <span style={{ color: T.accent, marginLeft: 8 }}>
+                  ${strikeMinDollar} – ${strikeMaxDollar}
+                </span>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <span style={{ fontSize: 10, color: T.textMuted, fontFamily: T.fontMono }}>{strikeMin}%</span>
+                <div style={{ position: "relative", width: 180, height: 20 }}>
+                  {/* Track */}
+                  <div style={{
+                    position: "absolute", top: "50%", left: 0, right: 0, height: 3,
+                    background: T.border, borderRadius: 2, transform: "translateY(-50%)",
+                  }} />
+                  {/* Active track */}
+                  <div style={{
+                    position: "absolute", top: "50%", height: 3, borderRadius: 2,
+                    background: T.accent, transform: "translateY(-50%)",
+                    left: `${((strikeMin - 90) / 50) * 100}%`,
+                    width: `${((strikeMax - strikeMin) / 50) * 100}%`,
+                  }} />
+                  <input type="range" min={90} max={140} step={1} value={strikeMin}
+                    onChange={e => setStrikeMin(Math.min(Number(e.target.value), strikeMax - 2))}
+                    style={{ position: "absolute", width: "100%", opacity: 0, cursor: "pointer", zIndex: 2, height: "100%" }}
+                  />
+                  <input type="range" min={90} max={140} step={1} value={strikeMax}
+                    onChange={e => setStrikeMax(Math.max(Number(e.target.value), strikeMin + 2))}
+                    style={{ position: "absolute", width: "100%", opacity: 0, cursor: "pointer", zIndex: 3, height: "100%" }}
+                  />
+                  {/* Thumbs */}
+                  <div style={{
+                    position: "absolute", top: "50%", width: 12, height: 12, borderRadius: "50%",
+                    background: T.accent, border: `2px solid ${T.bg}`, transform: "translate(-50%, -50%)",
+                    left: `${((strikeMin - 90) / 50) * 100}%`, zIndex: 4, pointerEvents: "none",
+                  }} />
+                  <div style={{
+                    position: "absolute", top: "50%", width: 12, height: 12, borderRadius: "50%",
+                    background: T.accent, border: `2px solid ${T.bg}`, transform: "translate(-50%, -50%)",
+                    left: `${((strikeMax - 90) / 50) * 100}%`, zIndex: 4, pointerEvents: "none",
+                  }} />
+                </div>
+                <span style={{ fontSize: 10, color: T.textMuted, fontFamily: T.fontMono }}>{strikeMax}%</span>
+                <button onClick={() => { setStrikeMin(95); setStrikeMax(120); }} style={{
+                  fontSize: 9, color: T.textMuted, fontFamily: T.fontMono,
+                  background: "transparent", border: `1px solid ${T.border}`,
+                  borderRadius: 4, padding: "2px 6px", cursor: "pointer",
+                }}>reset</button>
+              </div>
+            </div>
+
+            {/* DTE Range */}
+            <div>
+              <div style={{ fontSize: 10, color: T.textDim, fontFamily: T.fontMono, marginBottom: 6, letterSpacing: 0.5, textTransform: "uppercase" }}>
+                DTE Range
+                <span style={{ color: T.accent, marginLeft: 8 }}>{dteMin}d – {dteMax}d</span>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <span style={{ fontSize: 10, color: T.textMuted, fontFamily: T.fontMono }}>{dteMin}d</span>
+                <div style={{ position: "relative", width: 140, height: 20 }}>
+                  <div style={{
+                    position: "absolute", top: "50%", left: 0, right: 0, height: 3,
+                    background: T.border, borderRadius: 2, transform: "translateY(-50%)",
+                  }} />
+                  <div style={{
+                    position: "absolute", top: "50%", height: 3, borderRadius: 2,
+                    background: T.accent, transform: "translateY(-50%)",
+                    left: `${((dteMin - 7) / 83) * 100}%`,
+                    width: `${((dteMax - dteMin) / 83) * 100}%`,
+                  }} />
+                  <input type="range" min={7} max={90} step={1} value={dteMin}
+                    onChange={e => setDteMin(Math.min(Number(e.target.value), dteMax - 1))}
+                    style={{ position: "absolute", width: "100%", opacity: 0, cursor: "pointer", zIndex: 2, height: "100%" }}
+                  />
+                  <input type="range" min={7} max={90} step={1} value={dteMax}
+                    onChange={e => setDteMax(Math.max(Number(e.target.value), dteMin + 1))}
+                    style={{ position: "absolute", width: "100%", opacity: 0, cursor: "pointer", zIndex: 3, height: "100%" }}
+                  />
+                  <div style={{
+                    position: "absolute", top: "50%", width: 12, height: 12, borderRadius: "50%",
+                    background: T.accent, border: `2px solid ${T.bg}`, transform: "translate(-50%, -50%)",
+                    left: `${((dteMin - 7) / 83) * 100}%`, zIndex: 4, pointerEvents: "none",
+                  }} />
+                  <div style={{
+                    position: "absolute", top: "50%", width: 12, height: 12, borderRadius: "50%",
+                    background: T.accent, border: `2px solid ${T.bg}`, transform: "translate(-50%, -50%)",
+                    left: `${((dteMax - 7) / 83) * 100}%`, zIndex: 4, pointerEvents: "none",
+                  }} />
+                </div>
+                <span style={{ fontSize: 10, color: T.textMuted, fontFamily: T.fontMono }}>{dteMax}d</span>
+                <button onClick={() => { setDteMin(7); setDteMax(60); }} style={{
+                  fontSize: 9, color: T.textMuted, fontFamily: T.fontMono,
+                  background: "transparent", border: `1px solid ${T.border}`,
+                  borderRadius: 4, padding: "2px 6px", cursor: "pointer",
+                }}>reset</button>
+              </div>
+            </div>
+          </div>
+
+          {filtered.length === 0 ? (
             <div style={{ padding: 40, textAlign: "center", color: T.textDim, fontSize: 14 }}>
-              No covered call opportunities found for {scores.symbol} in the 7–60 day range.
-              This can happen with low-volume or low-IV stocks.
+              {scores.recommendations.length === 0
+                ? <>No covered call opportunities found for {scores.symbol} in the 7–60 day range. This can happen with low-volume or low-IV stocks.</>
+                : <>No results match your current filters. <button onClick={() => { setStrikeMin(95); setStrikeMax(120); setDteMin(7); setDteMax(60); }} style={{ color: T.accent, background: "none", border: "none", cursor: "pointer", fontFamily: T.fontMono, fontSize: 14 }}>Reset filters</button></>
+              }
             </div>
           ) : (
             <div style={{ overflowX: "auto" }}>
@@ -484,7 +612,7 @@ export default function CoveredCallsDashboard({ onPositionChange, sharedSymbol, 
                   </tr>
                 </thead>
                 <tbody>
-                  {scores.recommendations.map((rec, i) => (
+                  {filtered.map((rec, i) => (
                     <RecommendationRow
                       key={rec.contractSymbol}
                       rec={rec}
@@ -503,7 +631,8 @@ export default function CoveredCallsDashboard({ onPositionChange, sharedSymbol, 
             </div>
           )}
         </div>
-      )}
+        );
+      })()}
 
       {/* ── Collection Picker Modal ── */}
       {collectionPicker && (
