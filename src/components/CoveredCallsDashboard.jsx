@@ -17,6 +17,10 @@ import { useStockQuote, useCoveredCalls } from "../hooks/useMarketData";
 import { useAuth } from "../contexts/AuthContext";
 import { AnalyticsEvents } from "../services/analytics";
 import { useTheme } from "../contexts/ThemeContext";
+import {
+  getFirestore, collection, addDoc, deleteDoc,
+  doc, onSnapshot, query, orderBy, serverTimestamp,
+} from "firebase/firestore";
 
 const POPULAR = ["AAPL", "MSFT", "NVDA", "GOOGL", "AMZN", "META", "TSLA", "SPY"];
 
@@ -73,7 +77,7 @@ function DelayInfoIcon() {
   );
 }
 
-export default function CoveredCallsDashboard({ onPositionChange }) {
+export default function CoveredCallsDashboard({ onPositionChange, sharedSymbol, onSymbolChange }) {
   const { T } = useTheme();
   const [searchParams, setSearchParams] = useSearchParams();
   const location = useLocation();
@@ -81,20 +85,89 @@ export default function CoveredCallsDashboard({ onPositionChange }) {
   // Restore context from navigation state (from history page) or URL param
   const navState = location.state || {};
   const initialSymbol = searchParams.get("symbol")?.toUpperCase().trim()
-    || navState.symbol || null;
+    || navState.symbol || sharedSymbol || "AAPL";
   const restoredContract = navState.selectedContract || null;
 
   const [inputValue, setInputValue] = useState(initialSymbol || "");
   const [activeSymbol, setActiveSymbol] = useState(initialSymbol);
   const [expandedRow, setExpandedRow] = useState(null);
   const [selectedContract, setSelectedContract] = useState(restoredContract);
+  const [savedViews, setSavedViews] = useState([]); // [{id, contractSymbol}]
+  const [userCollections, setUserCollections] = useState([]);
+  const [collectionPicker, setCollectionPicker] = useState(null); // rec being picked for
 
-  const { addToSearchHistory, updateSearchHistoryEntry, searchHistory } = useAuth();
+  const { addToSearchHistory, updateSearchHistoryEntry, searchHistory, currentUser } = useAuth();
   const { quote, loading: quoteLoading, error: quoteError } = useStockQuote(activeSymbol);
   const { scores, loading: scoresLoading, error: scoresError, refresh } = useCoveredCalls(activeSymbol);
 
   // Debounce ref to avoid rapid Firestore writes
   const saveTimeout = useRef(null);
+
+  // ── Sync saved views from Firestore ──
+  useEffect(() => {
+    if (!currentUser?.uid) return;
+    const db = getFirestore();
+    const ref = collection(db, "users", currentUser.uid, "savedViews");
+    const q = query(ref, orderBy("updatedAt", "desc"));
+    const unsub = onSnapshot(q, (snap) => {
+      setSavedViews(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    });
+    return unsub;
+  }, [currentUser?.uid]);
+
+  // ── Sync user collections from Firestore ──
+  useEffect(() => {
+    if (!currentUser?.uid) return;
+    const db = getFirestore();
+    const ref = collection(db, "users", currentUser.uid, "savedViewCollections");
+    const unsub = onSnapshot(ref, (snap) => {
+      const docs = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      docs.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+      setUserCollections(docs);
+    });
+    return unsub;
+  }, [currentUser?.uid]);
+
+  // ── Save to a specific collection (or null for auto-dated) ──
+  const handleSaveToCollection = useCallback(async (rec, collectionId) => {
+    if (!currentUser?.uid) return;
+    const db = getFirestore();
+    await addDoc(collection(db, "users", currentUser.uid, "savedViews"), {
+      name: `${activeSymbol} $${rec.strike?.toFixed(0)} ${rec.expiration?.slice(5)}`,
+      symbol: activeSymbol,
+      contractSymbol: rec.contractSymbol,
+      collectionId: collectionId || null,
+      stockPrice: quote?.price || scores?.underlyingPrice || 0,
+      contract: {
+        strike: rec.strike,
+        expiration: rec.expiration,
+        premium: rec.premium,
+        score: rec.compositeScore,
+      },
+      updatedAt: serverTimestamp(),
+      createdAt: serverTimestamp(),
+    });
+    setCollectionPicker(null);
+  }, [currentUser?.uid, activeSymbol, quote?.price, scores?.underlyingPrice]);
+
+  // ── Toggle save/unsave — shows picker if collections exist ──
+  const handleToggleSave = useCallback(async (rec, e) => {
+    e.stopPropagation();
+    if (!currentUser?.uid) return;
+    const db = getFirestore();
+    const contractKey = rec.contractSymbol;
+    const existing = savedViews.find((v) => v.contractSymbol === contractKey);
+    if (existing) {
+      await deleteDoc(doc(db, "users", currentUser.uid, "savedViews", existing.id));
+      return;
+    }
+    // If user has collections, show picker; otherwise save directly
+    if (userCollections.length > 0) {
+      setCollectionPicker(rec);
+    } else {
+      handleSaveToCollection(rec, null);
+    }
+  }, [currentUser?.uid, savedViews, userCollections, handleSaveToCollection]);
 
   // ── Propagate active position to parent (for Working tab, etc.) ──
   useEffect(() => {
@@ -198,6 +271,7 @@ export default function CoveredCallsDashboard({ onPositionChange }) {
       setExpandedRow(null);
       setSelectedContract(null);
       addToSearchHistory(sym);
+      if (onSymbolChange) onSymbolChange(sym);
       AnalyticsEvents.symbolSearched(sym);
     }
   };
@@ -208,6 +282,7 @@ export default function CoveredCallsDashboard({ onPositionChange }) {
     setExpandedRow(null);
     setSelectedContract(null);
     addToSearchHistory(sym);
+    if (onSymbolChange) onSymbolChange(sym);
     AnalyticsEvents.symbolSearched(sym);
   };
 
@@ -396,6 +471,7 @@ export default function CoveredCallsDashboard({ onPositionChange }) {
               <table aria-label="Covered call recommendations" style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                 <thead>
                   <tr style={{ borderBottom: `1px solid ${T.border}` }}>
+                    <th scope="col" style={{ padding: "10px 8px 10px 12px", width: 32 }} />
                     {["Score", "Strike", "Exp", "DTE", "Premium", "Yield", "Annual", "Prob OTM", "Δ Delta", "IV"].map((h) => (
                       <th key={h} scope="col" style={{
                         padding: "10px 12px", textAlign: "right", fontSize: 10, fontWeight: 600,
@@ -417,12 +493,78 @@ export default function CoveredCallsDashboard({ onPositionChange }) {
                       isSelected={selectedContract?.strike === rec.strike && selectedContract?.expiration === rec.expiration}
                       onToggle={() => handleRowToggle(i)}
                       underlyingPrice={scores.underlyingPrice}
+                      isSaved={savedViews.some((v) => v.contractSymbol === rec.contractSymbol)}
+                      onToggleSave={(e) => handleToggleSave(rec, e)}
+                      showingPicker={collectionPicker?.contractSymbol === rec.contractSymbol}
                     />
                   ))}
                 </tbody>
               </table>
             </div>
           )}
+        </div>
+      )}
+
+      {/* ── Collection Picker Modal ── */}
+      {collectionPicker && (
+        <div
+          style={{ position: "fixed", inset: 0, zIndex: 300, background: "rgba(0,0,0,0.7)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}
+          onClick={() => setCollectionPicker(null)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: T.rL, padding: 24, width: "100%", maxWidth: 360 }}
+          >
+            <h4 style={{ margin: "0 0 4px", color: T.text, fontSize: 16, fontFamily: T.fontDisplay }}>
+              Save to Collection
+            </h4>
+            <p style={{ margin: "0 0 16px", color: T.textDim, fontSize: 12, fontFamily: T.fontMono }}>
+              {activeSymbol} ${collectionPicker.strike?.toFixed(0)} · {collectionPicker.expiration?.slice(5)}
+            </p>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {userCollections.map((col) => (
+                <button
+                  key={col.id}
+                  onClick={() => handleSaveToCollection(collectionPicker, col.id)}
+                  style={{
+                    padding: "12px 16px", borderRadius: 8, cursor: "pointer", textAlign: "left",
+                    background: T.card, border: `1px solid ${T.border}`,
+                    color: T.text, fontSize: 13, fontFamily: T.fontBody,
+                    display: "flex", alignItems: "center", gap: 10,
+                    transition: "border-color 0.15s",
+                  }}
+                  onMouseOver={(e) => e.currentTarget.style.borderColor = T.accent}
+                  onMouseOut={(e) => e.currentTarget.style.borderColor = T.border}
+                >
+                  <span>📁</span> {col.name}
+                </button>
+              ))}
+              <button
+                onClick={() => handleSaveToCollection(collectionPicker, null)}
+                style={{
+                  padding: "12px 16px", borderRadius: 8, cursor: "pointer", textAlign: "left",
+                  background: "transparent", border: `1px dashed ${T.border}`,
+                  color: T.textDim, fontSize: 13, fontFamily: T.fontBody,
+                  display: "flex", alignItems: "center", gap: 10,
+                  transition: "border-color 0.15s",
+                }}
+                onMouseOver={(e) => e.currentTarget.style.borderColor = T.textDim}
+                onMouseOut={(e) => e.currentTarget.style.borderColor = T.border}
+              >
+                <span>📅</span> Auto-dated folder
+              </button>
+            </div>
+            <button
+              onClick={() => setCollectionPicker(null)}
+              style={{
+                marginTop: 16, width: "100%", padding: "10px 0", borderRadius: 8,
+                background: "transparent", border: `1px solid ${T.border}`,
+                color: T.textDim, cursor: "pointer", fontSize: 13, fontFamily: T.fontBody,
+              }}
+            >
+              Cancel
+            </button>
+          </div>
         </div>
       )}
 
@@ -511,7 +653,7 @@ function QuoteStat({ label, value }) {
 
 // ─── Recommendation Row ─────────────────────────────────────────────────────
 
-function RecommendationRow({ rec, rank, isExpanded, isSelected, onToggle, underlyingPrice }) {
+function RecommendationRow({ rec, rank, isExpanded, isSelected, onToggle, underlyingPrice, isSaved, onToggleSave }) {
   const { T } = useTheme();
   const scoreColor = rec.compositeScore >= 75 ? T.success
     : rec.compositeScore >= 50 ? T.accent
@@ -540,6 +682,31 @@ function RecommendationRow({ rec, rank, isExpanded, isSelected, onToggle, underl
         onMouseOver={(e) => { if (!isExpanded) e.currentTarget.style.background = T.cardHover; }}
         onMouseOut={(e) => { if (!isExpanded) e.currentTarget.style.background = isSelected ? "rgba(0,212,170,0.03)" : "transparent"; }}
       >
+        <td style={{ padding: "10px 4px 10px 12px", textAlign: "center" }}>
+          <button
+            aria-label={isSaved ? "Remove from saved views" : "Add to saved views"}
+            onClick={onToggleSave}
+            style={{
+              width: 26, height: 26, borderRadius: 6, border: "none", cursor: "pointer",
+              display: "inline-flex", alignItems: "center", justifyContent: "center",
+              background: isSaved ? `${T.accent}22` : "transparent",
+              color: isSaved ? T.accent : T.textMuted,
+              transition: "all 0.15s", padding: 0,
+            }}
+            onMouseOver={(e) => { e.currentTarget.style.background = isSaved ? `${T.accent}33` : T.cardHover; e.currentTarget.style.color = T.accent; }}
+            onMouseOut={(e) => { e.currentTarget.style.background = isSaved ? `${T.accent}22` : "transparent"; e.currentTarget.style.color = isSaved ? T.accent : T.textMuted; }}
+          >
+            {isSaved ? (
+              <svg xmlns="http://www.w3.org/2000/svg" height="18" viewBox="0 0 24 24" width="18" fill="currentColor">
+                <path d="M0 0h24v24H0z" fill="none"/><path d="M7 11v2h10v-2H7zm5-9C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/>
+              </svg>
+            ) : (
+              <svg xmlns="http://www.w3.org/2000/svg" height="18" viewBox="0 0 24 24" width="18" fill="currentColor">
+                <path d="M0 0h24v24H0z" fill="none"/><path d="M13 7h-2v4H7v2h4v4h2v-4h4v-2h-4V7zm-1-5C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/>
+              </svg>
+            )}
+          </button>
+        </td>
         <Cell>
           <span style={{
             display: "inline-block", width: 36, height: 24, borderRadius: 6,

@@ -25,7 +25,7 @@ const STEPS = [
 
 export default function OnboardingScreen() {
   const { T } = useTheme();
-  const { user, email, name, markOnboardingComplete } = useAuth();
+  const { user, email, name, userData, markOnboardingComplete } = useAuth();
   const navigate = useNavigate();
   const [step, setStep] = useState(0);
   const [saving, setSaving] = useState(false);
@@ -59,28 +59,6 @@ export default function OnboardingScreen() {
   });
 
   const [promoCode, setPromoCode] = useState("");
-
-  // ── Skip Onboarding ──
-  // Uses email prefix as name fallback so name field is never blank in Firestore.
-  const skipOnboarding = async () => {
-    if (!user) return;
-    setSaving(true);
-    try {
-      AnalyticsEvents.onboardingSkipped(STEPS[step].key);
-      const fallbackName = profile.displayName.trim() || user.email?.split("@")[0] || "User";
-      await markOnboardingComplete({
-        name: fallbackName,
-        searchHistory: [],
-        watchlist: [],
-      });
-      navigate("/", { replace: true });
-    } catch (err) {
-      console.error("Skip onboarding error:", err);
-      navigate("/", { replace: true });
-    } finally {
-      setSaving(false);
-    }
-  };
 
   // ── Navigation ──
   const canAdvance = () => {
@@ -251,6 +229,8 @@ export default function OnboardingScreen() {
               promoSuccess={promoSuccess}
               profile={profile}
               preferences={preferences}
+              alreadyApplied={!!userData?.promoCode}
+              appliedCode={userData?.promoCode}
             />
           )}
 
@@ -290,15 +270,6 @@ export default function OnboardingScreen() {
           </div>
         </div>
 
-        {/* ── Skip option ── */}
-        <div style={{ textAlign: "center", marginTop: 16 }}>
-          <button onClick={skipOnboarding} disabled={saving} style={{
-            background: "none", border: "none", color: T.textMuted,
-            fontSize: 12, cursor: "pointer",
-          }}>
-            Skip for now — I'll set this up later
-          </button>
-        </div>
       </div>
     </div>
   );
@@ -471,7 +442,7 @@ function StepPreferences({ preferences, setPreferences }) {
 // STEP 3: PROMO CODE + SUMMARY
 // ═══════════════════════════════════════════════════════════════════════════════
 
-function StepPromo({ promoCode, setPromoCode, applyPromo, promoError, promoSuccess, profile, preferences }) {
+function StepPromo({ promoCode, setPromoCode, applyPromo, promoError, promoSuccess, profile, preferences, alreadyApplied, appliedCode }) {
   const { T } = useTheme();
   return (
     <div>
@@ -479,40 +450,62 @@ function StepPromo({ promoCode, setPromoCode, applyPromo, promoError, promoSucce
         Almost there!
       </h2>
       <p style={{ fontSize: 13, color: T.textDim, marginBottom: 24 }}>
-        Have a promo code? Enter it below. Otherwise, you're all set to start your 7-day free trial.
+        {alreadyApplied
+          ? "Your promo code has been applied. You're all set to start your 7-day free trial."
+          : "Have a promo code? Enter it below. Otherwise, you're all set to start your 7-day free trial."}
       </p>
 
       {/* Promo Code */}
       <FieldLabel>Promo Code (optional)</FieldLabel>
-      <div style={{ display: "flex", gap: 8 }}>
-        <input
-          value={promoCode}
-          onChange={(e) => setPromoCode(e.target.value.toUpperCase())}
-          placeholder="e.g. LAUNCH50"
-          maxLength={20}
-          style={{ ...inputStyle(T), flex: 1, fontFamily: T.fontMono, letterSpacing: 1 }}
-        />
-        <button
-          onClick={applyPromo}
-          disabled={!promoCode.trim()}
-          style={{
-            padding: "10px 20px", borderRadius: T.r,
-            background: promoCode.trim() ? T.accentDim : "rgba(255,255,255,0.03)",
-            border: `1px solid ${promoCode.trim() ? "rgba(0,212,170,0.3)" : T.border}`,
-            color: promoCode.trim() ? T.accent : T.textMuted,
-            fontSize: 12, fontWeight: 700, cursor: promoCode.trim() ? "pointer" : "default",
-          }}
-        >
-          Apply
-        </button>
-      </div>
-      {promoError && (
-        <div style={{ marginTop: 8, fontSize: 12, color: T.danger }}>{promoError}</div>
-      )}
-      {promoSuccess && (
-        <div style={{ marginTop: 8, fontSize: 12, color: T.success, fontWeight: 600 }}>
-          ✓ {promoSuccess}
+      {alreadyApplied ? (
+        <div style={{
+          display: "flex", alignItems: "center", gap: 12,
+          padding: "12px 16px", borderRadius: T.r,
+          background: `rgba(0,212,170,0.08)`, border: `1px solid rgba(0,212,170,0.25)`,
+        }}>
+          <span style={{ fontSize: 18 }}>✅</span>
+          <div>
+            <div style={{ color: T.success, fontSize: 12, fontWeight: 700, fontFamily: T.fontMono }}>
+              {appliedCode} applied
+            </div>
+            <div style={{ color: T.textDim, fontSize: 11, marginTop: 2 }}>
+              Your discount is active for this account.
+            </div>
+          </div>
         </div>
+      ) : (
+        <>
+          <div style={{ display: "flex", gap: 8 }}>
+            <input
+              value={promoCode}
+              onChange={(e) => setPromoCode(e.target.value.toUpperCase())}
+              placeholder="e.g. LAUNCH50"
+              maxLength={20}
+              style={{ ...inputStyle(T), flex: 1, fontFamily: T.fontMono, letterSpacing: 1 }}
+            />
+            <button
+              onClick={applyPromo}
+              disabled={!promoCode.trim()}
+              style={{
+                padding: "10px 20px", borderRadius: T.r,
+                background: promoCode.trim() ? T.accentDim : "rgba(255,255,255,0.03)",
+                border: `1px solid ${promoCode.trim() ? "rgba(0,212,170,0.3)" : T.border}`,
+                color: promoCode.trim() ? T.accent : T.textMuted,
+                fontSize: 12, fontWeight: 700, cursor: promoCode.trim() ? "pointer" : "default",
+              }}
+            >
+              Apply
+            </button>
+          </div>
+          {promoError && (
+            <div style={{ marginTop: 8, fontSize: 12, color: T.danger }}>{promoError}</div>
+          )}
+          {promoSuccess && (
+            <div style={{ marginTop: 8, fontSize: 12, color: T.success, fontWeight: 600 }}>
+              ✓ {promoSuccess}
+            </div>
+          )}
+        </>
       )}
 
       {/* Summary */}
@@ -528,7 +521,7 @@ function StepPromo({ promoCode, setPromoCode, applyPromo, promoError, promoSucce
         <SummaryRow label="Experience" value={capitalize(profile.experienceLevel) || "—"} />
         <SummaryRow label="Goal" value={goalLabel(profile.investmentGoal)} />
         <SummaryRow label="Newsletter" value={preferences.newsletterOptIn ? `Yes (${preferences.updateFrequency})` : "No"} />
-        {promoSuccess && <SummaryRow label="Promo" value={promoCode} accent />}
+        {(promoSuccess || alreadyApplied) && <SummaryRow label="Promo" value={alreadyApplied ? appliedCode : promoCode} accent />}
 
         <div style={{ height: 1, background: T.border, margin: "12px 0" }} />
 

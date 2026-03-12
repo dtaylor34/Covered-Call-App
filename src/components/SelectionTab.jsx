@@ -96,7 +96,7 @@ function todayISO() {
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
-export default function SelectionTab({ onNavigateToGlossary }) {
+export default function SelectionTab({ onNavigateToGlossary, sharedSymbol, onSymbolChange }) {
   const { T, themeName } = useTheme();
 
   // Map ThemeContext tokens → prototype variable names (keeps JSX identical)
@@ -126,7 +126,11 @@ export default function SelectionTab({ onNavigateToGlossary }) {
   const displayFont = T.fontDisplay;
 
   // ── State ─────────────────────────────────────────────────────────────────
-  const [symbol, setSymbol] = useState("META");
+  const [symbol, setSymbol] = useState(sharedSymbol || "AAPL");
+  const changeSymbol = useCallback((sym) => {
+    setSymbol(sym);
+    if (onSymbolChange) onSymbolChange(sym);
+  }, [onSymbolChange]);
   const [customStocks, setCustomStocks] = useState({});
   const [hiddenPresets, setHiddenPresets] = useState([]);
   const [hoveredSymbol, setHoveredSymbol] = useState(null);
@@ -169,7 +173,7 @@ export default function SelectionTab({ onNavigateToGlossary }) {
     }
     if (sym === symbol) {
       const remaining = Object.keys(allStocks).filter(s => s !== sym);
-      setSymbol(remaining[0] || "META");
+      changeSymbol(remaining[0] || "META");
       setStrikePrice(null);
     }
   }, [symbol, allStocks]);
@@ -213,7 +217,7 @@ export default function SelectionTab({ onNavigateToGlossary }) {
       earningsDate: null, high52: p * 1.15, low52: p * 0.75,
       url: `https://finance.yahoo.com/quote/${sym}`,
     }}));
-    setSymbol(sym); setStrikePrice(null); setLookupError("");
+    changeSymbol(sym); setStrikePrice(null); setLookupError("");
     if (tickerRef.current) tickerRef.current.value = "";
     if (priceRef.current) priceRef.current.value = "";
   }, []);
@@ -562,7 +566,7 @@ export default function SelectionTab({ onNavigateToGlossary }) {
                     <div key={s} style={{ position: "relative", display: "inline-flex" }}
                       onMouseEnter={() => setHoveredSymbol(s)}
                       onMouseLeave={() => setHoveredSymbol(null)}>
-                      <button onClick={() => { setSymbol(s); setStrikePrice(null); setLookupError(""); }}
+                      <button onClick={() => { changeSymbol(s); setStrikePrice(null); setLookupError(""); }}
                         style={{
                           background: isActive ? palette.accent : palette.inputBg,
                           color: isActive ? palette.bg : palette.text,
@@ -607,7 +611,7 @@ export default function SelectionTab({ onNavigateToGlossary }) {
                       const price = priceRef.current?.value || "";
                       if (sym && price) addManualStock(sym, price);
                       else if (sym && allStocks[sym]) {
-                        setSymbol(sym); setStrikePrice(null);
+                        changeSymbol(sym); setStrikePrice(null);
                         if (tickerRef.current) tickerRef.current.value = "";
                         if (priceRef.current) priceRef.current.value = "";
                       }
@@ -638,7 +642,7 @@ export default function SelectionTab({ onNavigateToGlossary }) {
                   const sym = tickerRef.current?.value?.trim().toUpperCase() || "";
                   const price = priceRef.current?.value || "";
                   if (sym && allStocks[sym] && !price) {
-                    setSymbol(sym); setStrikePrice(null);
+                    changeSymbol(sym); setStrikePrice(null);
                     if (tickerRef.current) tickerRef.current.value = "";
                     if (priceRef.current) priceRef.current.value = "";
                   } else addManualStock(sym, price);

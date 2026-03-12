@@ -28,8 +28,8 @@ import SelectionTab from "../components/SelectionTab";
 
 // ── Tab definitions ──
 const TABS = [
-  { id: "dashboard", label: "Dashboard", icon: "◉", feature: "dashboard" },
-  { id: "selection", label: "Selection", icon: "🎯", feature: "selection" },
+  { id: "dashboard", label: "Selection", icon: "◉", feature: "dashboard" },
+  { id: "selection", label: "Dashboard", icon: "🎯", feature: "selection" },
   { id: "working",   label: "Working",   icon: "📊", feature: "working" },
   { id: "risk",      label: "Risk",      icon: "⚠",  feature: "risk" },
   { id: "transactions", label: "Trades", icon: "📝", feature: "transactions" },
@@ -104,6 +104,7 @@ export default function Dashboard() {
 
   // Persisted active tab
   const [activeTab, setActiveTab] = usePersistedState("cc:tab", "dashboard");
+  const [sharedSymbol, setSharedSymbol] = usePersistedState("cc:symbol", "AAPL");
 
   // Dashboard sub-tabs: "finder" | "saved"
   const [dashSubTab, setDashSubTab] = useState("finder");
@@ -363,7 +364,7 @@ export default function Dashboard() {
           {/* Position Finder */}
           {dashSubTab === "finder" && (
             <>
-              <CoveredCallsDashboard onPositionChange={handlePositionChange} />
+              <CoveredCallsDashboard onPositionChange={handlePositionChange} sharedSymbol={sharedSymbol} onSymbolChange={setSharedSymbol} />
               {/* Save View button — only shown when a contract is selected */}
               {activePosition?.contract && (
                 <div style={{ marginTop: 12 }}>
@@ -391,7 +392,7 @@ export default function Dashboard() {
 
         {/* Selection (basic -- always unlocked) */}
         <div role="tabpanel" aria-label="Position selection and analysis" style={{ display: activeTab === "selection" ? "block" : "none" }}>
-          <SelectionTab onNavigateToGlossary={() => setActiveTab("glossary")} />
+          <SelectionTab onNavigateToGlossary={() => setActiveTab("glossary")} sharedSymbol={sharedSymbol} onSymbolChange={setSharedSymbol} />
         </div>
 
         {/* Working (tier-gated) */}

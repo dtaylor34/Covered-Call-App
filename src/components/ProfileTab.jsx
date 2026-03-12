@@ -47,7 +47,7 @@ export default function ProfileTab() {
   const [promoError, setPromoError] = useState(null);
   const [promoSuccess, setPromoSuccess] = useState(null);
 
-  const isTrial = subscriptionStatus === "trial";
+  const isTrial = subscriptionStatus === "trial" || subscriptionStatus === "trialing";
   const alreadyHasPromo = !!userData?.promoCode;
 
   const applyPromo = async () => {
@@ -235,7 +235,7 @@ export default function ProfileTab() {
                     setPromoSuccess(null);
                   }}
                   onKeyDown={(e) => e.key === "Enter" && applyPromo()}
-                  placeholder="e.g. FAMILY34"
+                  placeholder="e.g. CODE123"
                   style={{
                     flex: 1, padding: "9px 14px", borderRadius: 8, fontSize: 13,
                     background: T.card, border: `1px solid ${promoError ? T.danger : promoSuccess ? T.success : T.border}`,
@@ -372,7 +372,7 @@ export default function ProfileTab() {
       </Card>
 
       {/* Billing */}
-      {subscriptionStatus === "active" && (
+      {(subscriptionStatus === "active" || isTrial) && (
         <Card>
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
             <span style={{ fontSize: 16 }}>💳</span>
@@ -388,6 +388,23 @@ export default function ProfileTab() {
           </button>
           <div style={{ color: T.textDim, fontSize: 11, marginTop: 8 }}>
             View invoices, update payment method, or cancel your subscription via Stripe.
+          </div>
+          <div style={{ marginTop: 16, paddingTop: 16, borderTop: `1px solid ${T.border}` }}>
+            <button
+              aria-label="Cancel subscription"
+              onClick={handleManageBilling}
+              disabled={billingLoading}
+              style={{
+                padding: "8px 16px", borderRadius: 8, cursor: "pointer",
+                background: "transparent", border: `1px solid ${T.danger}44`, color: T.danger,
+                fontSize: 12, fontWeight: 600, fontFamily: T.fontBody, transition: "all 0.2s",
+              }}
+            >
+              Cancel Subscription
+            </button>
+            <div style={{ color: T.textDim, fontSize: 11, marginTop: 6 }}>
+              You'll keep access until the end of your current billing period.
+            </div>
           </div>
         </Card>
       )}

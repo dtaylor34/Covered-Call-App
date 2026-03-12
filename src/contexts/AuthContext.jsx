@@ -390,9 +390,10 @@ export function AuthProvider({ children }) {
     (userData?.promoCode || "").toUpperCase()
   );
 
-  const isTrialExpired = subscriptionStatus === "trial" && trialInfo.expired && !hasFreeAccessCode;
+  const isTrial = subscriptionStatus === "trial" || subscriptionStatus === "trialing";
+  const isTrialExpired = isTrial && trialInfo.expired && !hasFreeAccessCode;
   const hasAccess = subscriptionStatus === "active" || hasFreeAccessCode ||
-    (subscriptionStatus === "trial" && !trialInfo.expired);
+    (isTrial && !trialInfo.expired);
   const onboardingComplete = userData?.onboardingComplete ?? false;
 
   const value = {
