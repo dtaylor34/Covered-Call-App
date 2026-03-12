@@ -121,7 +121,11 @@ exports.getCoveredCalls = onCall({ cors: true, timeoutSeconds: 60 }, async (requ
   const cacheKey = `scores_${symbol}`;
 
   const cached = await getCached(cacheKey, TTL.scores);
-  if (cached && !cached._stale) {
+  // Never serve a cached result with 0 recommendations — it likely means
+  // the cache was written during after-hours when bid=0 filtered everything out.
+  // Force a fresh fetch so the fixed scoring engine can re-run.
+  const cachedHasResults = cached?.recommendations?.length > 0;
+  if (cached && !cached._stale && cachedHasResults) {
     return cached;
   }
 

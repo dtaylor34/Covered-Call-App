@@ -1,25 +1,19 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-
-    // Safe when user doc doesn't exist yet (e.g. new auth account, or doc not created).
     function getUserRole() {
       let path = /databases/$(database)/documents/users/$(request.auth.uid);
       return exists(path) ? get(path).data.role : null;
     }
-
     function isOwner() {
       return getUserRole() == "owner";
     }
-
     function isAdmin() {
       return getUserRole() in ["owner", "admin"];
     }
-
     function isTeamMember() {
       return getUserRole() in ["owner", "admin", "moderator"];
     }
-
     // ── Users ──
     match /users/{userId} {
       allow read: if request.auth != null && (
@@ -34,32 +28,34 @@ service cloud.firestore {
          !request.resource.data.diff(resource.data).affectedKeys()
            .hasAny(['role', 'subscriptionStatus', 'monthlyRate', 'totalPaid']))
       );
+      // ── Saved Views ──
+      match /savedViews/{viewId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+      // ── Saved View Collections ──
+      match /savedViewCollections/{collId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
     }
-
-    // ── Market Data Cache (read by functions, written by functions) ──
+    // ── Market Data Cache ──
     match /marketData/{docId} {
       allow read: if request.auth != null;
-      // Only Cloud Functions (admin SDK) writes to this collection
     }
-
     // ── Audit Log ──
     match /auditLog/{logId} {
       allow read: if request.auth != null && isTeamMember();
       allow create: if request.auth != null && isAdmin();
     }
-
     // ── Promo Codes ──
     match /promoCodes/{codeId} {
-      allow read: if request.auth != null; // Users can read to validate codes
+      allow read: if request.auth != null;
       allow write: if request.auth != null && isOwner();
     }
-
     // ── Analytics Events ──
     match /analyticsEvents/{eventId} {
       allow create: if request.auth != null
                     && request.resource.data.uid == request.auth.uid;
       allow read: if request.auth != null && isTeamMember();
-      // No update/delete — events are immutable
     }
   }
 }

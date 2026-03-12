@@ -133,19 +133,23 @@ function passesFilters(call, stockPrice, cfg) {
   // Strike must be at or near the money (>= 95% of stock price by default)
   if (call.strike < stockPrice * cfg.minStrikeRatio) return false;
 
-  // Minimum liquidity
-  if ((call.openInterest || 0) < cfg.minOpenInterest) return false;
-  if ((call.volume || 0) < cfg.minVolume) return false;
-
   // DTE range
   if (call.daysToExpiration < cfg.minDTE) return false;
   if (call.daysToExpiration > cfg.maxDTE) return false;
 
-  // Must have a bid (can actually sell this contract)
-  if (!call.bid || call.bid <= 0) return false;
-
-  // Must have IV
+  // Must have IV — hard requirement for Black-Scholes Greeks
   if (!call.impliedVolatility || call.impliedVolatility <= 0) return false;
+
+  // Must have some tradeable price. After market hours Yahoo returns bid=0,
+  // so fall back to lastPrice. If neither exists, skip the contract.
+  const hasPrice = (call.bid && call.bid > 0) ||
+                   (call.lastPrice && call.lastPrice > 0);
+  if (!hasPrice) return false;
+
+  // Liquidity: volume resets to 0 at market open each day, so treat 0 as
+  // "unknown" rather than "illiquid". Open interest is a better signal —
+  // require at least 10 (down from 100) to keep low-volume stocks viable.
+  if ((call.openInterest || 0) < 10) return false;
 
   return true;
 }
@@ -153,8 +157,9 @@ function passesFilters(call, stockPrice, cfg) {
 // ─── Metrics Calculation ────────────────────────────────────────────────────
 
 function calculateMetrics(call, stockPrice) {
-  // Use midpoint of bid/ask as premium estimate (more realistic than last price)
-  const premium = call.bid && call.ask
+  // Use midpoint of bid/ask when available (most accurate during market hours).
+  // After hours Yahoo returns bid=0, so fall back to lastPrice in that case.
+  const premium = (call.bid > 0 && call.ask > 0)
     ? (call.bid + call.ask) / 2
     : call.lastPrice || call.bid || 0;
 
