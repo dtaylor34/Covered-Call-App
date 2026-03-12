@@ -1,3 +1,7 @@
+## [2.0.3] — 2026-03-12
+
+## [2.0.3] — 2026-03-12
+
 # Changelog — Covered Calls Manager
 
 All notable changes to this project are documented here.
