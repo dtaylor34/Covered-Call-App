@@ -10,6 +10,7 @@ import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   signInWithPopup,
+  getRedirectResult,
   signOut,
 } from "firebase/auth";
 import {
@@ -50,7 +51,6 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [userData, setUserData] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
 
   // ── Sync Firestore theme to ThemeContext on login (cross-device) ──
   useEffect(() => {
@@ -58,6 +58,14 @@ export function AuthProvider({ children }) {
       setTheme(userData.theme);
     }
   }, [userData?.theme, setTheme]);
+
+  // ── Consume any stale pending OAuth credential on init ──
+  // Firebase stores partial Apple/Google OAuth state in IndexedDB and retries
+  // it on every page load, causing a 400 error. Calling getRedirectResult once
+  // silently clears that pending state so it doesn't keep firing.
+  useEffect(() => {
+    getRedirectResult(auth).catch(() => {});
+  }, []);
 
   // ── Listen for auth state changes ──
   useEffect(() => {
@@ -126,7 +134,6 @@ export function AuthProvider({ children }) {
 
   // ── Email/Password Sign Up ──
   const signup = useCallback(async (email, password, name) => {
-    setError(null);
     try {
       const cred = await createUserWithEmailAndPassword(auth, email, password);
       await createUserDoc(cred.user.uid, email, name);
@@ -137,14 +144,12 @@ export function AuthProvider({ children }) {
         "auth/weak-password": "Password must be at least 6 characters",
         "auth/invalid-email": "Invalid email address",
       }[e.code] || e.message;
-      setError(msg);
-      throw e;
+      throw Object.assign(e, { friendlyMessage: msg });
     }
   }, [createUserDoc]);
 
   // ── Email/Password Sign In ──
   const login = useCallback(async (email, password) => {
-    setError(null);
     try {
       const cred = await signInWithEmailAndPassword(auth, email, password);
       return cred.user;
@@ -155,14 +160,12 @@ export function AuthProvider({ children }) {
         "auth/invalid-credential": "Invalid email or password",
         "auth/too-many-requests": "Too many attempts — please wait a moment",
       }[e.code] || e.message;
-      setError(msg);
-      throw e;
+      throw Object.assign(e, { friendlyMessage: msg });
     }
   }, []);
 
   // ── Google Sign In ──
   const signInWithGoogle = useCallback(async () => {
-    setError(null);
     try {
       const result = await signInWithPopup(auth, googleProvider);
       const uid = result.user.uid;
@@ -179,19 +182,18 @@ export function AuthProvider({ children }) {
       }
       return result.user;
     } catch (e) {
-      if (e.code === "auth/popup-closed-by-user") return null;
-      const msg = {
-        "auth/account-exists-with-different-credential": "An account already exists with this email using a different sign-in method",
-        "auth/popup-blocked": "Sign-in popup was blocked. Please allow popups and try again.",
-      }[e.code] || e.message;
-      setError(msg);
+      // Silently ignore these — they're not user-facing errors
+      const silent = ["auth/popup-closed-by-user", "auth/cancelled-popup-request", "auth/popup-blocked"];
+      if (silent.includes(e.code)) return null;
       throw e;
     }
   }, [createUserDoc]);
 
   // ── Apple Sign In ──
   const signInWithApple = useCallback(async () => {
-    setError(null);
+    if (!appleProvider) {
+      throw Object.assign(new Error("Apple Sign-In is not configured yet."), { friendlyMessage: "Apple Sign-In is not configured yet. Please use Google or email to sign in." });
+    }
     try {
       const result = await signInWithPopup(auth, appleProvider);
       const uid = result.user.uid;
@@ -207,12 +209,9 @@ export function AuthProvider({ children }) {
       }
       return result.user;
     } catch (e) {
-      if (e.code === "auth/popup-closed-by-user") return null;
-      const msg = {
-        "auth/account-exists-with-different-credential": "An account already exists with this email using a different sign-in method",
-        "auth/popup-blocked": "Sign-in popup was blocked. Please allow popups and try again.",
-      }[e.code] || e.message;
-      setError(msg);
+      // Silently ignore these — they're not user-facing errors
+      const silent = ["auth/popup-closed-by-user", "auth/cancelled-popup-request", "auth/popup-blocked"];
+      if (silent.includes(e.code)) return null;
       throw e;
     }
   }, [createUserDoc]);
@@ -397,8 +396,8 @@ export function AuthProvider({ children }) {
   const onboardingComplete = userData?.onboardingComplete ?? false;
 
   const value = {
-    user, currentUser: user, userData, loading, error,
-    signup, login, signInWithGoogle, signInWithApple, logout, refreshUserData, markOnboardingComplete, setError,
+    user, currentUser: user, userData, loading,
+    signup, login, signInWithGoogle, signInWithApple, logout, refreshUserData, markOnboardingComplete,
     addToSearchHistory, updateSearchHistoryEntry, deleteFromSearchHistory, clearSearchHistory,
     updateWatchlist, updatePlan, updateUserTheme, updateProfile,
     searchHistory: userData?.searchHistory || [],
