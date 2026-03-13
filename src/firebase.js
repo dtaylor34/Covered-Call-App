@@ -24,11 +24,9 @@ export const functions = getFunctions(app);
 
 // ── OAuth Providers ──
 export const googleProvider = new GoogleAuthProvider();
-// Apple Sign-In disabled until Apple Developer account is configured
-// export const appleProvider = new OAuthProvider("apple.com");
-// appleProvider.addScope("email");
-// appleProvider.addScope("name");
-export const appleProvider = null;
+export const appleProvider = new OAuthProvider("apple.com");
+appleProvider.addScope("email");
+appleProvider.addScope("name");
 
 // ── Emulators (explicit opt-in only) ──
 const USE_EMULATORS = import.meta.env.VITE_USE_EMULATORS === "true";
