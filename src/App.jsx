@@ -10,6 +10,10 @@
 //
 // Flow for returning users:
 //   1. /login → / (Dashboard) — onboarding already complete
+//
+// branch: feature/api-integration
+// change: added /api/schwab/callback route for Schwab OAuth redirect.
+//         Injection points marked with ── API TAB INJECTION ──
 
 import { Routes, Route, Navigate, Link } from "react-router-dom";
 import { useAuth } from "./contexts/AuthContext";
@@ -20,6 +24,8 @@ import AdminPanel from "./views/AdminPanel";
 import PaywallScreen from "./views/PaywallScreen";
 import CheckoutScreen from "./views/CheckoutScreen";
 import SearchHistory from "./views/SearchHistory";
+// ── API TAB INJECTION — import ───────────────────────────────────────────────
+import SchwabCallback from "./views/SchwabCallback";
 
 // ── Loading Screen ──
 function LoadingScreen() {
@@ -155,6 +161,16 @@ export default function App() {
             <AdminLink />
           </RequireAccess>
         } />
+
+        {/* ── API TAB INJECTION — Schwab OAuth callback route ──────────────────
+            Must come BEFORE the "/*" catch-all so it isn't swallowed.
+            RequireAccess ensures the user is authenticated before the token
+            exchange runs — Schwab won't redirect an unauthenticated user
+            here anyway, but this guards against edge cases.                  */}
+        <Route path="/api/schwab/callback" element={
+          <RequireAccess><SchwabCallback /></RequireAccess>
+        } />
+        {/* ── END API TAB INJECTION ─────────────────────────────────────────── */}
 
         {/* ── Main Dashboard (onboarding + subscription gated) ── */}
         <Route path="/*" element={

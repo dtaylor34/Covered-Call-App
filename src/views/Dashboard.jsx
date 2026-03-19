@@ -4,6 +4,10 @@
 //
 // Tab rendering: all tabs stay mounted (display toggle), so state is never lost.
 // Locked tabs show blurred preview with upgrade prompt overlay.
+//
+// branch: feature/api-integration
+// change: added "APIs" tab (id: "api") — always unlocked, no tier gate.
+//         Injection points marked with ── API TAB INJECTION ──
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useState, useCallback, useEffect, useRef } from "react";
@@ -25,17 +29,23 @@ import GlossaryTab from "../components/GlossaryTab";
 import SetupTab from "../components/SetupTab";
 import ProfileTab from "../components/ProfileTab";
 import SelectionTab from "../components/SelectionTab";
+// ── API TAB INJECTION 1/3 — import ──────────────────────────────────────────
+import APITab from "../components/APITab";
 
 // ── Tab definitions ──
 const TABS = [
-  { id: "dashboard", label: "Selection", icon: "◉", feature: "dashboard" },
-  { id: "selection", label: "Dashboard", icon: "🎯", feature: "selection" },
-  { id: "working",   label: "Working",   icon: "📊", feature: "working" },
-  { id: "risk",      label: "Risk",      icon: "⚠",  feature: "risk" },
-  { id: "transactions", label: "Trades", icon: "📝", feature: "transactions" },
-  { id: "glossary",  label: "Glossary",  icon: "📖", feature: "glossary" },
-  { id: "setup",     label: "Setup",     icon: "🔧", feature: "setup" },
-  { id: "profile",   label: "Profile",   icon: "👤", feature: "profile" },
+  { id: "dashboard",    label: "Selection", icon: "◉",  feature: "dashboard" },
+  { id: "selection",    label: "Dashboard", icon: "🎯", feature: "selection" },
+  { id: "working",      label: "Working",   icon: "📊", feature: "working" },
+  { id: "risk",         label: "Risk",      icon: "⚠",  feature: "risk" },
+  { id: "transactions", label: "Trades",    icon: "📝", feature: "transactions" },
+  { id: "glossary",     label: "Glossary",  icon: "📖", feature: "glossary" },
+  { id: "setup",        label: "Setup",     icon: "🔧", feature: "setup" },
+  { id: "profile",      label: "Profile",   icon: "👤", feature: "profile" },
+  // ── API TAB INJECTION 2/3 — tab entry ──────────────────────────────────────
+  // feature: "api" — intentionally not gated; canAccess("api") returns true for
+  // all tiers because there is no useFeatureAccess rule for this feature key.
+  { id: "api",          label: "APIs",      icon: "🔌", feature: "api" },
 ];
 
 // ── Locked Overlay ──
@@ -436,6 +446,15 @@ export default function Dashboard() {
         <div role="tabpanel" aria-label="Profile and settings" style={{ display: activeTab === "profile" ? "block" : "none" }}>
           <ProfileTab />
         </div>
+
+        {/* ── API TAB INJECTION 3/3 — tab panel ──────────────────────────────────
+            Not tier-gated. canAccess("api") returns true for all plans because
+            "api" is not a known feature key in useFeatureAccess — it falls through
+            to the default unlocked state. No blur, no LockedOverlay.            */}
+        <div role="tabpanel" aria-label="Broker API connections" style={{ display: activeTab === "api" ? "block" : "none" }}>
+          <APITab />
+        </div>
+        {/* ── END API TAB INJECTION ─────────────────────────────────────────── */}
 
         {/* ── Financial Disclaimer ── */}
         <aside aria-label="Financial disclaimer" style={{

@@ -255,5 +255,16 @@ exports.getProviderStatus = onCall({ cors: true }, async (request) => {
 // ── Stripe (Payments) ──
 const stripe = require("./stripe");
 exports.createCheckoutSession = stripe.createCheckoutSession;
-exports.createPortalSession = stripe.createPortalSession;
-exports.stripeWebhook = stripe.stripeWebhook;
+exports.createPortalSession   = stripe.createPortalSession;
+exports.stripeWebhook         = stripe.stripeWebhook;
+
+// ── Schwab API Integration (feature/api-integration) ─────────────────────────
+// Phase 1: OAuth flow + account sync + market data proxy
+const schwab = require("./schwab");
+exports.schwabInitiateOAuth  = schwab.schwabInitiateOAuth;
+exports.schwabExchangeToken  = schwab.schwabExchangeToken;
+exports.schwabRefreshToken   = schwab.schwabRefreshToken;
+exports.schwabGetPositions   = schwab.schwabGetPositions;
+exports.schwabGetBuyingPower = schwab.schwabGetBuyingPower;
+exports.schwabGetQuotes      = schwab.schwabGetQuotes;
+exports.schwabGetOptionChain = schwab.schwabGetOptionChain;

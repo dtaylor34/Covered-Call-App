@@ -36,6 +36,23 @@ service cloud.firestore {
       match /savedViewCollections/{collId} {
         allow read, write: if request.auth != null && request.auth.uid == userId;
       }
+      // ── Broker API Connections ──
+      // Users can only read/write their own broker connections.
+      // Admins can read (for support) but NOT write (never touch user credentials).
+      // Note: sensitive fields (appKey, appSecret, accessToken, refreshToken)
+      // are written by Cloud Functions, not directly by the client. Firestore
+      // rules here enforce ownership; Cloud Functions enforce the logic.
+      match /brokerConnections/{brokerId} {
+        allow read:  if request.auth != null && request.auth.uid == userId;
+        allow write: if request.auth != null && request.auth.uid == userId;
+      }
+      // ── Broker Accounts ──
+      // Metadata about accounts linked via the broker OAuth flow.
+      // Cloud Functions populate these after token exchange.
+      match /brokerAccounts/{accountId} {
+        allow read:  if request.auth != null && request.auth.uid == userId;
+        allow write: if request.auth != null && request.auth.uid == userId;
+      }
     }
     // ── Market Data Cache ──
     match /marketData/{docId} {

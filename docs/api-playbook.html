@@ -1,0 +1,1073 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Covered Calls App — API Playbook</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;1,400&display=swap');
+
+  :root {
+    --bg:        #0b0d11;
+    --surface:   #13161c;
+    --surface2:  #1a1e27;
+    --surface3:  #21262f;
+    --border:    #252b36;
+    --border2:   #2e3647;
+    --text:      #e6e9ef;
+    --muted:     #6b7585;
+    --dim:       #9aa3b0;
+    --accent:    #00d4aa;
+    --accent-dim:#0d2620;
+    --green:     #22c55e;
+    --green-dim: #0d2018;
+    --amber:     #f59e0b;
+    --amber-dim: #251a06;
+    --red:       #ef4444;
+    --red-dim:   #270d0d;
+    --blue:      #60a5fa;
+    --blue-dim:  #0d1a2e;
+    --purple:    #a78bfa;
+    --purple-dim:#180f30;
+    --mono:      'DM Mono', monospace;
+    --sans:      'DM Sans', sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+
+  body {
+    font-family: var(--sans);
+    background: var(--bg);
+    color: var(--text);
+    font-size: 15px;
+    line-height: 1.65;
+  }
+
+  /* ── Layout ── */
+  .shell { display: flex; min-height: 100vh; }
+
+  /* ── Sidebar ── */
+  .sidebar {
+    width: 240px; flex-shrink: 0;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    padding: 28px 0;
+    position: sticky; top: 0; height: 100vh;
+    overflow-y: auto;
+  }
+  .sidebar-logo {
+    padding: 0 20px 24px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 20px;
+  }
+  .sidebar-logo-mark {
+    width: 32px; height: 32px; border-radius: 8px;
+    background: linear-gradient(135deg, var(--accent), #00b894);
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 900; color: #000;
+    font-family: var(--mono); margin-bottom: 8px;
+  }
+  .sidebar-title { font-size: 13px; font-weight: 600; color: var(--text); }
+  .sidebar-sub   { font-size: 11px; color: var(--muted); margin-top: 1px; }
+
+  .nav-group { padding: 0 12px; margin-bottom: 4px; }
+  .nav-group-label {
+    font-size: 9px; color: var(--muted); letter-spacing: .1em;
+    text-transform: uppercase; font-family: var(--mono);
+    padding: 0 8px; margin-bottom: 4px;
+  }
+  .nav-item {
+    display: flex; align-items: center; gap: 8px;
+    padding: 7px 10px; border-radius: 7px;
+    font-size: 12px; color: var(--dim);
+    cursor: pointer; text-decoration: none;
+    transition: all .12s;
+  }
+  .nav-item:hover  { background: var(--surface2); color: var(--text); }
+  .nav-item.active { background: var(--accent-dim); color: var(--accent); font-weight: 500; }
+  .nav-icon { font-size: 13px; width: 16px; text-align: center; flex-shrink: 0; }
+
+  /* ── Main ── */
+  .main { flex: 1; min-width: 0; padding: 48px 56px 80px; max-width: 860px; }
+
+  /* ── Section ── */
+  .section { margin-bottom: 64px; }
+  .section-kicker {
+    font-family: var(--mono); font-size: 10px; letter-spacing: .12em;
+    color: var(--accent); text-transform: uppercase; margin-bottom: 10px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .section-kicker::before {
+    content: ''; display: inline-block; width: 14px; height: 1px; background: var(--accent);
+  }
+  h1 { font-size: 30px; font-weight: 600; letter-spacing: -.02em; line-height: 1.2; margin-bottom: 12px; }
+  h2 { font-size: 20px; font-weight: 600; letter-spacing: -.01em; margin-bottom: 16px; }
+  h3 { font-size: 15px; font-weight: 500; margin-bottom: 10px; }
+  p  { color: var(--dim); font-size: 14px; line-height: 1.75; margin-bottom: 16px; }
+  p:last-child { margin-bottom: 0; }
+
+  /* ── Cards ── */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px 24px;
+    margin-bottom: 14px;
+  }
+  .card-sm {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px 16px;
+    margin-bottom: 10px;
+  }
+
+  /* ── Grid ── */
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px; }
+  .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 20px; }
+  @media (max-width: 700px) {
+    .grid-2, .grid-3 { grid-template-columns: 1fr; }
+    .sidebar { display: none; }
+    .main { padding: 24px 20px 60px; }
+  }
+
+  /* ── Badges ── */
+  .badge {
+    display: inline-flex; align-items: center;
+    font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 99px;
+    font-family: var(--mono); white-space: nowrap;
+  }
+  .badge-green  { background: var(--green-dim);  color: var(--green); }
+  .badge-amber  { background: var(--amber-dim);  color: var(--amber); }
+  .badge-red    { background: var(--red-dim);    color: var(--red); }
+  .badge-blue   { background: var(--blue-dim);   color: var(--blue); }
+  .badge-purple { background: var(--purple-dim); color: var(--purple); }
+  .badge-accent { background: var(--accent-dim); color: var(--accent); }
+
+  /* ── Tables ── */
+  .tbl { width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 20px; }
+  .tbl th {
+    text-align: left; padding: 8px 14px; font-size: 11px; font-weight: 500;
+    color: var(--muted); border-bottom: 1px solid var(--border);
+    font-family: var(--mono); letter-spacing: .04em;
+  }
+  .tbl td { padding: 11px 14px; border-bottom: 1px solid var(--border); }
+  .tbl tr:last-child td { border-bottom: none; }
+  .tbl tr:hover td { background: var(--surface2); }
+  .check  { color: var(--green); }
+  .cross  { color: var(--red); }
+  .partial{ color: var(--amber); }
+
+  /* ── Step list ── */
+  .steps { display: flex; flex-direction: column; }
+  .step { display: flex; gap: 14px; position: relative; }
+  .step:not(:last-child)::before {
+    content: ''; position: absolute; left: 14px; top: 32px;
+    width: 1px; height: calc(100% - 12px); background: var(--border);
+  }
+  .step-num {
+    width: 28px; height: 28px; border-radius: 50%; flex-shrink: 0;
+    background: var(--surface2); border: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--mono); font-size: 11px; color: var(--accent); margin-top: 2px;
+  }
+  .step-body { padding-bottom: 22px; flex: 1; }
+  .step-title { font-size: 13px; font-weight: 500; margin-bottom: 3px; }
+  .step-desc  { font-size: 12px; color: var(--muted); line-height: 1.65; }
+
+  /* ── Code block ── */
+  .code {
+    font-family: var(--mono); font-size: 12px;
+    background: var(--bg); border: 1px solid var(--border);
+    border-radius: 8px; padding: 14px 16px;
+    color: var(--accent); white-space: pre; overflow-x: auto;
+    margin: 12px 0;
+  }
+
+  /* ── Callouts ── */
+  .callout {
+    border-radius: 8px; padding: 13px 16px;
+    font-size: 13px; line-height: 1.65;
+    margin: 16px 0; display: flex; gap: 10px; align-items: flex-start;
+  }
+  .callout-icon { font-size: 14px; flex-shrink: 0; margin-top: 1px; }
+  .callout-green  { background: var(--green-dim);  border: 1px solid #1a3d22; color: #6ee7a0; }
+  .callout-amber  { background: var(--amber-dim);  border: 1px solid #3d2a06; color: #fbbf24; }
+  .callout-blue   { background: var(--blue-dim);   border: 1px solid #0d2a4a; color: #93c5fd; }
+  .callout-red    { background: var(--red-dim);    border: 1px solid #3d1212; color: #fca5a5; }
+
+  /* ── Divider ── */
+  hr { border: none; border-top: 1px solid var(--border); margin: 36px 0; }
+
+  /* ── Tab flow illustration ── */
+  .tab-flow { display: flex; gap: 0; overflow-x: auto; margin: 20px 0; }
+  .tab-box {
+    min-width: 130px; background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; padding: 14px 12px; flex-shrink: 0;
+  }
+  .tab-box.live { border-color: var(--accent); background: var(--accent-dim); }
+  .tab-box-name { font-size: 11px; font-weight: 600; margin-bottom: 6px; }
+  .tab-box.live .tab-box-name { color: var(--accent); }
+  .tab-box-items { font-size: 10px; color: var(--muted); line-height: 1.7; }
+  .tab-box.live .tab-box-items { color: var(--dim); }
+  .tab-arrow { display: flex; align-items: center; color: var(--border2); font-size: 16px; padding: 0 4px; flex-shrink: 0; }
+  .live-dot {
+    width: 6px; height: 6px; border-radius: 50%; background: var(--accent);
+    display: inline-block; margin-right: 4px; box-shadow: 0 0 4px var(--accent);
+  }
+
+  /* ── Comparison row ── */
+  .compare { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 16px 0; }
+  .compare-col { border-radius: 10px; padding: 16px; border: 1px solid var(--border); }
+  .compare-col.before { background: var(--surface2); }
+  .compare-col.after  { background: var(--accent-dim); border-color: var(--accent) + "33"; }
+  .compare-label { font-size: 10px; font-family: var(--mono); letter-spacing: .08em; margin-bottom: 10px; }
+  .compare-col.before .compare-label { color: var(--muted); }
+  .compare-col.after  .compare-label { color: var(--accent); }
+  .compare-item { font-size: 12px; color: var(--dim); padding: 4px 0; display: flex; gap: 7px; }
+
+  /* ── Scroll highlight ── */
+  :target { scroll-margin-top: 24px; }
+
+  /* ── Pill ── */
+  .pill { display: inline-block; padding: 2px 10px; border-radius: 99px; font-size: 11px; font-family: var(--mono); border: 1px solid var(--border2); color: var(--muted); margin: 2px 3px 2px 0; }
+
+  ul.list { padding-left: 20px; }
+  ul.list li { font-size: 13px; color: var(--dim); margin-bottom: 6px; line-height: 1.65; }
+  ul.list li strong { color: var(--text); }
+</style>
+</head>
+<body>
+<div class="shell">
+
+<!-- ── Sidebar ── -->
+<aside class="sidebar">
+  <div class="sidebar-logo">
+    <div class="sidebar-logo-mark">CC</div>
+    <div class="sidebar-title">API Playbook</div>
+    <div class="sidebar-sub">Covered Calls Manager</div>
+  </div>
+
+  <div class="nav-group">
+    <div class="nav-group-label">Overview</div>
+    <a class="nav-item active" href="#what-is-it">
+      <span class="nav-icon">🔌</span> What is the API tab?
+    </a>
+    <a class="nav-item" href="#before-after">
+      <span class="nav-icon">⟳</span> Before vs After
+    </a>
+    <a class="nav-item" href="#data-flows">
+      <span class="nav-icon">→</span> Data flows
+    </a>
+  </div>
+
+  <div class="nav-group" style="margin-top:12px">
+    <div class="nav-group-label">User Journey</div>
+    <a class="nav-item" href="#getting-started">
+      <span class="nav-icon">🚀</span> Getting started
+    </a>
+    <a class="nav-item" href="#schwab-setup">
+      <span class="nav-icon">🔑</span> Schwab setup
+    </a>
+    <a class="nav-item" href="#accounts">
+      <span class="nav-icon">🏦</span> Account switching
+    </a>
+    <a class="nav-item" href="#reconnect">
+      <span class="nav-icon">🔄</span> Token refresh
+    </a>
+  </div>
+
+  <div class="nav-group" style="margin-top:12px">
+    <div class="nav-group-label">What gets unlocked</div>
+    <a class="nav-item" href="#live-quotes">
+      <span class="nav-icon">💹</span> Live quotes
+    </a>
+    <a class="nav-item" href="#option-chains">
+      <span class="nav-icon">📋</span> Option chains
+    </a>
+    <a class="nav-item" href="#positions">
+      <span class="nav-icon">💼</span> Auto positions
+    </a>
+    <a class="nav-item" href="#buying-power">
+      <span class="nav-icon">💰</span> Buying power
+    </a>
+  </div>
+
+  <div class="nav-group" style="margin-top:12px">
+    <div class="nav-group-label">Limitations</div>
+    <a class="nav-item" href="#historical">
+      <span class="nav-icon">📉</span> Historical data gap
+    </a>
+    <a class="nav-item" href="#rate-limits">
+      <span class="nav-icon">⏱</span> Rate limits
+    </a>
+    <a class="nav-item" href="#not-supported">
+      <span class="nav-icon">⛔</span> Not supported (yet)
+    </a>
+  </div>
+
+  <div class="nav-group" style="margin-top:12px">
+    <div class="nav-group-label">Reference</div>
+    <a class="nav-item" href="#brokers">
+      <span class="nav-icon">📊</span> Broker matrix
+    </a>
+    <a class="nav-item" href="#troubleshooting">
+      <span class="nav-icon">🔧</span> Troubleshooting
+    </a>
+    <a class="nav-item" href="#faq">
+      <span class="nav-icon">❓</span> FAQ
+    </a>
+  </div>
+</aside>
+
+<!-- ── Main ── -->
+<main class="main">
+
+  <!-- ═══════════════════════════════════════════ -->
+  <!-- SECTION: WHAT IS IT -->
+  <!-- ═══════════════════════════════════════════ -->
+  <div class="section" id="what-is-it">
+    <div class="section-kicker">Overview</div>
+    <h1>API Playbook</h1>
+    <p>The <strong style="color:var(--text)">APIs tab</strong> lets users connect a real brokerage account to the Covered Calls Manager. Once connected, the app stops using static data and starts pulling live quotes, real option chains, and actual account positions — turning the app from an educational simulator into a live companion for managing real covered call positions.</p>
+    <p>This document explains what the API tab does, what it enables in every part of the app, what its limits are, and exactly what a user needs to do to set it up.</p>
+
+    <div class="callout callout-blue">
+      <span class="callout-icon">ℹ</span>
+      <div><strong style="color:var(--text)">Manual mode stays fully functional.</strong> The API is additive — connecting a broker account enhances the app with live data, but every feature works without it. Users who don't connect a broker continue using the app exactly as before.</div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════ -->
+  <!-- SECTION: BEFORE / AFTER -->
+  <!-- ═══════════════════════════════════════════ -->
+  <div class="section" id="before-after">
+    <div class="section-kicker">Impact</div>
+    <h2>Before vs After connecting</h2>
+    <p>Here's the concrete difference the API connection makes in each part of the app.</p>
+
+    <div class="compare">
+      <div class="compare-col before">
+        <div class="compare-label">WITHOUT API — Manual Mode</div>
+        <div class="compare-item">○ Yahoo Finance quotes (15min delayed)</div>
+        <div class="compare-item">○ Option chains from Yahoo (delayed, limited Greeks)</div>
+        <div class="compare-item">○ Positions logged manually by user</div>
+        <div class="compare-item">○ Stock prices typed in by user</div>
+        <div class="compare-item">○ No account balance visibility</div>
+        <div class="compare-item">○ Assignment risk based on manual price input</div>
+        <div class="compare-item">○ B-S calculator uses whatever price you type</div>
+      </div>
+      <div class="compare-col after">
+        <div class="compare-label"><span class="live-dot"></span>WITH API — Live Mode</div>
+        <div class="compare-item"><span class="check">✓</span> Real-time quotes from Schwab (true live price)</div>
+        <div class="compare-item"><span class="check">✓</span> Full option chains with live bid/ask + Greeks</div>
+        <div class="compare-item"><span class="check">✓</span> Open positions auto-imported from your account</div>
+        <div class="compare-item"><span class="check">✓</span> Live underlying price feeds into all calculators</div>
+        <div class="compare-item"><span class="check">✓</span> Buying power and cash balance visible</div>
+        <div class="compare-item"><span class="check">✓</span> Assignment risk updates in real time</div>
+        <div class="compare-item"><span class="check">✓</span> B-S calculator uses actual current price</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════ -->
+  <!-- SECTION: DATA FLOWS -->
+  <!-- ═══════════════════════════════════════════ -->
+  <div class="section" id="data-flows">
+    <div class="section-kicker">Architecture</div>
+    <h2>How data flows through the app</h2>
+    <p>Once connected, the broker API becomes the primary data source. Every tab that currently uses a static price or user-entered value gets upgraded automatically.</p>
+
+    <div class="tab-flow">
+      <div class="tab-box live">
+        <div class="tab-box-name"><span class="live-dot"></span>Schwab API</div>
+        <div class="tab-box-items">Live quotes<br>Option chains<br>Positions<br>Buying power</div>
+      </div>
+      <div class="tab-arrow">→</div>
+      <div class="tab-box live">
+        <div class="tab-box-name"><span class="live-dot"></span>Dashboard tab</div>
+        <div class="tab-box-items">Real-time price<br>Live option chain<br>Ranked by live data</div>
+      </div>
+      <div class="tab-arrow">→</div>
+      <div class="tab-box live">
+        <div class="tab-box-name"><span class="live-dot"></span>Working tab</div>
+        <div class="tab-box-items">Live P&L table<br>Live urgency signal<br>Live buyback cost</div>
+      </div>
+      <div class="tab-arrow">→</div>
+      <div class="tab-box live">
+        <div class="tab-box-name"><span class="live-dot"></span>Risk tab</div>
+        <div class="tab-box-items">Real stock price<br>Live strike distance<br>Assignment probability</div>
+      </div>
+      <div class="tab-arrow">→</div>
+      <div class="tab-box">
+        <div class="tab-box-name">Historical data</div>
+        <div class="tab-box-items">Still from Yahoo<br>Finance + CBOE<br>(broker API gap)</div>
+      </div>
+    </div>
+
+    <p>The broker API does <em>not</em> replace the historical data sources (Yahoo Finance, CBOE free data). These continue to power the educational backtesting features unchanged. See <a href="#historical" style="color:var(--accent)">Historical data gap</a> for details.</p>
+
+    <div class="callout callout-green">
+      <span class="callout-icon">🔒</span>
+      <div><strong style="color:var(--text)">All API calls are server-side.</strong> Your App Key, App Secret, and tokens are stored encrypted in Firestore and only ever touched by Cloud Functions. The browser never sees your raw credentials.</div>
+    </div>
+  </div>
+
+  <hr>
+
+  <!-- ═══════════════════════════════════════════ -->
+  <!-- SECTION: GETTING STARTED -->
+  <!-- ═══════════════════════════════════════════ -->
+  <div class="section" id="getting-started">
+    <div class="section-kicker">User journey</div>
+    <h2>Getting started</h2>
+    <p>The one-time setup takes about 10 minutes plus a 2–5 day wait for Schwab's approval. After that, every session reconnects automatically.</p>
+
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-body">
+          <div class="step-title">Open the APIs tab in the app</div>
+          <div class="step-desc">Scroll the tab bar to find the 🔌 APIs tab. You'll see the broker hub with Charles Schwab available and other brokers listed as coming soon.</div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-body">
+          <div class="step-title">Click "Connect" on Charles Schwab</div>
+          <div class="step-desc">The Schwab setup flow opens. You'll see the step-by-step guide and the exact callback URL to paste into Schwab's Developer Portal.</div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-body">
+          <div class="step-title">Create a Schwab Developer account and register an app</div>
+          <div class="step-desc">Go to developer.schwab.com — this is a separate account from your brokerage login. Register an app, select both API products, paste in the callback URL the app shows you.</div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">4</div>
+        <div class="step-body">
+          <div class="step-title">Wait for Schwab approval (2–5 business days)</div>
+          <div class="step-desc">Schwab reviews all developer app registrations. Status shows "Approved — Pending" initially. You'll get an email when approved.</div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">5</div>
+        <div class="step-body">
+          <div class="step-title">Paste your App Key and App Secret into the app</div>
+          <div class="step-desc">Copy both from your approved Schwab Developer app. These are stored encrypted — the app never exposes them to the browser or logs them anywhere.</div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">6</div>
+        <div class="step-body">
+          <div class="step-title">Click "Connect Schwab Account" and complete OAuth</div>
+          <div class="step-desc">A Schwab login window opens. Sign in with your regular brokerage credentials (not your developer account), then select which accounts to authorize.</div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">7</div>
+        <div class="step-body">
+          <div class="step-title">Select your default account</div>
+          <div class="step-desc">After OAuth completes, the app shows all linked accounts (IRA, individual, etc.) with masked account numbers. Pick your default — you can switch any time from the APIs tab.</div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">8</div>
+        <div class="step-body">
+          <div class="step-title">Live data starts flowing</div>
+          <div class="step-desc">The status dot in the APIs tab turns green. Real-time quotes, positions, and option chains are now active across the app.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════ -->
+  <!-- SECTION: SCHWAB SETUP DETAILS -->
+  <!-- ═══════════════════════════════════════════ -->
+  <div class="section" id="schwab-setup">
+    <div class="section-kicker">Schwab</div>
+    <h2>Schwab Developer Portal — what to enter</h2>
+
+    <div class="card">
+      <h3 style="margin-bottom:14px">Required settings in Schwab's app registration</h3>
+      <table class="tbl">
+        <thead>
+          <tr><th>Field</th><th>What to enter</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td style="font-family:var(--mono);font-size:12px">API Products</td>
+            <td>Select <strong>both</strong>: "Market Data Production" + "Accounts and Trading Production"</td>
+          </tr>
+          <tr>
+            <td style="font-family:var(--mono);font-size:12px">Callback URL</td>
+            <td>Copy the URL shown in the app's connection flow — it matches your deployed domain</td>
+          </tr>
+          <tr>
+            <td style="font-family:var(--mono);font-size:12px">App Name</td>
+            <td>Any name (e.g. "Covered Calls Manager") — this is just for your Developer Portal</td>
+          </tr>
+          <tr>
+            <td style="font-family:var(--mono);font-size:12px">App Type</td>
+            <td>Leave as default (Individual Use)</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout callout-amber">
+      <span class="callout-icon">⚠</span>
+      <div><strong style="color:var(--text)">The callback URL must match exactly.</strong> Schwab's OAuth will reject any redirect that doesn't precisely match the URL registered in your app. The app shows you the exact URL to use — copy-paste it, don't retype it.</div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════ -->
+  <!-- SECTION: ACCOUNT SWITCHING -->
+  <!-- ═══════════════════════════════════════════ -->
+  <div class="section" id="accounts">
+    <div class="section-kicker">Accounts</div>
+    <h2>Switching between accounts</h2>
+    <p>Most users have multiple accounts — Individual, Roth IRA, Traditional IRA. The app lets you connect all of them in one OAuth flow and switch between them without reconnecting.</p>
+
+    <div class="card">
+      <h3 style="margin-bottom:12px">How account switching works</h3>
+      <ul class="list">
+        <li>During the OAuth flow, Schwab shows all accounts in your brokerage. You authorize access to all of them at once.</li>
+        <li>The APIs tab shows all linked accounts with masked numbers (e.g. <span class="pill">····1234</span> <span class="pill">····5678</span>).</li>
+        <li>Tap any account to make it the default. The selection persists across sessions.</li>
+        <li>Switching accounts re-fetches positions and buying power for that account. Quotes and option chains are account-independent — they switch instantly.</li>
+        <li>The active account is shown in the live data banner at the top of the APIs tab.</li>
+      </ul>
+    </div>
+
+    <div class="callout callout-blue">
+      <span class="callout-icon">ℹ</span>
+      <div>The app only <em>reads</em> account data — positions, balances. It does not place trades. Order entry is not part of Phase 1 (see <a href="#not-supported" style="color:var(--accent)">Not supported yet</a>).</div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════ -->
+  <!-- SECTION: TOKEN REFRESH -->
+  <!-- ═══════════════════════════════════════════ -->
+  <div class="section" id="reconnect">
+    <div class="section-kicker">Authentication</div>
+    <h2>Token lifecycle &amp; reconnecting</h2>
+    <p>Schwab uses a two-token system. Understanding it explains why you occasionally need to re-authenticate.</p>
+
+    <div class="grid-2">
+      <div class="card-sm">
+        <div style="color:var(--accent);font-size:10px;font-family:var(--mono);margin-bottom:8px;letter-spacing:.06em">ACCESS TOKEN</div>
+        <div style="color:var(--text);font-size:13px;font-weight:500;margin-bottom:4px">Expires every 30 min</div>
+        <div style="color:var(--muted);font-size:12px;line-height:1.6">Used for every API call. Refreshed automatically by the app in the background — you never notice this.</div>
+      </div>
+      <div class="card-sm">
+        <div style="color:var(--amber);font-size:10px;font-family:var(--mono);margin-bottom:8px;letter-spacing:.06em">REFRESH TOKEN</div>
+        <div style="color:var(--text);font-size:13px;font-weight:500;margin-bottom:4px">Expires every 7 days</div>
+        <div style="color:var(--muted);font-size:12px;line-height:1.6">Used to get new access tokens. The app refreshes this proactively. If it does expire, you'll be prompted to re-authenticate once.</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3 style="margin-bottom:12px">Status indicators in the APIs tab</h3>
+      <table class="tbl">
+        <thead><tr><th>Status dot</th><th>Label</th><th>What it means</th><th>Action</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 5px var(--green)"></span></td>
+            <td><span class="badge badge-green">Connected</span></td>
+            <td>Tokens valid, live data flowing</td>
+            <td>None needed</td>
+          </tr>
+          <tr>
+            <td><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--amber)"></span></td>
+            <td><span class="badge badge-amber">Refreshing</span></td>
+            <td>Access token being renewed silently</td>
+            <td>None — wait a moment</td>
+          </tr>
+          <tr>
+            <td><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--red)"></span></td>
+            <td><span class="badge badge-red">Expired</span></td>
+            <td>Refresh token expired (7-day limit)</td>
+            <td>Click "Reconnect" in APIs tab</td>
+          </tr>
+          <tr>
+            <td><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--muted)"></span></td>
+            <td><span class="badge">Disconnected</span></td>
+            <td>No broker connected</td>
+            <td>Go to APIs tab → Connect</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <hr>
+
+  <!-- ═══════════════════════════════════════════ -->
+  <!-- SECTION: LIVE QUOTES -->
+  <!-- ═══════════════════════════════════════════ -->
+  <div class="section" id="live-quotes">
+    <div class="section-kicker">What gets unlocked</div>
+    <h2>Live quotes</h2>
+    <p>Without the API, stock prices come from Yahoo Finance with a 15-minute delay. With the Schwab API connected, prices are real-time (NBBO — National Best Bid and Offer).</p>
+
+    <div class="card">
+      <h3 style="margin-bottom:12px">Where live quotes appear</h3>
+      <table class="tbl">
+        <thead><tr><th>Location</th><th>Without API</th><th>With API</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>Dashboard tab — quote card</td>
+            <td class="partial">15min delayed</td>
+            <td class="check">Real-time NBBO</td>
+          </tr>
+          <tr>
+            <td>Working tab — stock price in P&L table</td>
+            <td class="partial">Static / manual input</td>
+            <td class="check">Live, auto-refreshed</td>
+          </tr>
+          <tr>
+            <td>Working tab — urgency signal</td>
+            <td class="partial">Based on delayed price</td>
+            <td class="check">Based on live price</td>
+          </tr>
+          <tr>
+            <td>Selection tab — B-S calculator</td>
+            <td class="partial">Static stock data</td>
+            <td class="check">Live underlying price</td>
+          </tr>
+          <tr>
+            <td>Risk tab — strike distance</td>
+            <td class="partial">Manual entry</td>
+            <td class="check">Calculated from live price</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>Quotes refresh automatically every 30 seconds while the app is in focus. They use Schwab's batch quote endpoint — multiple tickers in one call — so the 120 req/min rate limit is rarely a concern.</p>
+  </div>
+
+  <!-- ═══════════════════════════════════════════ -->
+  <!-- SECTION: OPTION CHAINS -->
+  <!-- ═══════════════════════════════════════════ -->
+  <div class="section" id="option-chains">
+    <div class="section-kicker">What gets unlocked</div>
+    <h2>Option chains</h2>
+    <p>The Schwab Market Data API provides full option chains with live bid/ask spreads, volume, open interest, and Greeks. This replaces the Yahoo Finance option chain data (which lacks some Greeks and has delayed pricing).</p>
+
+    <div class="card">
+      <h3 style="margin-bottom:12px">Data available per contract</h3>
+      <div class="grid-2" style="margin-bottom:0">
+        <div>
+          <div style="font-size:10px;color:var(--accent);font-family:var(--mono);margin-bottom:8px;letter-spacing:.06em">PRICING</div>
+          <ul class="list">
+            <li>Live bid price</li>
+            <li>Live ask price</li>
+            <li>Last traded price</li>
+            <li>Mark price (mid-market)</li>
+            <li>Daily volume</li>
+            <li>Open interest</li>
+          </ul>
+        </div>
+        <div>
+          <div style="font-size:10px;color:var(--accent);font-family:var(--mono);margin-bottom:8px;letter-spacing:.06em">GREEKS</div>
+          <ul class="list">
+            <li>Delta (Δ)</li>
+            <li>Gamma (Γ)</li>
+            <li>Theta (Θ)</li>
+            <li>Vega (ν)</li>
+            <li>Implied Volatility</li>
+            <li>Theoretical value</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div class="callout callout-amber">
+      <span class="callout-icon">⚠</span>
+      <div><strong style="color:var(--text)">Historical options pricing is not available.</strong> The Schwab API provides the current chain but not past chains (e.g. what did the AAPL $190 call trade at 3 months ago). For backtesting, the app continues to use Yahoo Finance and CBOE free data. See <a href="#historical" style="color:var(--accent)">Historical data gap</a>.</div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════ -->
+  <!-- SECTION: AUTO POSITIONS -->
+  <!-- ═══════════════════════════════════════════ -->
+  <div class="section" id="positions">
+    <div class="section-kicker">What gets unlocked</div>
+    <h2>Auto-imported positions</h2>
+    <p>The most significant quality-of-life improvement. Instead of manually logging positions in the Trades tab, the app reads your actual open positions from Schwab.</p>
+
+    <div class="card">
+      <h3 style="margin-bottom:12px">How it works</h3>
+      <ul class="list">
+        <li><strong>On app load:</strong> Positions are fetched from Schwab for the active account and reconciled with the transaction log.</li>
+        <li><strong>What's imported:</strong> Open short call positions (covered calls you've sold). The underlying stock holdings are also visible for context.</li>
+        <li><strong>Matching:</strong> Imported positions are matched to existing manual log entries by symbol + strike + expiration. If matched, the manual entry is updated. If new, it's added automatically.</li>
+        <li><strong>Manual entries preserved:</strong> Any positions you logged manually that don't exist in Schwab are kept as-is (they may be in a different account or already closed).</li>
+        <li><strong>Refresh:</strong> Positions sync on load and via the manual refresh button. They do not auto-poll (avoids rate limit waste).</li>
+      </ul>
+    </div>
+
+    <div class="callout callout-blue">
+      <span class="callout-icon">ℹ</span>
+      <div>Position sync is read-only. The app cannot place, modify, or cancel orders. This is intentional for Phase 1 — order routing is planned for Phase 5 as an opt-in feature with an explicit review screen.</div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════ -->
+  <!-- SECTION: BUYING POWER -->
+  <!-- ═══════════════════════════════════════════ -->
+  <div class="section" id="buying-power">
+    <div class="section-kicker">What gets unlocked</div>
+    <h2>Buying power &amp; account balance</h2>
+    <p>The APIs tab surfaces account cash and buying power so you can size new covered call positions without switching to Schwab.</p>
+
+    <div class="card">
+      <h3 style="margin-bottom:12px">Fields displayed</h3>
+      <table class="tbl">
+        <thead><tr><th>Field</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>Buying power</td>
+            <td>Cash available for new trades. For margin accounts, this includes margin buying power.</td>
+          </tr>
+          <tr>
+            <td>Cash balance</td>
+            <td>Settled cash in the account (excludes unsettled proceeds from recent sales).</td>
+          </tr>
+          <tr>
+            <td>Account type</td>
+            <td>Individual / Roth IRA / Traditional IRA / etc. — helps confirm you're viewing the right account.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <hr>
+
+  <!-- ═══════════════════════════════════════════ -->
+  <!-- SECTION: HISTORICAL DATA GAP -->
+  <!-- ═══════════════════════════════════════════ -->
+  <div class="section" id="historical">
+    <div class="section-kicker">Limitations</div>
+    <h2>Historical data gap</h2>
+    <p>This is the most important limitation to understand. <strong style="color:var(--text)">Broker APIs — including Schwab — do not provide historical options pricing data.</strong> You can see today's option chain, but not what premiums were for a given strike three months ago.</p>
+
+    <div class="card">
+      <h3 style="margin-bottom:12px">How the app handles this</h3>
+      <table class="tbl">
+        <thead><tr><th>Data type</th><th>Source</th><th>Available?</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>Current option chain (live)</td>
+            <td>Schwab API</td>
+            <td class="check">✓ Yes — real-time</td>
+          </tr>
+          <tr>
+            <td>Historical stock price (OHLCV)</td>
+            <td>Yahoo Finance</td>
+            <td class="check">✓ Yes — years of data</td>
+          </tr>
+          <tr>
+            <td>Historical IV / HV</td>
+            <td>Yahoo Finance</td>
+            <td class="partial">Partial — near-term only</td>
+          </tr>
+          <tr>
+            <td>Historical option chain snapshots</td>
+            <td>CBOE free data</td>
+            <td class="partial">Index options only (SPX, VIX)</td>
+          </tr>
+          <tr>
+            <td>Historical option pricing (individual equities)</td>
+            <td>Polygon.io free tier</td>
+            <td class="partial">EOD, 5 calls/min limit</td>
+          </tr>
+          <tr>
+            <td>Real-time historical options (full depth)</td>
+            <td>Not available free</td>
+            <td class="cross">✗ Requires paid data vendor</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>The educational backtesting features in the app already use Yahoo Finance and CBOE data. Connecting a broker API does not change this — those tabs work exactly the same before and after connecting.</p>
+  </div>
+
+  <!-- ═══════════════════════════════════════════ -->
+  <!-- SECTION: RATE LIMITS -->
+  <!-- ═══════════════════════════════════════════ -->
+  <div class="section" id="rate-limits">
+    <div class="section-kicker">Limitations</div>
+    <h2>Rate limits</h2>
+    <p>Schwab allows 120 API requests per minute per app key. In practice, normal app usage stays well under 20 requests per minute.</p>
+
+    <div class="card" style="overflow-x:auto">
+      <h3 style="margin-bottom:12px">Typical usage breakdown</h3>
+      <table class="tbl">
+        <thead><tr><th>Action</th><th>Calls used</th><th>Frequency</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>App load — sync positions + buying power</td>
+            <td style="font-family:var(--mono)">2</td>
+            <td>Once per session</td>
+          </tr>
+          <tr>
+            <td>Batch quote (up to 50 tickers)</td>
+            <td style="font-family:var(--mono)">1</td>
+            <td>Every 30 seconds</td>
+          </tr>
+          <tr>
+            <td>Option chain for 1 ticker</td>
+            <td style="font-family:var(--mono)">1</td>
+            <td>On demand (user action)</td>
+          </tr>
+          <tr>
+            <td>Token refresh (silent)</td>
+            <td style="font-family:var(--mono)">1</td>
+            <td>Every 29 minutes</td>
+          </tr>
+          <tr>
+            <td><strong>Typical session total</strong></td>
+            <td style="font-family:var(--mono);color:var(--green)">~5–15/min</td>
+            <td style="color:var(--green)">Well within 120/min limit</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════ -->
+  <!-- SECTION: NOT SUPPORTED -->
+  <!-- ═══════════════════════════════════════════ -->
+  <div class="section" id="not-supported">
+    <div class="section-kicker">Limitations</div>
+    <h2>Not supported in Phase 1</h2>
+
+    <div class="card">
+      <table class="tbl">
+        <thead><tr><th>Feature</th><th>Status</th><th>Planned for</th></tr></thead>
+        <tbody>
+          <tr>
+            <td>Order placement (sell covered call)</td>
+            <td><span class="badge badge-amber">Not yet</span></td>
+            <td>Phase 5 — opt-in, review screen</td>
+          </tr>
+          <tr>
+            <td>Order modification / rolling</td>
+            <td><span class="badge badge-amber">Not yet</span></td>
+            <td>Phase 5</td>
+          </tr>
+          <tr>
+            <td>E*TRADE connection</td>
+            <td><span class="badge badge-amber">Not yet</span></td>
+            <td>Phase 2</td>
+          </tr>
+          <tr>
+            <td>Tastytrade connection</td>
+            <td><span class="badge badge-amber">Not yet</span></td>
+            <td>Phase 2</td>
+          </tr>
+          <tr>
+            <td>Interactive Brokers connection</td>
+            <td><span class="badge badge-amber">Not yet</span></td>
+            <td>Phase 3</td>
+          </tr>
+          <tr>
+            <td>Historical options pricing</td>
+            <td><span class="badge badge-red">Not available</span></td>
+            <td>Broker APIs don't provide this — requires a paid data vendor</td>
+          </tr>
+          <tr>
+            <td>Streaming real-time quotes (WebSocket)</td>
+            <td><span class="badge badge-amber">Not yet</span></td>
+            <td>Polling every 30s is sufficient for Phase 1</td>
+          </tr>
+          <tr>
+            <td>Options level 2 data (full order book)</td>
+            <td><span class="badge badge-red">Not available</span></td>
+            <td>Schwab retail API doesn't expose this</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <hr>
+
+  <!-- ═══════════════════════════════════════════ -->
+  <!-- SECTION: BROKER MATRIX -->
+  <!-- ═══════════════════════════════════════════ -->
+  <div class="section" id="brokers">
+    <div class="section-kicker">Reference</div>
+    <h2>Broker capability matrix</h2>
+
+    <div class="card" style="overflow-x:auto">
+      <table class="tbl">
+        <thead>
+          <tr>
+            <th>Broker</th>
+            <th>Phase</th>
+            <th>Live Quotes</th>
+            <th>Option Chains</th>
+            <th>Positions</th>
+            <th>Buying Power</th>
+            <th>Approval Wait</th>
+            <th>Auth Type</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Charles Schwab</strong></td>
+            <td><span class="badge badge-green">1 — Live</span></td>
+            <td class="check">✓</td>
+            <td class="check">✓</td>
+            <td class="check">✓</td>
+            <td class="check">✓</td>
+            <td>2–5 days</td>
+            <td style="font-family:var(--mono);font-size:11px">OAuth 2.0</td>
+          </tr>
+          <tr>
+            <td><strong>E*TRADE</strong></td>
+            <td><span class="badge badge-amber">2 — Soon</span></td>
+            <td class="check">✓</td>
+            <td class="check">✓</td>
+            <td class="check">✓</td>
+            <td class="check">✓</td>
+            <td>1–3 days</td>
+            <td style="font-family:var(--mono);font-size:11px">OAuth 1.0a</td>
+          </tr>
+          <tr>
+            <td><strong>Tastytrade</strong></td>
+            <td><span class="badge badge-amber">2 — Soon</span></td>
+            <td class="check">✓</td>
+            <td class="check">✓</td>
+            <td class="check">✓</td>
+            <td class="check">✓</td>
+            <td>Instant</td>
+            <td style="font-family:var(--mono);font-size:11px">Session token</td>
+          </tr>
+          <tr>
+            <td><strong>IBKR</strong></td>
+            <td><span class="badge badge-purple">3 — Planned</span></td>
+            <td class="check">✓</td>
+            <td class="check">✓</td>
+            <td class="check">✓</td>
+            <td class="check">✓</td>
+            <td>Instant</td>
+            <td style="font-family:var(--mono);font-size:11px">Client Portal</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════ -->
+  <!-- SECTION: TROUBLESHOOTING -->
+  <!-- ═══════════════════════════════════════════ -->
+  <div class="section" id="troubleshooting">
+    <div class="section-kicker">Reference</div>
+    <h2>Troubleshooting</h2>
+
+    <div class="card-sm" style="margin-bottom:10px">
+      <h3 style="margin-bottom:6px">"Connect Schwab Account" button does nothing / window doesn't open</h3>
+      <p style="margin:0">Your browser is likely blocking the popup. Allow popups for the app's domain in your browser settings, then try again. Safari and Firefox can be especially aggressive about blocking OAuth windows.</p>
+    </div>
+
+    <div class="card-sm" style="margin-bottom:10px">
+      <h3 style="margin-bottom:6px">OAuth completes but the app shows "Pending OAuth" instead of "Connected"</h3>
+      <p style="margin:0">The callback page (<code style="font-family:var(--mono);font-size:11px">/api/schwab/callback</code>) may have been blocked or the tab closed before the token exchange finished. Go to APIs tab → Schwab → the setup flow will detect the pending state and let you re-attempt the OAuth step without re-entering your credentials.</p>
+    </div>
+
+    <div class="card-sm" style="margin-bottom:10px">
+      <h3 style="margin-bottom:6px">"Token exchange failed" error</h3>
+      <p style="margin:0">This usually means the App Key or App Secret was entered incorrectly. Return to the Schwab Developer Portal, copy both values fresh, and re-enter them. Also confirm your app status in the portal is "Approved" (not "Approved — Pending").</p>
+    </div>
+
+    <div class="card-sm" style="margin-bottom:10px">
+      <h3 style="margin-bottom:6px">Status shows "Connected" but quotes are not updating</h3>
+      <p style="margin:0">Check the Connection Health section in the APIs tab. If the access token shows "Expired," click the manual refresh button. If the refresh token is expired, you'll need to reconnect (re-run the OAuth flow — you don't need to re-enter your App Key/Secret).</p>
+    </div>
+
+    <div class="card-sm" style="margin-bottom:10px">
+      <h3 style="margin-bottom:6px">I see accounts I didn't expect / accounts are missing</h3>
+      <p style="margin:0">The accounts shown are exactly what Schwab returned during your OAuth grant. If you have multiple Schwab logins (e.g. a personal and a business account), make sure you logged in with the correct one. You can disconnect and reconnect to switch the authorized account set.</p>
+    </div>
+
+    <div class="card-sm">
+      <h3 style="margin-bottom:6px">The APIs tab appears but shows no broker options</h3>
+      <p style="margin:0">This is likely a Cloud Functions deploy issue. Open the browser console and look for a Firebase function error. Run <code style="font-family:var(--mono);font-size:11px">firebase deploy --only functions</code> to make sure the Schwab functions are deployed, then reload the app.</p>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════ -->
+  <!-- SECTION: FAQ -->
+  <!-- ═══════════════════════════════════════════ -->
+  <div class="section" id="faq">
+    <div class="section-kicker">Reference</div>
+    <h2>FAQ</h2>
+
+    <div class="card-sm" style="margin-bottom:10px">
+      <h3 style="margin-bottom:5px">Can the app place trades on my behalf?</h3>
+      <p style="margin:0">No. Phase 1 is read-only. The app reads your positions and market data but cannot submit, modify, or cancel orders. Order routing is planned for Phase 5 as an explicit opt-in feature.</p>
+    </div>
+
+    <div class="card-sm" style="margin-bottom:10px">
+      <h3 style="margin-bottom:5px">Where are my App Key and App Secret stored?</h3>
+      <p style="margin:0">Encrypted in Firestore under your user document. They are only accessed by Cloud Functions running server-side — they never appear in browser logs, network requests from the frontend, or any client-readable location.</p>
+    </div>
+
+    <div class="card-sm" style="margin-bottom:10px">
+      <h3 style="margin-bottom:5px">Can I connect multiple brokers at the same time?</h3>
+      <p style="margin:0">Yes — you can have connections for multiple brokers simultaneously (as more brokers are added in Phase 2+). However, only one broker is "active" at a time as the live data source. You toggle which is active from the APIs tab.</p>
+    </div>
+
+    <div class="card-sm" style="margin-bottom:10px">
+      <h3 style="margin-bottom:5px">Do I need ThinkOrSwim enabled on my Schwab account?</h3>
+      <p style="margin:0">Yes, technically — the Schwab API requires TOS to be enabled to access trading endpoints. Most former TD Ameritrade accounts and active traders already have it. If not, you can enable it in your Schwab account settings or by calling Schwab.</p>
+    </div>
+
+    <div class="card-sm" style="margin-bottom:10px">
+      <h3 style="margin-bottom:5px">What happens if I disconnect a broker?</h3>
+      <p style="margin:0">The API connection and tokens are removed from Firestore. The app reverts to manual mode — Yahoo Finance delayed data and manual position logging. Your transaction log history is preserved, nothing is deleted.</p>
+    </div>
+
+    <div class="card-sm" style="margin-bottom:10px">
+      <h3 style="margin-bottom:5px">Does the API work outside US market hours?</h3>
+      <p style="margin:0">Quotes can be fetched outside market hours — you'll see the last traded price. Option chains outside hours show the last bid/ask, which may be stale. Position and account data is always available. The app shows an "as of close" label when market is closed.</p>
+    </div>
+
+    <div class="card-sm">
+      <h3 style="margin-bottom:5px">How is this different from linking Schwab in PlaidLink or a similar service?</h3>
+      <p style="margin:0">This is a direct integration with Schwab's official developer API — not a screen-scraper or read-only account aggregator. It uses Schwab's own OAuth and gives access to live market data (quotes, option chains) which aggregators don't provide. The trade-off is the 2–5 day developer app approval process.</p>
+    </div>
+  </div>
+
+</main>
+</div>
+
+<script>
+  // Active nav highlight on scroll
+  const sections = document.querySelectorAll('.section[id]');
+  const navLinks = document.querySelectorAll('.nav-item');
+
+  const obs = new IntersectionObserver((entries) => {
+    entries.forEach(e => {
+      if (e.isIntersecting) {
+        navLinks.forEach(l => l.classList.remove('active'));
+        const match = document.querySelector(`.nav-item[href="#${e.target.id}"]`);
+        if (match) match.classList.add('active');
+      }
+    });
+  }, { rootMargin: '-20% 0px -75% 0px' });
+
+  sections.forEach(s => obs.observe(s));
+</script>
+</body>
+</html>
