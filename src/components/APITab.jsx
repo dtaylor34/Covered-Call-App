@@ -1,4 +1,4 @@
-// ─── src/components/APITab.jsx ────────────────────────────────────────────────
+// ── src/components/APITab.jsx ────────────────────────────────────────────────
 // Broker API connection hub. Phase 1 of the API integration roadmap.
 // Branch: feature/api-integration
 //
@@ -59,6 +59,55 @@ const StatusDot = ({ status }) => {
   );
 };
 
+// ── PIICallout ────────────────────────────────────────────────────────────────
+// Renders a broker-specific security callout inside the setup flow and
+// coming-soon broker cards. Reads from broker.piiNote — safe to skip if absent.
+
+function PIICallout({ broker }) {
+  const note = broker.piiNote;
+  if (!note) return null;
+
+  const variants = {
+    safe:    { bg: "#0d2018", border: "#1a4530", text: "#86efac", icon: "🛡" },
+    warning: { bg: "#251a06", border: "#3d2a0a", text: "#fcd34d", icon: "⚠" },
+    caution: { bg: "#270d0d", border: "#3d1515", text: "#fca5a5", icon: "⚠" },
+    info:    { bg: "#0d1a2e", border: "#1a2e4a", text: "#93c5fd", icon: "ℹ" },
+  };
+  const v = variants[note.level] || variants.info;
+
+  return (
+    <div style={{
+      background: v.bg,
+      border: `1px solid ${v.border}`,
+      borderRadius: 10,
+      padding: "14px 16px",
+      marginBottom: 16,
+      display: "flex",
+      gap: 10,
+      alignItems: "flex-start",
+    }}>
+      <span style={{ fontSize: 15, flexShrink: 0, marginTop: 1 }}>{v.icon}</span>
+      <div>
+        <div style={{ fontWeight: 700, fontSize: 12, color: v.text, marginBottom: 5, letterSpacing: 0.3 }}>
+          {note.title}
+        </div>
+        <div style={{ fontSize: 12.5, color: v.text, opacity: 0.85, lineHeight: 1.6, marginBottom: note.items ? 8 : 0 }}>
+          {note.body}
+        </div>
+        {note.items && (
+          <ul style={{ paddingLeft: 14, margin: 0 }}>
+            {note.items.map((item, i) => (
+              <li key={i} style={{ fontSize: 12, color: v.text, opacity: 0.75, marginBottom: 3, lineHeight: 1.5 }}>
+                {item}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── Broker definitions ────────────────────────────────────────────────────────
 
 const BROKERS = [
@@ -71,6 +120,20 @@ const BROKERS = [
     phaseLabel: "Available now",
     available: true,
     requiresAppKey: true,
+
+    piiNote: {
+      level: "safe",
+      title: "Callback URL & PII — what Schwab sees",
+      body: "The callback URL shown above contains no personal data. Schwab appends a one-time auth code (?code=…) that expires in ~30 seconds. Our server validates and discards it immediately — it is never logged or stored.",
+      items: [
+        "✓  HTTPS required for production — localhost is fine for local dev only",
+        "✓  No PII in the URL path — copy-paste the callback exactly as shown, don't modify it",
+        "✓  App Type: Individual Use — limits the OAuth scope to your account only",
+        "✓  We store: App Key, App Secret, access token, refresh token — all encrypted in Firestore",
+        "✗  We never store: your Schwab password, full account numbers, or SSN",
+      ],
+    },
+
     steps: [
       {
         title: "Create a Schwab Developer account",
@@ -111,6 +174,18 @@ const BROKERS = [
     phase: "Phase 2",
     phaseLabel: "Coming soon",
     available: false,
+
+    piiNote: {
+      level: "warning",
+      title: "OAuth 1.0a — signed requests, no PII in callback",
+      body: "E*TRADE uses OAuth 1.0a. The callback URL contains no personal data — it receives only an oauth_token and oauth_verifier. All requests are HMAC-SHA1 signed server-side so credentials never appear in a URL or browser request.",
+      items: [
+        "✓  Callback URL contains no PII — clean path only",
+        "✓  Consumer Secret used for signing, never transmitted in plain text",
+        "⚠  E*TRADE access tokens don't auto-expire — revoke in your E*TRADE account when disconnecting",
+        "✗  We never store: your E*TRADE password or account numbers",
+      ],
+    },
   },
   {
     id: "tastytrade",
@@ -120,6 +195,19 @@ const BROKERS = [
     phase: "Phase 2",
     phaseLabel: "Coming soon",
     available: false,
+
+    piiNote: {
+      level: "caution",
+      title: "Session auth — no OAuth, no callback URL",
+      body: "Tastytrade uses session-based authentication, not OAuth. There is no callback URL. Credentials are submitted server-side (Cloud Function only) and exchanged for a session token — your username and password are never stored or logged by our app.",
+      items: [
+        "✓  No callback URL — no redirect chain to intercept",
+        "✓  Credentials handled exclusively in Cloud Function, never touch the browser",
+        "⚠  Session tokens expire every ~24 hours — you'll be prompted to re-authenticate",
+        "⚠  Use a unique Tastytrade password not shared with other accounts",
+        "✗  We never store: your Tastytrade username or password",
+      ],
+    },
   },
   {
     id: "ibkr",
@@ -129,6 +217,19 @@ const BROKERS = [
     phase: "Phase 3",
     phaseLabel: "Planned",
     available: false,
+
+    piiNote: {
+      level: "info",
+      title: "OAuth 2.0 via Client Portal — standard redirect, session keep-alive",
+      body: "IBKR's Client Portal API uses standard OAuth 2.0, similar to Schwab. The callback URL contains no PII. Sessions require periodic keep-alive pings — our Cloud Function handles this automatically while the app is in use.",
+      items: [
+        "✓  Callback URL contains no PII — receives only a one-time auth code",
+        "✓  HTTPS required for all production callbacks",
+        "⚠  Sessions expire after ~24hrs of inactivity (shorter than Schwab's 7-day refresh token)",
+        "⚠  TWS REST requires Trader Workstation running locally — we use Client Portal API only",
+        "✗  We never store: your IBKR password or full account numbers",
+      ],
+    },
   },
 ];
 
@@ -140,17 +241,17 @@ const DATA_FEATURES = [
   { icon: "💰", label: "Buying Power", desc: "Account cash & margin available for sizing new positions" },
 ];
 
-// ── Schwab connection flow ─────────────────────────────────────────────────────
+// ── Schwab connection flow ────────────────────────────────────────────────────
 
 function SchwabSetupFlow({ broker, onClose }) {
   const { T } = useTheme();
   const { saveConnection } = useBrokerConnection();
-  const [appKey, setAppKey]       = useState("");
-  const [appSecret, setAppSecret] = useState("");
+  const [appKey, setAppKey]         = useState("");
+  const [appSecret, setAppSecret]   = useState("");
   const [showSecret, setShowSecret] = useState(false);
-  const [step, setStep]           = useState(0); // which step is expanded
+  const [step, setStep]             = useState(0);
   const [connecting, setConnecting] = useState(false);
-  const [error, setError]         = useState(null);
+  const [error, setError]           = useState(null);
 
   const REDIRECT_URI = `${window.location.origin}/api/schwab/callback`;
 
@@ -162,12 +263,9 @@ function SchwabSetupFlow({ broker, onClose }) {
     setConnecting(true);
     setError(null);
     try {
-      // Save credentials to Firestore first
       await saveConnection("schwab", appKey.trim(), appSecret.trim());
-      // Get OAuth URL from Cloud Function
       const result = await schwabInitiateOAuth({ appKey: appKey.trim(), appSecret: appSecret.trim(), redirectUri: REDIRECT_URI });
       const { authUrl } = result.data;
-      // Open Schwab OAuth in new tab
       window.open(authUrl, "_blank", "width=600,height=700,noopener");
     } catch (err) {
       setError(err.message || "Failed to initiate connection. Check your App Key and Secret.");
@@ -201,9 +299,14 @@ function SchwabSetupFlow({ broker, onClose }) {
         </div>
       </Card>
 
+      {/* ── PII & Security callout — inserted after callback URL box ── */}
+      <PIICallout broker={broker} />
+
       {/* Step list */}
       {broker.steps.map((s, i) => (
-        <Card key={i} style={{ padding: "16px 20px", cursor: s.isForm || s.isConnect ? "default" : "pointer", transition: "border-color 0.2s" }}
+        <Card
+          key={i}
+          style={{ padding: "16px 20px", cursor: s.isForm || s.isConnect ? "default" : "pointer", transition: "border-color 0.2s" }}
           onClick={() => !s.isForm && !s.isConnect && setStep(step === i ? -1 : i)}
           onMouseEnter={(e) => { if (!s.isForm && !s.isConnect) e.currentTarget.style.borderColor = T.borderActive; }}
           onMouseLeave={(e) => { e.currentTarget.style.borderColor = T.border; }}
@@ -223,7 +326,6 @@ function SchwabSetupFlow({ broker, onClose }) {
                 {s.title}
               </div>
 
-              {/* Always show form/connect steps; toggle others */}
               {(s.isForm || s.isConnect || step === i) && (
                 <div>
                   {s.detail && (
@@ -232,7 +334,10 @@ function SchwabSetupFlow({ broker, onClose }) {
                     </div>
                   )}
                   {s.link && (
-                    <a href={s.link} target="_blank" rel="noopener noreferrer"
+                    <a
+                      href={s.link}
+                      target="_blank"
+                      rel="noopener noreferrer"
                       style={{ fontSize: 12, color: broker.color, fontFamily: T.fontMono, textDecoration: "none" }}
                       onClick={(e) => e.stopPropagation()}
                     >
@@ -301,7 +406,8 @@ function SchwabSetupFlow({ broker, onClose }) {
                         onClick={handleConnect}
                         disabled={connecting || !appKey || !appSecret}
                         style={{
-                          padding: "12px 24px", borderRadius: 8, border: "none", cursor: (connecting || !appKey || !appSecret) ? "default" : "pointer",
+                          padding: "12px 24px", borderRadius: 8, border: "none",
+                          cursor: (connecting || !appKey || !appSecret) ? "default" : "pointer",
                           background: (connecting || !appKey || !appSecret) ? T.accentDim : broker.color,
                           color: (connecting || !appKey || !appSecret) ? T.textDim : "#fff",
                           fontSize: 13, fontWeight: 700, fontFamily: T.fontBody,
@@ -385,13 +491,16 @@ function ConnectedPanel({ broker, connection, accounts, activeAccount, onSetDefa
           {accounts.map((account) => {
             const isActive = activeAccount?.id === account.id;
             return (
-              <div key={account.id} onClick={() => onSetDefault(account.id)} style={{
-                display: "flex", alignItems: "center", justifyContent: "space-between",
-                padding: "12px 14px", borderRadius: 8, cursor: "pointer",
-                background: isActive ? T.accentDim : T.card,
-                border: `1px solid ${isActive ? T.accent + "44" : T.border}`,
-                marginBottom: 8, transition: "all 0.15s",
-              }}
+              <div
+                key={account.id}
+                onClick={() => onSetDefault(account.id)}
+                style={{
+                  display: "flex", alignItems: "center", justifyContent: "space-between",
+                  padding: "12px 14px", borderRadius: 8, cursor: "pointer",
+                  background: isActive ? T.accentDim : T.card,
+                  border: `1px solid ${isActive ? T.accent + "44" : T.border}`,
+                  marginBottom: 8, transition: "all 0.15s",
+                }}
                 onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.borderColor = T.borderActive; }}
                 onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.borderColor = T.border; }}
               >
@@ -416,7 +525,7 @@ function ConnectedPanel({ broker, connection, accounts, activeAccount, onSetDefa
           CONNECTION HEALTH
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          <TokenRow label="Access Token" expires={connection.expiresAt} warnHours={0.5} />
+          <TokenRow label="Access Token"  expires={connection.expiresAt}        warnHours={0.5} />
           <TokenRow label="Refresh Token" expires={connection.refreshExpiresAt} warnHours={24} />
         </div>
         <div style={{ color: T.textMuted, fontSize: 11, fontFamily: T.fontMono, marginTop: 10 }}>
@@ -465,18 +574,17 @@ function ConnectedPanel({ broker, connection, accounts, activeAccount, onSetDefa
 function TokenRow({ label, expires, warnHours }) {
   const { T } = useTheme();
   if (!expires) return null;
-  const now = Date.now();
-  const msLeft = expires - now;
+  const now      = Date.now();
+  const msLeft   = expires - now;
   const hoursLeft = msLeft / (1000 * 60 * 60);
   const isExpired = msLeft <= 0;
   const isWarning = hoursLeft < warnHours;
 
-  const color = isExpired ? T.danger : isWarning ? T.warn : T.success;
-  const label2 = isExpired ? "Expired" : hoursLeft < 1
-    ? `${Math.round(hoursLeft * 60)}m remaining`
-    : hoursLeft < 24
-      ? `${Math.round(hoursLeft)}h remaining`
-      : `${Math.round(hoursLeft / 24)}d remaining`;
+  const color  = isExpired ? T.danger : isWarning ? T.warn : T.success;
+  const label2 = isExpired     ? "Expired"
+    : hoursLeft < 1  ? `${Math.round(hoursLeft * 60)}m remaining`
+    : hoursLeft < 24 ? `${Math.round(hoursLeft)}h remaining`
+    :                  `${Math.round(hoursLeft / 24)}d remaining`;
 
   return (
     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
@@ -492,17 +600,18 @@ function TokenRow({ label, expires, warnHours }) {
 // ── Broker card (not expanded) ────────────────────────────────────────────────
 
 function BrokerCard({ broker, connection, onSelect }) {
-  const { T } = useTheme();
+  const { T }    = useTheme();
   const isConnected = connection?.status === "connected";
   const isPending   = connection?.status === "pending";
 
   return (
-    <div style={{
-      background: T.surface, border: `1px solid ${isConnected ? broker.color + "44" : T.border}`,
-      borderRadius: T.r, padding: "18px 20px", marginBottom: 12,
-      opacity: broker.available ? 1 : 0.55,
-      transition: "border-color 0.2s",
-    }}
+    <div
+      style={{
+        background: T.surface, border: `1px solid ${isConnected ? broker.color + "44" : T.border}`,
+        borderRadius: T.r, padding: "18px 20px", marginBottom: 12,
+        opacity: broker.available ? 1 : 0.55,
+        transition: "border-color 0.2s",
+      }}
       onMouseEnter={(e) => { if (broker.available && !isConnected) e.currentTarget.style.borderColor = broker.color + "55"; }}
       onMouseLeave={(e) => { e.currentTarget.style.borderColor = isConnected ? broker.color + "44" : T.border; }}
     >
@@ -539,15 +648,16 @@ function BrokerCard({ broker, connection, onSelect }) {
               {broker.phaseLabel}
             </Badge>
           )}
-
           {broker.available && (
-            <button onClick={() => onSelect(broker.id)} style={{
-              padding: "8px 18px", borderRadius: 8, border: `1px solid ${broker.color}44`,
-              background: isConnected ? T.accentDim : broker.color + "18",
-              color: isConnected ? T.accent : broker.color,
-              fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: T.fontBody,
-              transition: "all 0.15s",
-            }}
+            <button
+              onClick={() => onSelect(broker.id)}
+              style={{
+                padding: "8px 18px", borderRadius: 8, border: `1px solid ${broker.color}44`,
+                background: isConnected ? T.accentDim : broker.color + "18",
+                color: isConnected ? T.accent : broker.color,
+                fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: T.fontBody,
+                transition: "all 0.15s",
+              }}
               onMouseEnter={(e) => { e.currentTarget.style.background = broker.color + "28"; }}
               onMouseLeave={(e) => { e.currentTarget.style.background = isConnected ? T.accentDim : broker.color + "18"; }}
             >
@@ -556,6 +666,13 @@ function BrokerCard({ broker, connection, onSelect }) {
           )}
         </div>
       </div>
+
+      {/* ── PII callout shown inline on coming-soon broker cards ── */}
+      {!broker.available && broker.piiNote && (
+        <div style={{ marginTop: 14, paddingTop: 14, borderTop: `1px solid ${T.border}` }}>
+          <PIICallout broker={broker} />
+        </div>
+      )}
     </div>
   );
 }
@@ -569,11 +686,9 @@ export default function APITab() {
     saveConnection, deleteConnection, setDefaultAccount,
   } = useBrokerConnection();
 
-  const [selectedBroker, setSelectedBroker] = useState(null); // broker id being set up
+  const [selectedBroker, setSelectedBroker] = useState(null);
 
-  const handleSelectBroker = (brokerId) => {
-    setSelectedBroker(brokerId);
-  };
+  const handleSelectBroker = (brokerId) => setSelectedBroker(brokerId);
 
   const handleDisconnect = async () => {
     if (!selectedBroker) return;
@@ -581,7 +696,7 @@ export default function APITab() {
     setSelectedBroker(null);
   };
 
-  const activeBrokerDef   = BROKERS.find((b) => b.id === selectedBroker) || null;
+  const activeBrokerDef    = BROKERS.find((b) => b.id === selectedBroker) || null;
   const selectedConnection = connections.find((c) => c.broker === selectedBroker) || null;
   const isConnected        = selectedConnection?.status === "connected";
   const hasAnyConnection   = connections.some((c) => c.status === "connected");
@@ -624,7 +739,6 @@ export default function APITab() {
             Connect your broker account to pull live quotes, option chains, and positions directly into the app.
             Manual entry continues to work — the API is additive, not a replacement.
           </div>
-          {/* What this powers */}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 8 }}>
             {DATA_FEATURES.map((f) => (
               <div key={f.label} style={{
@@ -642,7 +756,7 @@ export default function APITab() {
         </Card>
       )}
 
-      {/* ── Broker list (no broker selected) ── */}
+      {/* ── Broker list ── */}
       {!selectedBroker && (
         <div>
           <div style={{

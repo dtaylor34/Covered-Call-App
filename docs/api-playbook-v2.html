@@ -1,0 +1,833 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Covered Calls App — API Playbook</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,400;0,500;1,400&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600;1,400&display=swap');
+
+  :root {
+    --bg:         #0b0d11;
+    --surface:    #13161c;
+    --surface2:   #1a1e27;
+    --surface3:   #21262f;
+    --border:     #252b36;
+    --border2:    #2e3647;
+    --text:       #e6e9ef;
+    --muted:      #6b7585;
+    --dim:        #9aa3b0;
+    --accent:     #00d4aa;
+    --accent-dim: #0a2420;
+    --green:      #22c55e;
+    --green-dim:  #0d2018;
+    --amber:      #f59e0b;
+    --amber-dim:  #251a06;
+    --red:        #ef4444;
+    --red-dim:    #270d0d;
+    --blue:       #60a5fa;
+    --blue-dim:   #0d1a2e;
+    --purple:     #a78bfa;
+    --purple-dim: #180f30;
+    --orange:     #fb923c;
+    --orange-dim: #2a1206;
+    --mono: 'DM Mono', monospace;
+    --sans: 'DM Sans', sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body { font-family: var(--sans); background: var(--bg); color: var(--text); font-size: 15px; line-height: 1.65; }
+
+  /* ── Shell ── */
+  .shell { display: flex; min-height: 100vh; }
+
+  /* ── Sidebar ── */
+  .sidebar {
+    width: 248px; flex-shrink: 0;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    padding: 28px 0;
+    position: sticky; top: 0; height: 100vh;
+    overflow-y: auto;
+  }
+  .sidebar::-webkit-scrollbar { width: 4px; }
+  .sidebar::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 4px; }
+
+  .logo-wrap { padding: 0 20px 24px; border-bottom: 1px solid var(--border); margin-bottom: 20px; }
+  .logo-mark {
+    width: 32px; height: 32px; border-radius: 8px;
+    background: linear-gradient(135deg, var(--accent), #00b89a);
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 600; color: #fff; margin-bottom: 10px;
+    font-family: var(--mono);
+  }
+  .logo-title { font-size: 13px; font-weight: 600; color: var(--text); }
+  .logo-sub { font-size: 11px; color: var(--muted); margin-top: 1px; }
+
+  .nav-group { padding: 0 12px; margin-bottom: 6px; }
+  .nav-group-label { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); padding: 0 8px; margin-bottom: 4px; }
+  .nav-item {
+    display: block; padding: 6px 8px; border-radius: 6px;
+    font-size: 13px; color: var(--dim); text-decoration: none;
+    transition: background .12s, color .12s;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .nav-item:hover { background: var(--surface2); color: var(--text); }
+  .nav-item.active { background: var(--accent-dim); color: var(--accent); }
+  .nav-badge {
+    display: inline-block; font-size: 9px; font-weight: 600;
+    padding: 1px 5px; border-radius: 3px; margin-left: 5px;
+    background: var(--green-dim); color: var(--green); vertical-align: middle;
+  }
+  .nav-badge.new { background: var(--amber-dim); color: var(--amber); }
+
+  /* ── Main ── */
+  main { flex: 1; max-width: 820px; padding: 56px 56px 120px; }
+
+  /* ── Sections ── */
+  .section { margin-bottom: 72px; padding-top: 8px; }
+  .section-kicker { font-size: 11px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: var(--accent); margin-bottom: 8px; }
+  h2 { font-size: 26px; font-weight: 600; color: var(--text); line-height: 1.2; margin-bottom: 14px; }
+  h3 { font-size: 15px; font-weight: 600; color: var(--text); margin-bottom: 8px; }
+  p { color: var(--dim); margin-bottom: 14px; }
+  p:last-child { margin-bottom: 0; }
+
+  /* ── Cards ── */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px 24px;
+    margin-bottom: 16px;
+  }
+  .card-sm {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px 20px;
+    margin-bottom: 12px;
+  }
+
+  /* ── Callouts ── */
+  .callout {
+    display: flex; gap: 12px; align-items: flex-start;
+    border-radius: 10px; padding: 14px 16px; margin-bottom: 16px;
+    font-size: 14px; line-height: 1.55;
+  }
+  .callout-icon { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
+  .callout-green  { background: var(--green-dim);  border: 1px solid #1a4530; color: #86efac; }
+  .callout-amber  { background: var(--amber-dim);  border: 1px solid #3d2a0a; color: #fcd34d; }
+  .callout-red    { background: var(--red-dim);    border: 1px solid #3d1515; color: #fca5a5; }
+  .callout-blue   { background: var(--blue-dim);   border: 1px solid #1a2e4a; color: #93c5fd; }
+  .callout-accent { background: var(--accent-dim); border: 1px solid #0f3830; color: var(--accent); }
+
+  /* ── Tables ── */
+  .tbl { width: 100%; border-collapse: collapse; font-size: 13.5px; margin-bottom: 0; }
+  .tbl thead tr { border-bottom: 1px solid var(--border2); }
+  .tbl th { text-align: left; padding: 8px 12px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+  .tbl td { padding: 10px 12px; border-bottom: 1px solid var(--border); color: var(--dim); vertical-align: top; }
+  .tbl tr:last-child td { border-bottom: none; }
+  .tbl tr:hover td { background: var(--surface2); }
+
+  /* ── Steps ── */
+  .steps { margin: 20px 0; }
+  .step { display: flex; gap: 16px; margin-bottom: 4px; position: relative; padding-bottom: 4px; }
+  .step:not(:last-child)::before {
+    content: ''; position: absolute;
+    left: 15px; top: 34px; bottom: 0; width: 1px;
+    background: var(--border2);
+  }
+  .step-num {
+    width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0;
+    background: var(--surface2); border: 1px solid var(--border2);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 600; color: var(--accent);
+    font-family: var(--mono); z-index: 1;
+  }
+  .step-body { padding: 5px 0 20px; flex: 1; }
+  .step-title { font-weight: 600; font-size: 14px; color: var(--text); margin-bottom: 4px; }
+  .step-desc { font-size: 13.5px; color: var(--dim); }
+
+  /* ── Pills / Badges ── */
+  .pill { display: inline-block; font-family: var(--mono); font-size: 11px; background: var(--surface3); border: 1px solid var(--border2); color: var(--dim); padding: 2px 7px; border-radius: 4px; }
+  .badge { display: inline-block; font-size: 10px; font-weight: 600; padding: 2px 7px; border-radius: 4px; }
+  .badge-green  { background: var(--green-dim);  color: var(--green); }
+  .badge-amber  { background: var(--amber-dim);  color: var(--amber); }
+  .badge-red    { background: var(--red-dim);    color: var(--red); }
+  .badge-blue   { background: var(--blue-dim);   color: var(--blue); }
+  .badge-purple { background: var(--purple-dim); color: var(--purple); }
+  .badge-orange { background: var(--orange-dim); color: var(--orange); }
+
+  /* ── PII Broker Cards ── */
+  .broker-pii-grid { display: grid; gap: 16px; margin-top: 16px; }
+
+  .broker-pii-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .broker-pii-header {
+    display: flex; align-items: center; gap: 12px;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    user-select: none;
+  }
+  .broker-pii-header:hover { background: var(--surface2); }
+  .broker-icon-sm {
+    width: 36px; height: 36px; border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700; font-family: var(--mono);
+    flex-shrink: 0;
+  }
+  .broker-pii-name { font-weight: 600; font-size: 14px; color: var(--text); }
+  .broker-pii-sub  { font-size: 12px; color: var(--muted); margin-top: 1px; }
+  .broker-pii-badges { margin-left: auto; display: flex; gap: 6px; align-items: center; }
+  .chevron { font-size: 18px; color: var(--muted); transition: transform .2s; margin-left: 8px; }
+  .broker-pii-card.open .chevron { transform: rotate(90deg); }
+
+  .broker-pii-body { padding: 20px; display: none; }
+  .broker-pii-card.open .broker-pii-body { display: block; }
+
+  .pii-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+  .pii-box {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 8px; padding: 14px 16px;
+  }
+  .pii-box-label {
+    font-size: 10px; font-weight: 600; letter-spacing: .08em;
+    text-transform: uppercase; color: var(--muted); margin-bottom: 8px;
+  }
+  .pii-item { display: flex; gap: 8px; align-items: flex-start; margin-bottom: 5px; font-size: 13px; }
+  .pii-item:last-child { margin-bottom: 0; }
+  .pii-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; margin-top: 6px; }
+  .pii-dot-green  { background: var(--green); }
+  .pii-dot-red    { background: var(--red); }
+  .pii-dot-amber  { background: var(--amber); }
+
+  .callback-detail {
+    background: var(--surface3);
+    border: 1px solid var(--border2);
+    border-radius: 8px;
+    padding: 14px 16px;
+    margin-bottom: 12px;
+  }
+  .callback-label { font-size: 10px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+  .callback-url { font-family: var(--mono); font-size: 12px; color: var(--accent); }
+  .callback-notes { font-size: 13px; color: var(--dim); margin-top: 8px; line-height: 1.5; }
+
+  .security-checklist { margin: 12px 0; }
+  .sc-item { display: flex; align-items: flex-start; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 13.5px; }
+  .sc-item:last-child { border-bottom: none; }
+  .sc-icon { width: 20px; height: 20px; border-radius: 4px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 11px; margin-top: 1px; }
+  .sc-pass { background: var(--green-dim); color: var(--green); }
+  .sc-warn { background: var(--amber-dim); color: var(--amber); }
+  .sc-fail { background: var(--red-dim); color: var(--red); }
+  .sc-text { color: var(--dim); }
+  .sc-text strong { color: var(--text); }
+
+  /* ── List ── */
+  .list { padding-left: 18px; color: var(--dim); font-size: 14px; }
+  .list li { margin-bottom: 6px; }
+
+  /* ── Code ── */
+  code { font-family: var(--mono); font-size: 12px; background: var(--surface2); border: 1px solid var(--border); color: var(--accent); padding: 2px 6px; border-radius: 4px; }
+
+  /* ── Divider ── */
+  hr { border: none; border-top: 1px solid var(--border); margin: 24px 0; }
+
+  /* ── Responsive ── */
+  @media (max-width: 768px) {
+    .sidebar { display: none; }
+    main { padding: 32px 20px 80px; }
+    .pii-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <!-- ════════════════════ SIDEBAR ════════════════════ -->
+  <nav class="sidebar">
+    <div class="logo-wrap">
+      <div class="logo-mark">CC</div>
+      <div class="logo-title">API Playbook</div>
+      <div class="logo-sub">Covered Calls App</div>
+    </div>
+
+    <div class="nav-group">
+      <div class="nav-group-label">Overview</div>
+      <a class="nav-item active" href="#overview">What the API does</a>
+      <a class="nav-item" href="#getting-started">Getting started</a>
+    </div>
+
+    <div class="nav-group">
+      <div class="nav-group-label">Security <span class="nav-badge new">New</span></div>
+      <a class="nav-item" href="#pii">Callback & PII guide</a>
+      <a class="nav-item" href="#what-we-store">What we store</a>
+    </div>
+
+    <div class="nav-group">
+      <div class="nav-group-label">Schwab</div>
+      <a class="nav-item" href="#schwab-setup">Developer Portal setup</a>
+      <a class="nav-item" href="#accounts">Account switching</a>
+      <a class="nav-item" href="#reconnect">Token lifecycle</a>
+    </div>
+
+    <div class="nav-group">
+      <div class="nav-group-label">Features</div>
+      <a class="nav-item" href="#unlocked">What's unlocked</a>
+      <a class="nav-item" href="#limits">Rate limits</a>
+      <a class="nav-item" href="#not-supported">Not supported yet</a>
+    </div>
+
+    <div class="nav-group">
+      <div class="nav-group-label">Reference</div>
+      <a class="nav-item" href="#brokers">Broker matrix</a>
+      <a class="nav-item" href="#troubleshoot">Troubleshooting</a>
+      <a class="nav-item" href="#faq">FAQ</a>
+    </div>
+  </nav>
+
+  <!-- ════════════════════ MAIN ════════════════════ -->
+  <main>
+
+    <!-- ══════════════════════════════════════════════════════ -->
+    <!-- OVERVIEW -->
+    <!-- ══════════════════════════════════════════════════════ -->
+    <div class="section" id="overview">
+      <div class="section-kicker">Overview</div>
+      <h2>What the API does</h2>
+      <p>Connecting your brokerage account upgrades the app from a manual covered call calculator to a live trading companion. Here's what changes:</p>
+      <div class="card">
+        <table class="tbl">
+          <thead><tr><th>Feature</th><th>Without API</th><th>With API</th></tr></thead>
+          <tbody>
+            <tr><td>Underlying price</td><td>You type it in</td><td>Live real-time quote</td></tr>
+            <tr><td>Option chain</td><td>You look it up externally</td><td>Browse strikes inline</td></tr>
+            <tr><td>Your positions</td><td>Manual entry</td><td>Auto-imported from broker</td></tr>
+            <tr><td>Buying power</td><td>Not shown</td><td>Pulled from account</td></tr>
+            <tr><td>Assignment risk</td><td>Static estimate</td><td>Refreshes with live price</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout callout-blue">
+        <span class="callout-icon">ℹ</span>
+        <div>The app is <strong>read-only in Phase 1</strong>. It reads your positions and balances — it does not place trades.</div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════ -->
+    <!-- GETTING STARTED -->
+    <!-- ══════════════════════════════════════════════════════ -->
+    <div class="section" id="getting-started">
+      <div class="section-kicker">Setup</div>
+      <h2>Getting started</h2>
+      <div class="steps">
+        <div class="step"><div class="step-num">1</div><div class="step-body"><div class="step-title">Open the APIs tab</div><div class="step-desc">Scroll the tab bar to find the 🔌 APIs tab. You'll see the broker hub with Charles Schwab available and other brokers listed as coming soon.</div></div></div>
+        <div class="step"><div class="step-num">2</div><div class="step-body"><div class="step-title">Click "Connect" on Charles Schwab</div><div class="step-desc">The Schwab setup flow opens. You'll see the step-by-step guide and the exact callback URL to paste into the Schwab Developer Portal.</div></div></div>
+        <div class="step"><div class="step-num">3</div><div class="step-body"><div class="step-title">Create a Schwab Developer account</div><div class="step-desc">Go to developer.schwab.com — separate from your brokerage login. Register an app, select both API products, paste the callback URL exactly as shown.</div></div></div>
+        <div class="step"><div class="step-num">4</div><div class="step-body"><div class="step-title">Wait for Schwab approval (2–5 business days)</div><div class="step-desc">Schwab reviews all developer app registrations. Status shows "Approved — Pending" initially. You'll get an email when approved.</div></div></div>
+        <div class="step"><div class="step-num">5</div><div class="step-body"><div class="step-title">Paste your App Key and App Secret into the app</div><div class="step-desc">Copy both from your approved Schwab Developer app. These are stored encrypted in Firestore — never exposed to the browser or logged.</div></div></div>
+        <div class="step"><div class="step-num">6</div><div class="step-body"><div class="step-title">Complete the OAuth flow</div><div class="step-desc">A Schwab login window opens. Sign in with your regular brokerage credentials and select which accounts to authorize. The app handles the rest.</div></div></div>
+        <div class="step"><div class="step-num">7</div><div class="step-body"><div class="step-title">Select your default account</div><div class="step-desc">After OAuth, the app shows all linked accounts with masked numbers. Pick your default — you can switch any time.</div></div></div>
+        <div class="step"><div class="step-num">8</div><div class="step-body"><div class="step-title">Live data starts flowing</div><div class="step-desc">The status dot in the APIs tab turns green. Real-time quotes, positions, and option chains are now active across the app.</div></div></div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════ -->
+    <!-- PII & CALLBACK SECURITY — NEW SECTION -->
+    <!-- ══════════════════════════════════════════════════════ -->
+    <div class="section" id="pii">
+      <div class="section-kicker">Security</div>
+      <h2>Callback URL & PII — broker-by-broker guide</h2>
+
+      <p>Every broker connection involves a callback URL and an authentication handshake. This section explains exactly what each broker sees, what our app stores, and how to configure your developer app to minimize data exposure.</p>
+
+      <div class="callout callout-accent">
+        <span class="callout-icon">🛡</span>
+        <div>
+          <strong>The golden rule:</strong> The callback URL is a one-time receiver for an authorization code — it never contains your personal data. Our app validates and discards the code immediately. It is never logged, stored, or reused.
+        </div>
+      </div>
+
+      <!-- ── Schwab ── -->
+      <div class="broker-pii-grid">
+        <div class="broker-pii-card open" id="pii-schwab">
+          <div class="broker-pii-header" onclick="togglePII('pii-schwab')">
+            <div class="broker-icon-sm" style="background:#001a2e;color:#00a3e0">SCH</div>
+            <div>
+              <div class="broker-pii-name">Charles Schwab</div>
+              <div class="broker-pii-sub">OAuth 2.0 · developer.schwab.com</div>
+            </div>
+            <div class="broker-pii-badges">
+              <span class="badge badge-green">Phase 1 — Live</span>
+              <span class="chevron">›</span>
+            </div>
+          </div>
+          <div class="broker-pii-body">
+
+            <div class="callback-detail">
+              <div class="callback-label">Callback URL format</div>
+              <div class="callback-url">https://[your-domain].web.app/api/schwab/callback</div>
+              <div class="callback-notes">
+                No PII in this URL. Schwab appends <code>?code=…&state=…</code> — the code is a one-time token (expires in ~30 sec). The state param is a random nonce the app generates to prevent CSRF. Both are consumed server-side and never persisted.
+              </div>
+            </div>
+
+            <div class="pii-grid">
+              <div class="pii-box">
+                <div class="pii-box-label">✅ What Schwab receives</div>
+                <div class="pii-item"><span class="pii-dot pii-dot-amber"></span><span>Your Schwab <strong>login email</strong> when you sign in (their own system)</span></div>
+                <div class="pii-item"><span class="pii-dot pii-dot-amber"></span><span>Your <strong>app name</strong> from the Developer Portal (you choose this)</span></div>
+                <div class="pii-item"><span class="pii-dot pii-dot-amber"></span><span>The <strong>callback URL</strong> you registered (no personal data)</span></div>
+                <div class="pii-item"><span class="pii-dot pii-dot-amber"></span><span>Which accounts you <strong>authorize</strong> during the OAuth screen</span></div>
+              </div>
+              <div class="pii-box">
+                <div class="pii-box-label">🚫 What Schwab does NOT receive</div>
+                <div class="pii-item"><span class="pii-dot pii-dot-red"></span><span>Any data from our app</span></div>
+                <div class="pii-item"><span class="pii-dot pii-dot-red"></span><span>Your email address from our Firebase Auth</span></div>
+                <div class="pii-item"><span class="pii-dot pii-dot-red"></span><span>Any analytics or usage data from our app</span></div>
+              </div>
+            </div>
+
+            <div class="pii-box" style="margin-bottom:12px">
+              <div class="pii-box-label">🗄 What our app stores (Firestore, per-user, encrypted)</div>
+              <div class="pii-item"><span class="pii-dot pii-dot-green"></span><span><strong>App Key + App Secret</strong> — encrypted at rest in your user document</span></div>
+              <div class="pii-item"><span class="pii-dot pii-dot-green"></span><span><strong>Access token</strong> — 30-min lifetime, auto-refreshed by Cloud Function</span></div>
+              <div class="pii-item"><span class="pii-dot pii-dot-green"></span><span><strong>Refresh token</strong> — 7-day lifetime, rotated on each refresh</span></div>
+              <div class="pii-item"><span class="pii-dot pii-dot-green"></span><span><strong>Account hash values</strong> — Schwab's obfuscated IDs, not real account numbers</span></div>
+              <div class="pii-item"><span class="pii-dot pii-dot-red"></span><span><strong>Never stored:</strong> your Schwab password, full account numbers, SSN, or login email</span></div>
+            </div>
+
+            <h3 style="margin-bottom:10px">Security checklist for your Developer Portal setup</h3>
+            <div class="security-checklist">
+              <div class="sc-item"><div class="sc-icon sc-pass">✓</div><div class="sc-text"><strong>Use HTTPS</strong> — Schwab requires HTTPS for all production callbacks. <code>localhost</code> is only valid for local dev.</div></div>
+              <div class="sc-item"><div class="sc-icon sc-pass">✓</div><div class="sc-text"><strong>No PII in the path</strong> — The callback URL must not contain your email, name, or user ID. Correct: <code>/api/schwab/callback</code>. Wrong: <code>/callback/john@email.com</code>.</div></div>
+              <div class="sc-item"><div class="sc-icon sc-pass">✓</div><div class="sc-text"><strong>Copy-paste the URL exactly</strong> — Schwab's OAuth rejects any redirect that doesn't precisely match the registered URL. Don't retype it.</div></div>
+              <div class="sc-item"><div class="sc-icon sc-pass">✓</div><div class="sc-text"><strong>App Type: Individual Use</strong> — This limits the OAuth grant to only your account. Prevents broader permission scope requests.</div></div>
+              <div class="sc-item"><div class="sc-icon sc-pass">✓</div><div class="sc-text"><strong>State parameter</strong> — Our app generates a random nonce as the <code>state</code> param and validates it on return. This prevents CSRF token injection attacks.</div></div>
+              <div class="sc-item"><div class="sc-icon sc-warn">!</div><div class="sc-text"><strong>Don't share your App Secret</strong> — It's the equivalent of a password. Anyone with your App Key + App Secret can impersonate your developer app.</div></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── E*TRADE ── -->
+        <div class="broker-pii-card" id="pii-etrade">
+          <div class="broker-pii-header" onclick="togglePII('pii-etrade')">
+            <div class="broker-icon-sm" style="background:#1a0a2e;color:#a78bfa">ET</div>
+            <div>
+              <div class="broker-pii-name">E*TRADE</div>
+              <div class="broker-pii-sub">OAuth 1.0a · developer.etrade.com</div>
+            </div>
+            <div class="broker-pii-badges">
+              <span class="badge badge-amber">Phase 2 — Coming soon</span>
+              <span class="chevron">›</span>
+            </div>
+          </div>
+          <div class="broker-pii-body">
+
+            <div class="callout callout-amber">
+              <span class="callout-icon">⚠</span>
+              <div><strong>OAuth 1.0a is more complex than OAuth 2.0.</strong> It uses signed requests rather than bearer tokens — your credentials are never sent in a URL, but the setup has more steps.</div>
+            </div>
+
+            <div class="callback-detail">
+              <div class="callback-label">Callback URL format</div>
+              <div class="callback-url">https://[your-domain].web.app/api/etrade/callback</div>
+              <div class="callback-notes">
+                E*TRADE supports both a registered callback URL and out-of-band (<code>oob</code>) mode where users receive a PIN to paste. We use the registered URL to keep the flow seamless. The URL receives a <code>?oauth_token=…&oauth_verifier=…</code> — neither contains PII.
+              </div>
+            </div>
+
+            <div class="pii-grid">
+              <div class="pii-box">
+                <div class="pii-box-label">✅ What E*TRADE receives</div>
+                <div class="pii-item"><span class="pii-dot pii-dot-amber"></span><span>Your E*TRADE <strong>login credentials</strong> during OAuth (their own system)</span></div>
+                <div class="pii-item"><span class="pii-dot pii-dot-amber"></span><span>Signed <strong>request tokens</strong> with HMAC-SHA1 signatures (no raw credentials in transit)</span></div>
+                <div class="pii-item"><span class="pii-dot pii-dot-amber"></span><span>Your registered <strong>callback URL</strong> (no personal data)</span></div>
+              </div>
+              <div class="pii-box">
+                <div class="pii-box-label">🗄 What our app stores</div>
+                <div class="pii-item"><span class="pii-dot pii-dot-green"></span><span><strong>Consumer Key + Consumer Secret</strong> — encrypted in Firestore</span></div>
+                <div class="pii-item"><span class="pii-dot pii-dot-green"></span><span><strong>OAuth access token + token secret</strong> — no expiry by default, revocable by user</span></div>
+                <div class="pii-item"><span class="pii-dot pii-dot-red"></span><span><strong>Never stored:</strong> your E*TRADE password or account numbers</span></div>
+              </div>
+            </div>
+
+            <h3 style="margin-bottom:10px">Security checklist</h3>
+            <div class="security-checklist">
+              <div class="sc-item"><div class="sc-icon sc-pass">✓</div><div class="sc-text"><strong>HTTPS required</strong> — E*TRADE rejects HTTP callbacks in production.</div></div>
+              <div class="sc-item"><div class="sc-icon sc-pass">✓</div><div class="sc-text"><strong>No PII in path</strong> — Callback URL must be a clean path. The <code>oauth_verifier</code> appended is a short-lived token, not personal data.</div></div>
+              <div class="sc-item"><div class="sc-icon sc-pass">✓</div><div class="sc-text"><strong>Signed requests</strong> — All OAuth 1.0a calls are HMAC-SHA1 signed server-side. Your Consumer Secret never appears in a URL or browser request.</div></div>
+              <div class="sc-item"><div class="sc-icon sc-warn">!</div><div class="sc-text"><strong>Tokens don't expire automatically</strong> — E*TRADE OAuth tokens are long-lived. Users should revoke access in their E*TRADE account if they disconnect from our app.</div></div>
+              <div class="sc-item"><div class="sc-icon sc-warn">!</div><div class="sc-text"><strong>Consumer Secret = high value target</strong> — Guard it like a password. Unlike OAuth 2.0, there is no short-lived refresh cycle.</div></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── Tastytrade ── -->
+        <div class="broker-pii-card" id="pii-tastytrade">
+          <div class="broker-pii-header" onclick="togglePII('pii-tastytrade')">
+            <div class="broker-icon-sm" style="background:#1a0d04;color:#fb923c">TT</div>
+            <div>
+              <div class="broker-pii-name">Tastytrade</div>
+              <div class="broker-pii-sub">Session auth · api.tastyworks.com</div>
+            </div>
+            <div class="broker-pii-badges">
+              <span class="badge badge-amber">Phase 2 — Coming soon</span>
+              <span class="chevron">›</span>
+            </div>
+          </div>
+          <div class="broker-pii-body">
+
+            <div class="callout callout-red">
+              <span class="callout-icon">⚠</span>
+              <div>
+                <strong>No OAuth — session-based auth.</strong> Tastytrade does not use OAuth. Users authenticate with username + password, which our backend exchanges for a session token. <strong>We never store or log the username or password.</strong> The credential exchange happens exclusively in the Cloud Function.
+              </div>
+            </div>
+
+            <div class="callback-detail">
+              <div class="callback-label">Callback URL</div>
+              <div class="callback-url">N/A — no OAuth redirect flow</div>
+              <div class="callback-notes">
+                Tastytrade uses a direct credential exchange. There is no callback URL to configure, so there is no risk of PII leaking through a redirect chain. The risk profile is different — see the security checklist below.
+              </div>
+            </div>
+
+            <div class="pii-grid">
+              <div class="pii-box">
+                <div class="pii-box-label">✅ What Tastytrade receives</div>
+                <div class="pii-item"><span class="pii-dot pii-dot-amber"></span><span>Your Tastytrade <strong>username + password</strong> — sent over HTTPS to their auth endpoint only</span></div>
+                <div class="pii-item"><span class="pii-dot pii-dot-amber"></span><span>Session token requests — standard API calls, no personal data in URLs</span></div>
+              </div>
+              <div class="pii-box">
+                <div class="pii-box-label">🗄 What our app stores</div>
+                <div class="pii-item"><span class="pii-dot pii-dot-green"></span><span><strong>Session token only</strong> — encrypted in Firestore, not the credentials</span></div>
+                <div class="pii-item"><span class="pii-dot pii-dot-red"></span><span><strong>Never stored:</strong> your Tastytrade username, password, or account numbers</span></div>
+              </div>
+            </div>
+
+            <h3 style="margin-bottom:10px">Security checklist</h3>
+            <div class="security-checklist">
+              <div class="sc-item"><div class="sc-icon sc-pass">✓</div><div class="sc-text"><strong>Credentials handled server-side only</strong> — Username and password flow through Cloud Functions and are never accessible from browser code.</div></div>
+              <div class="sc-item"><div class="sc-icon sc-pass">✓</div><div class="sc-text"><strong>HTTPS only</strong> — All requests to Tastytrade's API use TLS. The session token in transit is never exposed.</div></div>
+              <div class="sc-item"><div class="sc-icon sc-warn">!</div><div class="sc-text"><strong>Session tokens expire</strong> — Typically every 24 hours. The app will prompt re-authentication when the session lapses.</div></div>
+              <div class="sc-item"><div class="sc-icon sc-warn">!</div><div class="sc-text"><strong>No refresh token model</strong> — Unlike OAuth 2.0, there's no refresh cycle. Re-auth requires the user to enter credentials again through the secure in-app form.</div></div>
+              <div class="sc-item"><div class="sc-icon sc-fail">✗</div><div class="sc-text"><strong>Do not reuse passwords</strong> — Because credentials are submitted for session exchange (even server-side), use a unique Tastytrade password not shared with other accounts.</div></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ── IBKR ── -->
+        <div class="broker-pii-card" id="pii-ibkr">
+          <div class="broker-pii-header" onclick="togglePII('pii-ibkr')">
+            <div class="broker-icon-sm" style="background:#1a0808;color:#ef4444">IB</div>
+            <div>
+              <div class="broker-pii-name">Interactive Brokers</div>
+              <div class="broker-pii-sub">Client Portal API · TWS REST API</div>
+            </div>
+            <div class="broker-pii-badges">
+              <span class="badge badge-red">Phase 3 — Planned</span>
+              <span class="chevron">›</span>
+            </div>
+          </div>
+          <div class="broker-pii-body">
+
+            <div class="callout callout-blue">
+              <span class="callout-icon">ℹ</span>
+              <div>IBKR offers two API paths. <strong>Client Portal API</strong> (web-based, recommended) uses OAuth 2.0 + session pings. <strong>TWS REST API</strong> requires Trader Workstation running locally. Phase 3 will use Client Portal API.</div>
+            </div>
+
+            <div class="callback-detail">
+              <div class="callback-label">Callback URL format (Client Portal API)</div>
+              <div class="callback-url">https://[your-domain].web.app/api/ibkr/callback</div>
+              <div class="callback-notes">
+                Standard OAuth 2.0 redirect. IBKR appends <code>?code=…&state=…</code>. The code is short-lived. State param validated server-side. No PII in the URL.
+              </div>
+            </div>
+
+            <div class="pii-grid">
+              <div class="pii-box">
+                <div class="pii-box-label">✅ What IBKR receives</div>
+                <div class="pii-item"><span class="pii-dot pii-dot-amber"></span><span>Your IBKR <strong>login credentials</strong> during OAuth (their own portal)</span></div>
+                <div class="pii-item"><span class="pii-dot pii-dot-amber"></span><span>The <strong>callback URL</strong> registered with your IBKR developer app</span></div>
+                <div class="pii-item"><span class="pii-dot pii-dot-amber"></span><span>Keep-alive ping requests to maintain session</span></div>
+              </div>
+              <div class="pii-box">
+                <div class="pii-box-label">🗄 What our app stores</div>
+                <div class="pii-item"><span class="pii-dot pii-dot-green"></span><span><strong>Session identifier</strong> — encrypted in Firestore</span></div>
+                <div class="pii-item"><span class="pii-dot pii-dot-green"></span><span><strong>OAuth access token</strong> — short-lived, session-scoped</span></div>
+                <div class="pii-item"><span class="pii-dot pii-dot-red"></span><span><strong>Never stored:</strong> IBKR password, account numbers, or trading permissions</span></div>
+              </div>
+            </div>
+
+            <h3 style="margin-bottom:10px">Security checklist</h3>
+            <div class="security-checklist">
+              <div class="sc-item"><div class="sc-icon sc-pass">✓</div><div class="sc-text"><strong>HTTPS required</strong> — IBKR rejects HTTP callbacks.</div></div>
+              <div class="sc-item"><div class="sc-icon sc-pass">✓</div><div class="sc-text"><strong>No PII in path</strong> — Callback is a clean route. Auth code appended by IBKR is short-lived and opaque.</div></div>
+              <div class="sc-item"><div class="sc-icon sc-warn">!</div><div class="sc-text"><strong>Session keep-alive required</strong> — IBKR Client Portal sessions expire without periodic pings. Our Cloud Function handles keep-alive automatically while the app is in use.</div></div>
+              <div class="sc-item"><div class="sc-icon sc-warn">!</div><div class="sc-text"><strong>Sessions expire after ~24hrs of inactivity</strong> — Unlike Schwab's 7-day refresh token, IBKR sessions are shorter. Expect more frequent re-auth prompts.</div></div>
+              <div class="sc-item"><div class="sc-icon sc-warn">!</div><div class="sc-text"><strong>TWS REST variant requires local software</strong> — If using TWS REST (not recommended), Trader Workstation must be running on your machine. This path is not used in our integration.</div></div>
+            </div>
+          </div>
+        </div>
+      </div><!-- /broker-pii-grid -->
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════ -->
+    <!-- WHAT WE STORE -->
+    <!-- ══════════════════════════════════════════════════════ -->
+    <div class="section" id="what-we-store">
+      <div class="section-kicker">Security</div>
+      <h2>What we store — master reference</h2>
+      <p>All broker credentials and tokens are stored in Firestore under your user document (<code>users/{uid}/brokerConnections/{broker}</code>). Firebase security rules restrict reads and writes to the authenticated user only.</p>
+
+      <div class="card">
+        <table class="tbl">
+          <thead>
+            <tr><th>Data</th><th>Schwab</th><th>E*TRADE</th><th>Tastytrade</th><th>IBKR</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Password / brokerage credentials</td><td style="color:var(--red)">Never</td><td style="color:var(--red)">Never</td><td style="color:var(--red)">Never</td><td style="color:var(--red)">Never</td></tr>
+            <tr><td>Full account numbers</td><td style="color:var(--red)">Never</td><td style="color:var(--red)">Never</td><td style="color:var(--red)">Never</td><td style="color:var(--red)">Never</td></tr>
+            <tr><td>SSN / tax IDs</td><td style="color:var(--red)">Never</td><td style="color:var(--red)">Never</td><td style="color:var(--red)">Never</td><td style="color:var(--red)">Never</td></tr>
+            <tr><td>App Key / Consumer Key</td><td style="color:var(--amber)">Yes (encrypted)</td><td style="color:var(--amber)">Yes (encrypted)</td><td>N/A</td><td>N/A</td></tr>
+            <tr><td>App Secret / Consumer Secret</td><td style="color:var(--amber)">Yes (encrypted)</td><td style="color:var(--amber)">Yes (encrypted)</td><td>N/A</td><td>N/A</td></tr>
+            <tr><td>Access token</td><td style="color:var(--amber)">Yes (encrypted)</td><td style="color:var(--amber)">Yes (encrypted)</td><td>N/A</td><td style="color:var(--amber)">Yes (encrypted)</td></tr>
+            <tr><td>Refresh token</td><td style="color:var(--amber)">Yes (encrypted)</td><td>N/A (no refresh)</td><td>N/A</td><td>N/A</td></tr>
+            <tr><td>Session token</td><td>N/A</td><td>N/A</td><td style="color:var(--amber)">Yes (encrypted)</td><td style="color:var(--amber)">Yes (encrypted)</td></tr>
+            <tr><td>Account hash / masked ID</td><td style="color:var(--green)">Hash only</td><td style="color:var(--green)">Hash only</td><td style="color:var(--green)">Hash only</td><td style="color:var(--green)">Hash only</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout callout-green">
+        <span class="callout-icon">🔒</span>
+        <div>Firestore security rules ensure <strong>only your Firebase user account</strong> can read or write your broker connection documents. No admin access to individual user tokens is built into the app.</div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════ -->
+    <!-- SCHWAB SETUP -->
+    <!-- ══════════════════════════════════════════════════════ -->
+    <div class="section" id="schwab-setup">
+      <div class="section-kicker">Schwab</div>
+      <h2>Schwab Developer Portal — field-by-field</h2>
+
+      <div class="card">
+        <table class="tbl">
+          <thead><tr><th>Field</th><th>What to enter</th></tr></thead>
+          <tbody>
+            <tr><td style="font-family:var(--mono);font-size:12px">API Products</td><td>Select <strong>both</strong>: "Market Data Production" + "Accounts and Trading Production"</td></tr>
+            <tr><td style="font-family:var(--mono);font-size:12px">Callback URL</td><td>Copy the URL shown in the app's connection flow — it matches your deployed domain</td></tr>
+            <tr><td style="font-family:var(--mono);font-size:12px">App Name</td><td>Any name (e.g. "Covered Calls Manager") — visible only in your Developer Portal</td></tr>
+            <tr><td style="font-family:var(--mono);font-size:12px">App Type</td><td>Leave as default (Individual Use) — limits OAuth scope to your account only</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout callout-amber">
+        <span class="callout-icon">⚠</span>
+        <div><strong>The callback URL must match exactly.</strong> Schwab's OAuth rejects any redirect that doesn't precisely match the registered URL. Copy-paste from the app — don't retype it. Even a trailing slash difference will cause a failure.</div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════ -->
+    <!-- ACCOUNTS -->
+    <!-- ══════════════════════════════════════════════════════ -->
+    <div class="section" id="accounts">
+      <div class="section-kicker">Accounts</div>
+      <h2>Switching between accounts</h2>
+      <p>Most users have multiple accounts — Individual, Roth IRA, Traditional IRA. The app lets you connect all of them in one OAuth flow and switch without reconnecting.</p>
+
+      <div class="card">
+        <h3 style="margin-bottom:12px">How account switching works</h3>
+        <ul class="list">
+          <li>During the OAuth flow, Schwab shows all accounts in your brokerage. You authorize access to all of them at once.</li>
+          <li>The APIs tab shows all linked accounts with masked numbers (e.g. <span class="pill">····1234</span> <span class="pill">····5678</span>).</li>
+          <li>Tap any account to make it the default. The selection persists across sessions.</li>
+          <li>Switching accounts re-fetches positions and buying power. Quotes and option chains are account-independent — they switch instantly.</li>
+        </ul>
+      </div>
+
+      <div class="callout callout-blue">
+        <span class="callout-icon">ℹ</span>
+        <div>The app only <em>reads</em> account data — positions, balances. It does not place trades. Order entry is not part of Phase 1.</div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════ -->
+    <!-- TOKEN LIFECYCLE -->
+    <!-- ══════════════════════════════════════════════════════ -->
+    <div class="section" id="reconnect">
+      <div class="section-kicker">Authentication</div>
+      <h2>Token lifecycle &amp; reconnecting</h2>
+      <p>Schwab uses a two-token system. Tokens are managed automatically — you only see a prompt when the refresh token itself expires.</p>
+
+      <div class="card">
+        <table class="tbl">
+          <thead><tr><th>Token</th><th>Lifetime</th><th>What happens on expiry</th></tr></thead>
+          <tbody>
+            <tr><td>Access token</td><td>30 minutes</td><td>Auto-refreshed silently by Cloud Function before each API call</td></tr>
+            <tr><td>Refresh token</td><td>7 days</td><td>App prompts you to re-run the OAuth flow (one click)</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="callout callout-amber">
+        <span class="callout-icon">⚠</span>
+        <div>If you don't open the app for 7+ days, you'll need to re-authorize. This is Schwab's security policy — it ensures stale tokens can't be used indefinitely.</div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════ -->
+    <!-- UNLOCKED -->
+    <!-- ══════════════════════════════════════════════════════ -->
+    <div class="section" id="unlocked">
+      <div class="section-kicker">Features</div>
+      <h2>What connecting unlocks</h2>
+
+      <div class="card" style="margin-bottom:16px">
+        <h3 style="margin-bottom:10px">📊 Live Quotes</h3>
+        <p style="margin-bottom:0">Real-time underlying prices feed into the Black-Scholes calculator, the position cards, and the assignment risk analyzer. No more typing in a price that's already stale.</p>
+      </div>
+      <div class="card" style="margin-bottom:16px">
+        <h3 style="margin-bottom:10px">📋 Option Chains</h3>
+        <p style="margin-bottom:0">Browse strikes and expirations for any ticker without leaving the app. Select a strike to auto-populate the calculator.</p>
+      </div>
+      <div class="card" style="margin-bottom:16px">
+        <h3 style="margin-bottom:10px">💼 Position Auto-Import</h3>
+        <p style="margin-bottom:0">Open covered call positions are pulled from your brokerage account automatically. The app detects quantity, strike, expiration, and current P&L.</p>
+      </div>
+      <div class="card">
+        <h3 style="margin-bottom:10px">💰 Buying Power</h3>
+        <p style="margin-bottom:0">Cash and margin available for new positions is displayed in the sizing area, updated on each session start.</p>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════ -->
+    <!-- RATE LIMITS -->
+    <!-- ══════════════════════════════════════════════════════ -->
+    <div class="section" id="limits">
+      <div class="section-kicker">Limits</div>
+      <h2>Rate limits</h2>
+      <p>Schwab's API allows 120 requests/minute. In normal use, the app makes far fewer.</p>
+
+      <div class="card">
+        <table class="tbl">
+          <thead><tr><th>Action</th><th>Requests</th><th>Frequency</th></tr></thead>
+          <tbody>
+            <tr><td>Session start (positions + buying power)</td><td>2</td><td>Once per session</td></tr>
+            <tr><td>Live quote</td><td>1</td><td>Every 15 sec while tab is open</td></tr>
+            <tr><td>Option chain load</td><td>1</td><td>On demand</td></tr>
+            <tr><td>Token refresh</td><td>1</td><td>Every 29 min (background)</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════ -->
+    <!-- NOT SUPPORTED YET -->
+    <!-- ══════════════════════════════════════════════════════ -->
+    <div class="section" id="not-supported">
+      <div class="section-kicker">Roadmap</div>
+      <h2>Not supported yet</h2>
+      <div class="card">
+        <table class="tbl">
+          <thead><tr><th>Feature</th><th>Phase</th><th>Notes</th></tr></thead>
+          <tbody>
+            <tr><td>Order placement / trade execution</td><td><span class="badge badge-amber">Phase 3</span></td><td>Pre-fill covered call orders from within the app</td></tr>
+            <tr><td>Historical options prices</td><td><span class="badge badge-amber">Phase 3</span></td><td>Schwab's API doesn't expose OHLCV for options</td></tr>
+            <tr><td>E*TRADE connection</td><td><span class="badge badge-amber">Phase 2</span></td><td>OAuth 1.0a integration in progress</td></tr>
+            <tr><td>Tastytrade connection</td><td><span class="badge badge-amber">Phase 2</span></td><td>Session auth, no approval wait</td></tr>
+            <tr><td>IBKR connection</td><td><span class="badge badge-red">Phase 3</span></td><td>Client Portal API, most complex integration</td></tr>
+            <tr><td>Multi-broker simultaneous</td><td><span class="badge badge-red">Phase 3</span></td><td>Active source toggle per user</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════ -->
+    <!-- BROKER MATRIX -->
+    <!-- ══════════════════════════════════════════════════════ -->
+    <div class="section" id="brokers">
+      <div class="section-kicker">Reference</div>
+      <h2>Broker capability matrix</h2>
+      <div class="card">
+        <table class="tbl">
+          <thead><tr><th>Capability</th><th>Schwab</th><th>E*TRADE</th><th>Tastytrade</th><th>IBKR</th></tr></thead>
+          <tbody>
+            <tr><td>Auth method</td><td>OAuth 2.0</td><td>OAuth 1.0a</td><td>Session</td><td>OAuth 2.0</td></tr>
+            <tr><td>Approval wait</td><td>2–5 days</td><td>~1 week</td><td>None</td><td>None</td></tr>
+            <tr><td>Live quotes</td><td style="color:var(--green)">✓</td><td style="color:var(--green)">✓</td><td style="color:var(--green)">✓</td><td style="color:var(--green)">✓</td></tr>
+            <tr><td>Option chains</td><td style="color:var(--green)">✓</td><td style="color:var(--green)">✓</td><td style="color:var(--green)">✓</td><td style="color:var(--green)">✓</td></tr>
+            <tr><td>Position import</td><td style="color:var(--green)">✓</td><td style="color:var(--green)">✓</td><td style="color:var(--green)">✓</td><td style="color:var(--green)">✓</td></tr>
+            <tr><td>Historical options</td><td style="color:var(--red)">✗</td><td style="color:var(--amber)">Partial</td><td style="color:var(--amber)">Partial</td><td style="color:var(--green)">✓</td></tr>
+            <tr><td>No PII in callback</td><td style="color:var(--green)">✓</td><td style="color:var(--green)">✓</td><td>N/A</td><td style="color:var(--green)">✓</td></tr>
+            <tr><td>Auto token refresh</td><td style="color:var(--green)">✓</td><td style="color:var(--red)">✗</td><td style="color:var(--red)">✗</td><td style="color:var(--amber)">Keep-alive</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════ -->
+    <!-- TROUBLESHOOTING -->
+    <!-- ══════════════════════════════════════════════════════ -->
+    <div class="section" id="troubleshoot">
+      <div class="section-kicker">Support</div>
+      <h2>Troubleshooting</h2>
+
+      <div class="card-sm"><h3>OAuth fails with "redirect_uri mismatch"</h3><p style="margin-top:6px">The callback URL in your Schwab Developer Portal doesn't exactly match what the app sends. Copy-paste the URL from the APIs tab — don't retype it. Check for trailing slashes or <code>http://</code> vs <code>https://</code>.</p></div>
+      <div class="card-sm"><h3>Status shows "Approved — Pending"</h3><p style="margin-top:6px">Schwab's app is still under review. This typically takes 2–5 business days. You'll receive an email when approved. The app will show a waiting state in the APIs tab.</p></div>
+      <div class="card-sm"><h3>Positions not updating</h3><p style="margin-top:6px">Positions are fetched on session start. Pull-to-refresh in the APIs tab to force a re-fetch. If positions are stale, your refresh token may have expired — reconnect via the APIs tab.</p></div>
+      <div class="card-sm"><h3>Quotes show "—" after connection</h3><p style="margin-top:6px">Schwab's Market Data API may be unavailable outside trading hours for some products. Check the status dot — if it's amber, the session is connected but the market data endpoint returned an error.</p></div>
+      <div class="card-sm"><h3>App prompts to reconnect after a week</h3><p style="margin-top:6px">This is expected. Schwab's refresh token has a 7-day lifetime. Click "Reconnect" in the APIs tab to re-run the OAuth flow — it takes about 30 seconds.</p></div>
+      <div class="card-sm"><h3>Multiple accounts not showing</h3><p style="margin-top:6px">During the OAuth screen, Schwab lists all accounts in your brokerage. Ensure you ticked all accounts before approving. If you missed one, you'll need to disconnect and re-run the OAuth flow.</p></div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════ -->
+    <!-- FAQ -->
+    <!-- ══════════════════════════════════════════════════════ -->
+    <div class="section" id="faq">
+      <div class="section-kicker">FAQ</div>
+      <h2>Frequently asked questions</h2>
+
+      <div class="card-sm"><h3>Can the app place trades on my behalf?</h3><p style="margin-top:6px">No. Phase 1 is read-only — positions, balances, quotes, and option chains. Order placement is planned for Phase 3 and will require explicit opt-in with a confirmation screen.</p></div>
+      <div class="card-sm"><h3>Where are my App Key and App Secret stored?</h3><p style="margin-top:6px">Encrypted in Firestore under your user document. They are never stored in the browser, in local storage, or in the app bundle. Access is restricted to your authenticated Firebase session.</p></div>
+      <div class="card-sm"><h3>Can the app see my full account number?</h3><p style="margin-top:6px">No. Schwab returns obfuscated hash values, not real account numbers. The app displays only the last 4 digits for identification (e.g. ····1234). Full account numbers are never transmitted to our systems.</p></div>
+      <div class="card-sm"><h3>What happens if I revoke access in Schwab?</h3><p style="margin-top:6px">All tokens are immediately invalidated. The app will show a disconnected state on the next API call. You can reconnect at any time from the APIs tab.</p></div>
+      <div class="card-sm"><h3>Is this different from Plaid or account aggregators?</h3><p style="margin-top:6px">Yes. This is a direct integration with Schwab's official developer API, not a screen-scraper. It uses Schwab's own OAuth and provides live market data (quotes, option chains) that aggregators don't offer.</p></div>
+      <div class="card-sm"><h3>Can I connect multiple brokers at once?</h3><p style="margin-top:6px">Multi-broker simultaneous connection is planned for Phase 3. In Phase 1, one broker connection is active at a time.</p></div>
+      <div class="card-sm"><h3>Does the app work after market hours?</h3><p style="margin-top:6px">Position and account data is always available. Live quotes and option chains require market hours for real-time data — outside those hours the app shows the most recent close price with an "as of close" label.</p></div>
+      <div class="card-sm"><h3>How do I disconnect a broker?</h3><p style="margin-top:6px">From the APIs tab, tap the connected broker and select "Disconnect." This deletes all stored tokens from Firestore and revokes the session. Also revoke access from your Schwab Developer Portal for a full cleanup.</p></div>
+    </div>
+
+  </main>
+</div>
+
+<script>
+  function togglePII(id) {
+    const card = document.getElementById(id);
+    card.classList.toggle('open');
+  }
+
+  // Sidebar active nav on scroll
+  const sections = document.querySelectorAll('.section[id]');
+  const navLinks  = document.querySelectorAll('.nav-item');
+  const obs = new IntersectionObserver((entries) => {
+    entries.forEach(e => {
+      if (e.isIntersecting) {
+        navLinks.forEach(l => l.classList.remove('active'));
+        const match = document.querySelector(`.nav-item[href="#${e.target.id}"]`);
+        if (match) match.classList.add('active');
+      }
+    });
+  }, { rootMargin: '-15% 0px -75% 0px' });
+  sections.forEach(s => obs.observe(s));
+</script>
+</body>
+</html>

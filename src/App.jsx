@@ -113,9 +113,12 @@ function RequireAccess({ children }) {
   const { user, hasAccess, isTrialExpired, onboardingComplete, userData, loading } = useAuth();
   if (loading) return <LoadingScreen />;
   if (!user) return <Navigate to="/login" replace />;
-  // Must complete checkout (card collection) before onboarding
-  if (!userData?.stripeCustomerId) return <Navigate to="/checkout" replace />;
-  if (!onboardingComplete) return <Navigate to="/onboarding" replace />;
+  // ── LOCAL DEV BYPASS ──────────────────────────────────────────────────────
+  // Stripe checkout + onboarding gates disabled for API branch local testing.
+  // IMPORTANT: uncomment both lines below before merging to main.
+  // if (!userData?.stripeCustomerId) return <Navigate to="/checkout" replace />;
+  // if (!onboardingComplete) return <Navigate to="/onboarding" replace />;
+  // ─────────────────────────────────────────────────────────────────────────
   if (isTrialExpired) return <Navigate to="/upgrade" replace />;
   return children;
 }

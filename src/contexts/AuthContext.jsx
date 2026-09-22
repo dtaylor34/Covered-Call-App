@@ -63,8 +63,27 @@ export function AuthProvider({ children }) {
   // Firebase stores partial Apple/Google OAuth state in IndexedDB and retries
   // it on every page load, causing a 400 error. Calling getRedirectResult once
   // silently clears that pending state so it doesn't keep firing.
+  // Wrapped in setTimeout(0) so it runs after the current call stack clears —
+  // prevents it from blocking onAuthStateChanged from firing on cold start.
   useEffect(() => {
-    getRedirectResult(auth).catch(() => {});
+    setTimeout(() => getRedirectResult(auth).catch(() => {}), 0);
+  }, []);
+
+  // ── Loading timeout safety net ──
+  // If Firebase Auth hasn't resolved onAuthStateChanged within 3 seconds
+  // (slow connection, cold start, emulator delay) — stop waiting and show
+  // the login screen. Without this the app hangs on a black screen forever.
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      setLoading((prev) => {
+        if (prev) {
+          console.warn("AuthContext: loading timeout — forcing loading=false");
+          return false;
+        }
+        return prev;
+      });
+    }, 3000);
+    return () => clearTimeout(timeout);
   }, []);
 
   // ── Listen for auth state changes ──
@@ -76,8 +95,9 @@ export function AuthProvider({ children }) {
           let snap = await getDoc(userRef);
           // Race condition guard: signup writes the doc then auth fires immediately.
           // Retry once if the doc isn't committed yet.
+          // Reduced from 1500ms → 800ms to avoid black screen on cold start.
           if (!snap.exists()) {
-            await new Promise((r) => setTimeout(r, 1500));
+            await new Promise((r) => setTimeout(r, 800));
             snap = await getDoc(userRef);
           }
           if (snap.exists()) {

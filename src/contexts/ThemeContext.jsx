@@ -110,13 +110,32 @@ const PALETTES = {
   },
 };
 
-// ── Shared typography & radius ──
+// ── Shared typography, radius & elevation ──
 const TYPOGRAPHY = {
-  fontDisplay: "'Space Mono', 'JetBrains Mono', monospace",
-  fontBody: "'IBM Plex Sans', -apple-system, sans-serif",
+  fontDisplay: "'Roboto', 'Space Mono', 'JetBrains Mono', monospace",
+  fontBody: "'Roboto', 'IBM Plex Sans', -apple-system, sans-serif",
   fontMono: "'JetBrains Mono', 'Fira Code', monospace",
-  r: 10,
+  r: 12,
   rL: 16,
+  rS: 8,
+};
+
+const ELEVATION = {
+  dark: {
+    elevation1: "0px 1px 3px 1px rgba(0, 0, 0, 0.15), 0px 1px 2px 0px rgba(0, 0, 0, 0.30)",
+    elevation2: "0px 2px 6px 2px rgba(0, 0, 0, 0.15), 0px 1px 2px 0px rgba(0, 0, 0, 0.30)",
+    elevation3: "0px 1px 3px 0px rgba(0, 0, 0, 0.30), 0px 4px 8px 3px rgba(0, 0, 0, 0.15)",
+  },
+  light: {
+    elevation1: "0px 1px 3px 1px rgba(0, 0, 0, 0.1), 0px 1px 2px 0px rgba(0, 0, 0, 0.2)",
+    elevation2: "0px 2px 6px 2px rgba(0, 0, 0, 0.1), 0px 1px 2px 0px rgba(0, 0, 0, 0.2)",
+    elevation3: "0px 1px 3px 0px rgba(0, 0, 0, 0.2), 0px 4px 8px 3px rgba(0, 0, 0, 0.1)",
+  },
+  highContrast: {
+    elevation1: "0px 1px 3px 1px rgba(255, 255, 255, 0.15), 0px 1px 2px 0px rgba(255, 255, 255, 0.30)",
+    elevation2: "0px 2px 6px 2px rgba(255, 255, 255, 0.15), 0px 1px 2px 0px rgba(255, 255, 255, 0.30)",
+    elevation3: "0px 1px 3px 0px rgba(255, 255, 255, 0.30), 0px 4px 8px 3px rgba(255, 255, 255, 0.15)",
+  }
 };
 
 // ── Breakpoints ──
@@ -176,9 +195,10 @@ export function ThemeProvider({ children }) {
   const isTablet = windowWidth >= BREAKPOINTS.mobile && windowWidth < BREAKPOINTS.tablet;
   const isDesktop = windowWidth >= BREAKPOINTS.tablet;
 
-  // Build T = palette colors + typography (memoized to avoid re-renders)
+  // Build T = palette colors + typography + elevation (memoized to avoid re-renders)
   const T = useMemo(() => ({
     ...(PALETTES[themeName] || PALETTES.dark),
+    ...(ELEVATION[themeName] || ELEVATION.dark),
     ...TYPOGRAPHY,
   }), [themeName]);
 

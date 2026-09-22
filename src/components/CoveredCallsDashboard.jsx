@@ -296,10 +296,12 @@ export default function CoveredCallsDashboard({ onPositionChange, sharedSymbol, 
     <div>
       {/* ── Search Bar ── */}
       <div style={{
-        background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rL,
-        padding: "20px 24px", marginBottom: 16,
+        background: T.card, borderRadius: T.rL,
+        boxShadow: T.elevation1,
+        padding: "24px", marginBottom: 20,
+        transition: "box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
       }}>
-        <form role="search" aria-label="Search stock symbols" onSubmit={handleSearch} style={{ display: "flex", gap: 10, alignItems: "center" }}>
+        <form role="search" aria-label="Search stock symbols" onSubmit={handleSearch} style={{ display: "flex", gap: 12, alignItems: "center" }}>
           <input
             type="text"
             aria-label="Stock ticker symbol"
@@ -308,16 +310,20 @@ export default function CoveredCallsDashboard({ onPositionChange, sharedSymbol, 
             placeholder="Enter ticker symbol (e.g. AAPL)"
             maxLength={5}
             style={{
-              flex: 1, padding: "10px 16px", borderRadius: 8,
-              background: T.surface, border: `1px solid ${T.border}`,
-              color: T.text, fontSize: 15, fontFamily: T.fontMono,
+              flex: 1, padding: "12px 16px", borderRadius: T.rS,
+              background: T.surface, border: "none",
+              boxShadow: `inset 0 0 0 1px ${T.border}`,
+              color: T.text, fontSize: 16, fontFamily: T.fontBody,
               outline: "none",
+              transition: "box-shadow 0.2s ease",
             }}
           />
           <button type="submit" aria-label="Analyze covered calls" disabled={quoteLoading || scoresLoading} style={{
-            padding: "10px 24px", borderRadius: 8, border: "none",
-            background: T.accent, color: T.bg, fontSize: 13, fontWeight: 700,
-            fontFamily: T.fontDisplay, cursor: "pointer",
+            padding: "12px 28px", borderRadius: 100, border: "none",
+            background: T.accent, color: T.bg, fontSize: 14, fontWeight: 600,
+            fontFamily: T.fontBody, cursor: "pointer",
+            boxShadow: T.elevation2,
+            transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
             opacity: (quoteLoading || scoresLoading) ? 0.6 : 1,
           }}>
             {scoresLoading ? "Analyzing..." : "Analyze"}
@@ -448,8 +454,10 @@ export default function CoveredCallsDashboard({ onPositionChange, sharedSymbol, 
 
         return (
         <div style={{
-          background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rL,
+          background: T.card, borderRadius: T.rL,
+          boxShadow: T.elevation1,
           overflow: "hidden",
+          transition: "box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
         }}>
           {/* Header */}
           <div style={{
@@ -520,14 +528,16 @@ export default function CoveredCallsDashboard({ onPositionChange, sharedSymbol, 
                   />
                   {/* Thumbs */}
                   <div style={{
-                    position: "absolute", top: "50%", width: 12, height: 12, borderRadius: "50%",
-                    background: T.accent, border: `2px solid ${T.bg}`, transform: "translate(-50%, -50%)",
+                    position: "absolute", top: "50%", width: 16, height: 16, borderRadius: "50%",
+                    background: T.accent, boxShadow: T.elevation2, transform: "translate(-50%, -50%)",
                     left: `${((strikeMin - 90) / 50) * 100}%`, zIndex: 4, pointerEvents: "none",
+                    transition: "box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
                   }} />
                   <div style={{
-                    position: "absolute", top: "50%", width: 12, height: 12, borderRadius: "50%",
-                    background: T.accent, border: `2px solid ${T.bg}`, transform: "translate(-50%, -50%)",
+                    position: "absolute", top: "50%", width: 16, height: 16, borderRadius: "50%",
+                    background: T.accent, boxShadow: T.elevation2, transform: "translate(-50%, -50%)",
                     left: `${((strikeMax - 90) / 50) * 100}%`, zIndex: 4, pointerEvents: "none",
+                    transition: "box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
                   }} />
                 </div>
                 <span style={{ fontSize: 10, color: T.textMuted, fontFamily: T.fontMono }}>{strikeMax}%</span>
@@ -567,14 +577,16 @@ export default function CoveredCallsDashboard({ onPositionChange, sharedSymbol, 
                     style={{ position: "absolute", width: "100%", opacity: 0, cursor: "pointer", zIndex: 3, height: "100%" }}
                   />
                   <div style={{
-                    position: "absolute", top: "50%", width: 12, height: 12, borderRadius: "50%",
-                    background: T.accent, border: `2px solid ${T.bg}`, transform: "translate(-50%, -50%)",
+                    position: "absolute", top: "50%", width: 16, height: 16, borderRadius: "50%",
+                    background: T.accent, boxShadow: T.elevation2, transform: "translate(-50%, -50%)",
                     left: `${((dteMin - 7) / 83) * 100}%`, zIndex: 4, pointerEvents: "none",
+                    transition: "box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
                   }} />
                   <div style={{
-                    position: "absolute", top: "50%", width: 12, height: 12, borderRadius: "50%",
-                    background: T.accent, border: `2px solid ${T.bg}`, transform: "translate(-50%, -50%)",
+                    position: "absolute", top: "50%", width: 16, height: 16, borderRadius: "50%",
+                    background: T.accent, boxShadow: T.elevation2, transform: "translate(-50%, -50%)",
                     left: `${((dteMax - 7) / 83) * 100}%`, zIndex: 4, pointerEvents: "none",
+                    transition: "box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
                   }} />
                 </div>
                 <span style={{ fontSize: 10, color: T.textMuted, fontFamily: T.fontMono }}>{dteMax}d</span>
@@ -700,7 +712,8 @@ export default function CoveredCallsDashboard({ onPositionChange, sharedSymbol, 
       {/* ── Empty State ── */}
       {!activeSymbol && (
         <div style={{
-          background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rL,
+          background: T.card, borderRadius: T.rL,
+          boxShadow: T.elevation1,
           padding: 48, textAlign: "center",
         }}>
           <div style={{ fontSize: 48, marginBottom: 16 }}>📊</div>
@@ -726,11 +739,13 @@ function QuoteCard({ quote, loading }) {
 
   return (
     <div style={{
-      background: T.card, border: `1px solid ${T.border}`, borderRadius: T.rL,
-      padding: "16px 24px", marginBottom: 16,
+      background: T.card, borderRadius: T.rL,
+      boxShadow: T.elevation1,
+      padding: "20px 24px", marginBottom: 20,
       display: "flex", alignItems: "center", justifyContent: "space-between",
       flexWrap: "wrap", gap: 12,
       opacity: loading ? 0.7 : 1,
+      transition: "box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
     }}>
       <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
         <div>
@@ -807,6 +822,7 @@ function RecommendationRow({ rec, rank, isExpanded, isSelected, onToggle, underl
           cursor: "pointer",
           background: isExpanded ? T.surface : isSelected ? "rgba(0,212,170,0.03)" : "transparent",
           borderLeft: selectedBorder,
+          transition: "background-color 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
         }}
         onMouseOver={(e) => { if (!isExpanded) e.currentTarget.style.background = T.cardHover; }}
         onMouseOut={(e) => { if (!isExpanded) e.currentTarget.style.background = isSelected ? "rgba(0,212,170,0.03)" : "transparent"; }}
@@ -889,7 +905,7 @@ function ExpandedDetails({ rec, underlyingPrice }) {
   return (
     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16, fontSize: 12 }}>
       {/* Column 1: P&L */}
-      <div style={{ background: T.card, borderRadius: T.r, padding: 14 }}>
+      <div style={{ background: T.card, borderRadius: T.r, boxShadow: T.elevation1, padding: 16 }}>
         <div style={{ fontSize: 11, fontWeight: 700, color: T.accent, marginBottom: 10, fontFamily: T.fontDisplay }}>
           PROFIT & LOSS
         </div>
@@ -905,7 +921,7 @@ function ExpandedDetails({ rec, underlyingPrice }) {
       </div>
 
       {/* Column 2: Greeks */}
-      <div style={{ background: T.card, borderRadius: T.r, padding: 14 }}>
+      <div style={{ background: T.card, borderRadius: T.r, boxShadow: T.elevation1, padding: 16 }}>
         <div style={{ fontSize: 11, fontWeight: 700, color: T.accent, marginBottom: 10, fontFamily: T.fontDisplay }}>
           GREEKS
         </div>
@@ -921,7 +937,7 @@ function ExpandedDetails({ rec, underlyingPrice }) {
       </div>
 
       {/* Column 3: Score Breakdown */}
-      <div style={{ background: T.card, borderRadius: T.r, padding: 14 }}>
+      <div style={{ background: T.card, borderRadius: T.r, boxShadow: T.elevation1, padding: 16 }}>
         <div style={{ fontSize: 11, fontWeight: 700, color: T.accent, marginBottom: 10, fontFamily: T.fontDisplay }}>
           SCORE BREAKDOWN
         </div>

@@ -6,9 +6,17 @@
 // browser. This keeps credentials server-side and handles token refresh.
 // ─────────────────────────────────────────────────────────────────────────────
 
+import { getApp } from "firebase/app";
 import { getFunctions, httpsCallable } from "firebase/functions";
 
-const functions = getFunctions();
+// ── Call helper ───────────────────────────────────────────────────────────────
+// Resolve Functions at call time via getApp() so this module never reads
+// firebase.js exports while that module is still evaluating (Vite chunk order
+// can otherwise throw: No Firebase App '[DEFAULT]' has been created).
+
+function call(name) {
+  return (data) => httpsCallable(getFunctions(getApp()), name)(data);
+}
 
 // ── OAuth ─────────────────────────────────────────────────────────────────────
 
@@ -17,7 +25,7 @@ const functions = getFunctions();
  * Input:  { appKey, appSecret, redirectUri }
  * Output: { authUrl }
  */
-export const schwabInitiateOAuth = httpsCallable(functions, "schwabInitiateOAuth");
+export const schwabInitiateOAuth  = (data) => call("schwabInitiateOAuth")(data);
 
 /**
  * Exchanges an auth code for access + refresh tokens.
@@ -25,7 +33,7 @@ export const schwabInitiateOAuth = httpsCallable(functions, "schwabInitiateOAuth
  * Input:  { code, redirectUri }
  * Output: { success, accountCount }
  */
-export const schwabExchangeToken = httpsCallable(functions, "schwabExchangeToken");
+export const schwabExchangeToken  = (data) => call("schwabExchangeToken")(data);
 
 /**
  * Manually triggers a token refresh.
@@ -33,7 +41,7 @@ export const schwabExchangeToken = httpsCallable(functions, "schwabExchangeToken
  * Input:  {}
  * Output: { success }
  */
-export const schwabRefreshToken = httpsCallable(functions, "schwabRefreshToken");
+export const schwabRefreshToken   = (data) => call("schwabRefreshToken")(data);
 
 // ── Account data ──────────────────────────────────────────────────────────────
 
@@ -42,14 +50,14 @@ export const schwabRefreshToken = httpsCallable(functions, "schwabRefreshToken")
  * Input:  { accountHash }   — hashValue field from brokerAccounts
  * Output: Schwab account object with positions array
  */
-export const schwabGetPositions = httpsCallable(functions, "schwabGetPositions");
+export const schwabGetPositions   = (data) => call("schwabGetPositions")(data);
 
 /**
  * Returns buying power / cash available for a linked account.
  * Input:  { accountHash }
- * Output: { buyingPower, cashBalance, accountType }
+ * Output: { buyingPower, cashBalance, accountType, accountId }
  */
-export const schwabGetBuyingPower = httpsCallable(functions, "schwabGetBuyingPower");
+export const schwabGetBuyingPower = (data) => call("schwabGetBuyingPower")(data);
 
 // ── Market data ───────────────────────────────────────────────────────────────
 
@@ -58,16 +66,16 @@ export const schwabGetBuyingPower = httpsCallable(functions, "schwabGetBuyingPow
  * Input:  { symbols: ["AAPL", "MSFT"] }
  * Output: { quotes: [{ symbol, price, bid, ask, ... }] }
  */
-export const schwabGetQuotes = httpsCallable(functions, "schwabGetQuotes");
+export const schwabGetQuotes      = (data) => call("schwabGetQuotes")(data);
 
 /**
  * Returns the option chain for a symbol and expiration.
  * Input:  { symbol, expiration? }
  * Output: Schwab option chain object
  */
-export const schwabGetOptionChain = httpsCallable(functions, "schwabGetOptionChain");
+export const schwabGetOptionChain = (data) => call("schwabGetOptionChain")(data);
 
-// ── Helper: handle OAuth callback ────────────────────────────────────────────
+// ── Helper: handle OAuth callback ─────────────────────────────────────────────
 // Call this on the /api/schwab/callback route after the OAuth redirect.
 // Extracts the code from the URL and exchanges it for tokens.
 

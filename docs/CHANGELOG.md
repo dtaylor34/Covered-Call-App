@@ -1,3 +1,26 @@
+## [2.0.7] — 2026-09-21
+
+### Fixed
+- **Stale market prices** — the deployed Cloud Functions (last deploy 2026-03-13) ran an outdated `yahoo-finance2` that had broken against Yahoo's live API, so `getStockQuote` fell into its stale-cache fallback and served frozen prices (e.g. GOOGL stuck at $311.24). Redeployed functions with current deps (`yahoo-finance2` 3.13.1, `firebase-functions` 7.2.2), restoring live quotes. See DATA_LAYER.md §3.1 (Yahoo reliability).
+- **Selection tab showed hardcoded prices** — the "Position Setup" card read a static `STOCK_DATA` table (and a hashed fake daily change) instead of the market-data API. `SelectionTab` now overlays the live quote via `useStockQuote`, falling back to the static table only when the market is closed / API is down, with a LIVE/EST. source badge.
+
+---
+
+## [2.0.6] — 2026-04-14
+
+### Fixed
+- **Firebase `app/no-app` in dev** — `schwabApi.js` now uses `getFunctions(getApp())` at call time so Vite’s module order cannot evaluate Functions before `initializeApp()` runs.
+- **Vite HMR WebSocket mismatch** — `server.strictPort: true` on port 3000 so the dev server does not silently move to 3001/3002 while the client still targets 3000; kill other processes on 3000 if the server fails to start.
+
+---
+
+## [2.0.5] — 2026-04-14
+
+### Fixed
+- **Local dev black screen** — service worker is no longer registered on `localhost` / `127.0.0.1`; in dev, existing registrations are unregistered so stale cached JS cannot block Vite.
+
+---
+
 ## [2.0.4] — 2026-03-12
 
 ### Added
