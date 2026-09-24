@@ -315,9 +315,17 @@ function AddForm({ T, lots = [], positions = [], onSave, onDone }) {
     else setMsg("Couldn't read that. Type the fields on the right, or paste your opening BOT shares + SOLD call lines.");
   };
   const submit = async () => {
-    const res = await onSave(f);
+    // Auto-parse any pasted text first, so "paste → Add position" works without
+    // needing the separate Read-paste click.
+    let data = f;
+    if (paste.trim()) {
+      const { out } = parsePaste(paste);
+      data = { ...f, ...Object.fromEntries(Object.entries(out).filter(([, v]) => v != null && v !== "")) };
+      setF(data);
+    }
+    const res = await onSave(data);
     if (res.ok) { setF(empty); setPaste(""); setMsg(""); onDone(); }
-    else setMsg("Still need: " + (res.missing || []).join(", ") + ".");
+    else setMsg("Still need: " + (res.missing || []).join(", ") + " — type it in, or also paste your opening BOT shares + SOLD call.");
   };
 
   const field = (k, label, ph, type = "text", span = 1) => (
@@ -333,7 +341,7 @@ function AddForm({ T, lots = [], positions = [], onSave, onDone }) {
         {/* Left — paste, with the exact formats shown */}
         <div style={{ flex: "1 1 260px", minWidth: 240, display: "flex", flexDirection: "column", gap: 10 }}>
           <label style={{ fontSize: 13, fontWeight: 600, color: T.text }}>Paste from thinkorswim, or a quick note</label>
-          <textarea value={paste} onChange={(e) => setPaste(e.target.value)} rows={6} placeholder="Paste fill notifications or order rows here"
+          <textarea value={paste} onChange={(e) => setPaste(e.target.value)} onBlur={() => { if (paste.trim()) doParse(); }} rows={6} placeholder="Paste fill notifications or order rows here"
             style={{ ...inp, minHeight: 120, padding: 12, resize: "vertical", lineHeight: 1.5 }} />
           <button onClick={doParse} style={{ ...btn(T), width: "auto", alignSelf: "flex-start", padding: "10px 18px" }}>Read paste</button>
           <div style={{ fontSize: 12, color: T.textDim, lineHeight: 1.7 }}>
