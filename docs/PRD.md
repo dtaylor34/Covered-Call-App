@@ -245,7 +245,21 @@ Sign In → AuthContext reads role → If role exists:
 }
 ```
 
-### 5.4 Schema Rules
+### 5.4 Covered-call positions, tax lots & closed history (per user)
+Added for the Working/Lots/Sheet-sync feature. Owner-scoped subcollections under `users/{uid}`.
+```
+users/{uid}                    { ...existing, sheetId?, sheetTitle?, taxRates?: {fed,state,niit}, targetYieldPct? }
+users/{uid}/positions/{id}     { sym, contracts, strike, expiry, fillStock, fillCall, gtc, iv,
+                                 lotId, liveStock, liveCall, daysToExpiry, updatedAt }
+users/{uid}/lots/{id}          { sym, shares, cost, bought, premiumKept, lastPrice? }
+users/{uid}/closed/{id}        { sym, contracts, strike, expiry, fillStock, fillCall, buyback,
+                                 how: 'bought'|'expired'|'called', stockGain, delivered[], closedOn }
+```
+- Position id = `sym-strike-expiry` lowercased (e.g. `pfe-28-2026-10-16`); same id used in the Sheet.
+- Every call has a `lotId`; a new call either creates a lot (new purchase) or points at a free lot.
+- Rules: owner read/write only (see `firestore.rules`). All non-sensitive trade data.
+
+### 5.5 Schema Rules
 - **Adding fields:** Safe. Existing documents simply won't have the field.
 - **Renaming fields:** FORBIDDEN. Requires migration script.
 - **Removing fields:** FORBIDDEN without migration.

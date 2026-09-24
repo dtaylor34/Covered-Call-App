@@ -14,6 +14,7 @@ import { useState, useCallback } from "react";
 import { useTheme } from "../contexts/ThemeContext";
 import { useBrokerConnection } from "../hooks/useBrokerConnection";
 import { schwabInitiateOAuth, schwabExchangeToken } from "../services/schwabApi";
+import SheetSettings from "./SheetSettings";
 
 // ── Local shared components ───────────────────────────────────────────────────
 
@@ -833,6 +834,11 @@ export default function APITab() {
           )}
         </div>
       )}
+
+      {/* Google Sheet ledger sync — next to the broker connections */}
+      <div style={{ marginTop: 20 }}>
+        <SheetSettings />
+      </div>
     </div>
   );
 }

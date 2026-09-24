@@ -23,6 +23,9 @@ import CoveredCallsDashboard from "../components/CoveredCallsDashboard";
 import SavedViewsList from "../components/SavedViewsList";
 import SaveViewModal from "../components/SaveViewModal";
 import WorkingTab from "../components/WorkingTab";
+import WorkingPositionsTab from "../components/WorkingPositionsTab";
+import YearToDateStrip from "../components/YearToDateStrip";
+import ClosedTradesTab from "../components/ClosedTradesTab";
 import RiskTab from "../components/RiskTab";
 import TransactionsTab from "../components/TransactionsTab";
 import GlossaryTab from "../components/GlossaryTab";
@@ -402,6 +405,7 @@ export default function Dashboard() {
 
         {/* Selection (basic -- always unlocked) */}
         <div role="tabpanel" aria-label="Position selection and analysis" style={{ display: activeTab === "selection" ? "block" : "none" }}>
+          <YearToDateStrip />
           <SelectionTab onNavigateToGlossary={() => setActiveTab("glossary")} sharedSymbol={sharedSymbol} onSymbolChange={setSharedSymbol} />
         </div>
 
@@ -409,7 +413,15 @@ export default function Dashboard() {
         <div role="tabpanel" aria-label="Working P&L analysis" style={{ display: activeTab === "working" ? "block" : "none", position: "relative", minHeight: 300 }}>
           {!canAccess("working") && <LockedOverlay feature="working" />}
           <div style={{ filter: !canAccess("working") ? "blur(4px)" : "none", pointerEvents: !canAccess("working") ? "none" : "auto" }}>
-            <WorkingTab activePosition={activePosition} />
+            <WorkingPositionsTab />
+            {activePosition?.contract && (
+              <details style={{ marginTop: 8 }}>
+                <summary style={{ cursor: "pointer", color: "#8A867C", fontSize: 12, padding: "8px 0" }}>
+                  Contract what-if analysis (from the Selection tab)
+                </summary>
+                <WorkingTab activePosition={activePosition} />
+              </details>
+            )}
           </div>
         </div>
 
@@ -425,6 +437,7 @@ export default function Dashboard() {
         <div role="tabpanel" aria-label="Transaction log" style={{ display: activeTab === "transactions" ? "block" : "none", position: "relative", minHeight: 300 }}>
           {!canAccess("transactions") && <LockedOverlay feature="transactions" />}
           <div style={{ filter: !canAccess("transactions") ? "blur(4px)" : "none", pointerEvents: !canAccess("transactions") ? "none" : "auto" }}>
+            <ClosedTradesTab />
             <TransactionsTab activePosition={activePosition} />
           </div>
         </div>
