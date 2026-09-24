@@ -18,6 +18,11 @@ export default function AuthScreen() {
   const [oauthLoading, setOauthLoading] = useState(null); // "google" | "apple" | null
   const { login, signup, signInWithGoogle, signInWithApple, userData, onboardingComplete } = useAuth();
   const [error, setError] = useState(null);
+  // One-time notice if the previous session was auto-ended for inactivity.
+  const [idleNotice] = useState(() => {
+    try { const v = sessionStorage.getItem("cc:idleLogout"); if (v) sessionStorage.removeItem("cc:idleLogout"); return !!v; }
+    catch { return false; }
+  });
   const [userInteracted, setUserInteracted] = useState(false);
   const navigate = useNavigate();
 
@@ -267,6 +272,13 @@ export default function AuthScreen() {
           </div>
 
           {/* ── Email/Password Form ── */}
+          {idleNotice && (
+            <div style={{
+              padding: "10px 14px", marginBottom: 16,
+              background: T.accentDim, border: `1px solid ${T.accent}44`,
+              borderRadius: 8, color: T.text, fontSize: 13,
+            }}>For your security, you were signed out after 30 minutes of inactivity. Please sign in again.</div>
+          )}
           {error && userInteracted && (
             <div style={{
               padding: "10px 14px", marginBottom: 16,

@@ -1,3 +1,10 @@
+## [2.0.11] — 2026-09-24
+
+### Security
+- **Inactivity auto-logout** — signs the user out after 30 minutes with no interaction (mouse/keyboard/touch/scroll/tab-visibility), and shows a "signed out for your security" notice on the login screen. Protects unattended sessions on shared or public devices.
+
+---
+
 ## [2.0.10] — 2026-09-24
 
 ### Security

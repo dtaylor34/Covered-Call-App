@@ -245,11 +245,29 @@ export function AuthProvider({ children }) {
   }, [createUserDoc]);
 
   // ── Sign Out ──
-  const logout = useCallback(async () => {
+  const logout = useCallback(async (reason) => {
+    if (reason === "idle") { try { sessionStorage.setItem("cc:idleLogout", "1"); } catch { /* ignore */ } }
     clearPersistedState(); // wipe per-user cc:* localStorage so nothing bleeds to the next user on a shared device
     await signOut(auth);
     setUserData(null);
   }, []);
+
+  // ── Inactivity auto-logout (shared / public device safety) ──
+  // Signs the user out after IDLE_MINUTES with no interaction. Financial-app
+  // hygiene so an unattended session on a shared tablet/kiosk can't be resumed.
+  const IDLE_MINUTES = 30;
+  useEffect(() => {
+    if (!user) return;
+    const idleMs = IDLE_MINUTES * 60 * 1000;
+    let timer;
+    const arm = () => { clearTimeout(timer); timer = setTimeout(() => logout("idle"), idleMs); };
+    let last = 0;
+    const onActivity = () => { const now = Date.now(); if (now - last > 5000) { last = now; arm(); } };
+    const events = ["mousemove", "mousedown", "keydown", "touchstart", "scroll", "visibilitychange"];
+    events.forEach((e) => window.addEventListener(e, onActivity, { passive: true }));
+    arm();
+    return () => { clearTimeout(timer); events.forEach((e) => window.removeEventListener(e, onActivity)); };
+  }, [user, logout]);
 
   // ── Refresh user data ──
   const refreshUserData = useCallback(async () => {
