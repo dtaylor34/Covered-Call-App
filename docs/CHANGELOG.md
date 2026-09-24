@@ -2,6 +2,7 @@
 
 ### Security
 - **Shared-device isolation** — logout now wipes all per-user `cc:*` localStorage (transactions, tax rates, last position/symbol/tab), and signing in as a different user on the same browser clears the previous user's local state first. Prevents any UI-state bleed between accounts on a shared device. Server-side data isolation (Firestore rules + function uid-scoping) was already enforced and re-verified with a two-user cross-tenant attack test.
+- **OAuth code hygiene** — the Schwab `?code=` is stripped from the URL, history, and referrer immediately on callback, before the token exchange.
 
 ---
 

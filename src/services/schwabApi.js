@@ -96,6 +96,10 @@ export async function handleSchwabCallback() {
 
   if (!code) throw new Error("No authorization code in callback URL.");
 
+  // Strip the OAuth code from the address bar, browser history, and any outgoing
+  // referrer BEFORE the network exchange — it should never linger client-side.
+  try { window.history.replaceState({}, "", "/api/schwab/callback"); } catch { /* SSR/no-history */ }
+
   const result = await schwabExchangeToken({ code, redirectUri });
   return result.data;
 }
