@@ -328,7 +328,7 @@ function AddForm({ T, lots = [], positions = [], onSave, onDone }) {
             style={{ ...inp, minHeight: 120, padding: 12, resize: "vertical", lineHeight: 1.5 }} />
           <button onClick={doParse} style={{ ...btn(T), width: "auto", alignSelf: "flex-start", padding: "10px 18px" }}>Read paste</button>
           <div style={{ fontSize: 12, color: T.textDim, lineHeight: 1.7 }}>
-            Reads lines like <Code>SOLD -1 PFE 100 16 OCT 26 28 CALL @.55</Code>, <Code>BOT +100 PFE @27.80</Code>, and a GTC order row. Quick note: <Code>PFE, 1, 27.80, .55, 28, 10/16/26, .10</Code> — symbol, contracts, share price, call price, strike, expiry, GTC.
+            Reads thinkorswim lines like <Code>SOLD -1 PFE 100 16 OCT 26 28 CALL @.55</Code> and <Code>BOT +100 PFE @27.80</Code>, a quick note <Code>PFE, 1, 27.80, .55, 28, 10/16/26, .10</Code>, or plain English like <Code>100 shares of PFE, sold 1 call at $0.55, hits $28 by Oct 16, breakeven $27.25</Code>.
           </div>
         </div>
         {/* Right — fields */}

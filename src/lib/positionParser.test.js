@@ -50,6 +50,24 @@ describe("parsePaste", () => {
     expect(found).toContain("share purchase");
   });
 
+  it("plain-English note (the app 'Add covered call' example)", () => {
+    const note = [
+      "100 shares of PFE",
+      "Sold 1 call at $0.55 = $55 collected",
+      "Max profit: $75 if PFE hits $28 by Oct 16",
+      "Breakeven: $27.25",
+      "25 days to expiry",
+    ].join("\n");
+    const { out, found } = parsePaste(note, new Date("2026-09-21T00:00:00"));
+    expect(out.sym).toBe("PFE");
+    expect(num(out.contracts)).toBe(1);
+    expect(num(out.fillCall)).toBeCloseTo(0.55, 2);
+    expect(num(out.strike)).toBe(28);
+    expect(out.expiry).toBe("2026-10-16");
+    expect(num(out.fillStock)).toBeCloseTo(27.80, 2); // derived from breakeven + call
+    expect(found).toContain("note");
+  });
+
   it("combines a multi-line paste (shares + call + GTC) into one position", () => {
     const text = [
       "BOT +100 PFE @ 27.80",

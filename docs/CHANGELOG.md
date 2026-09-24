@@ -1,3 +1,10 @@
+## [2.0.14] — 2026-09-24
+
+### Changed
+- **Working tab — "Read paste" now understands plain-English notes** — in addition to thinkorswim order lines and the CSV quick-note, the parser reads free-form notes like `100 shares of PFE, sold 1 call at $0.55, hits $28 by Oct 16, breakeven $27.25` (derives symbol, contracts, call price, strike, expiration, and share price from breakeven). Fixes the case where a natural note filled nothing and the form said "Still need: …".
+
+---
+
 ## [2.0.13] — 2026-09-24
 
 ### Changed

@@ -34,7 +34,7 @@ export function normDate(s) {
  *          fillCall, strike, expiry, gtc } (strings, as pasted); found = the kinds
  *          of rows recognized, de-duplicated.
  */
-export function parsePaste(text) {
+export function parsePaste(text, now = new Date()) {
   const out = {}, found = [];
   const optRe = /([A-Z][A-Z.]{0,5})\s+(?:100\s+)?(\d{1,2})\s+(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)\s+(\d{2})\s+(\d+(?:\.\d+)?)\s+CALL/;
   const lines = String(text || "").toUpperCase().replace(/\(WEEKLYS?\)/g, " ").split(/\n|;/);
@@ -80,6 +80,45 @@ export function parsePaste(text) {
       found.push("share purchase");
     }
   }
+
+  // ── Natural-language fallback ──
+  // Fills anything still missing from a free-form note, e.g.
+  //   "100 shares of PFE, sold 1 call at $0.55, hits $28 by Oct 16, breakeven $27.25"
+  const U = String(text || "").toUpperCase();
+  const g = (re) => { const m = U.match(re); return m ? m[1] : null; };
+  let noteHit = false;
+  if (!out.sym) {
+    const s = g(/\bSHARES\s+OF\s+([A-Z]{1,5})\b/) || g(/\b([A-Z]{1,5})\s+(?:HITS|STOCK)\b/) || g(/\bON\s+([A-Z]{1,5})\b/);
+    if (s) { out.sym = s; noteHit = true; }
+  }
+  if (!out.fillCall) {
+    const v = g(/\bAT\s+\$?(\d*\.\d+)/) || g(/CALL[^$\d]*\$(\d*\.\d+)/) || g(/PREMIUM[:\s]+\$?(\d*\.\d+)/);
+    if (v) { out.fillCall = v; noteHit = true; }
+  }
+  if (!out.strike) {
+    const v = g(/\bHITS\s+\$?(\d+(?:\.\d+)?)/) || g(/STRIKE[:\s]+\$?(\d+(?:\.\d+)?)/) || g(/\$(\d+(?:\.\d+)?)\s+CALL\b/);
+    if (v) { out.strike = v; noteHit = true; }
+  }
+  if (!out.contracts) {
+    const v = g(/(\d+)\s+CALLS?\b/) || g(/SOLD\s+(\d+)\b/);
+    if (v) { out.contracts = v; noteHit = true; }
+    else { const sh = g(/(\d+)\s+SHARES?\b/); if (sh) { out.contracts = String(Math.max(1, Math.round(parseInt(sh, 10) / 100))); noteHit = true; } }
+  }
+  if (!out.expiry) {
+    const md = U.match(/\b(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)[A-Z]*\.?\s+(\d{1,2})(?:,?\s+(\d{2,4}))?/);
+    if (md) {
+      const mo = MONTHS[md[1]], day = parseInt(md[2], 10);
+      let yr = md[3] ? (md[3].length === 2 ? 2000 + +md[3] : +md[3]) : null;
+      if (yr == null) { yr = now.getFullYear(); if (new Date(yr, mo - 1, day) < now) yr += 1; }
+      out.expiry = `${yr}-${String(mo).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+      noteHit = true;
+    }
+  }
+  if (!out.fillStock) {
+    const be = g(/BREAKEVEN[:\s]+\$?(\d+(?:\.\d+)?)/);
+    if (be && out.fillCall != null) { out.fillStock = (parseFloat(be) + parseFloat(out.fillCall)).toFixed(2); noteHit = true; }
+  }
+  if (noteHit) found.push("note");
 
   return { out, found: found.filter((v, i) => found.indexOf(v) === i) };
 }
