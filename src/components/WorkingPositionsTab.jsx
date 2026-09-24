@@ -302,8 +302,17 @@ function AddForm({ T, lots = [], positions = [], onSave, onDone }) {
 
   const doParse = () => {
     const { out, found } = parsePaste(paste);
-    setF((s) => ({ ...s, ...Object.fromEntries(Object.entries(out).filter(([, v]) => v != null && v !== "")) }));
-    setMsg(found.length ? `Read ${found.join(", ")}. Check the fields, then save.` : "Couldn't read that — fill the fields on the right.");
+    const merged = { ...f, ...Object.fromEntries(Object.entries(out).filter(([, v]) => v != null && v !== "")) };
+    setF(merged);
+    const need = [];
+    if (!String(merged.sym || "").trim()) need.push("symbol");
+    if (!(Number(merged.strike) > 0)) need.push("strike");
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(merged.expiry || "")) need.push("expiration");
+    if (!(Number(merged.fillStock) > 0)) need.push("share price paid");
+    if (!(Number(merged.fillCall) > 0)) need.push("call sold at");
+    if (found.length && need.length) setMsg(`Read ${found.join(", ")}. Still need: ${need.join(", ")} — type it in, or paste your opening BOT shares + SOLD call.`);
+    else if (found.length) setMsg(`Read ${found.join(", ")}. Looks complete — hit Add position.`);
+    else setMsg("Couldn't read that. Type the fields on the right, or paste your opening BOT shares + SOLD call lines.");
   };
   const submit = async () => {
     const res = await onSave(f);
