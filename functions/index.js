@@ -269,3 +269,8 @@ exports.schwabGetPositions   = schwab.schwabGetPositions;
 exports.schwabGetBuyingPower = schwab.schwabGetBuyingPower;
 exports.schwabGetQuotes      = schwab.schwabGetQuotes;
 exports.schwabGetOptionChain = schwab.schwabGetOptionChain;
+
+// ── Google Sheet ledger sync (feature/working-lots-sheets) ───────────────────
+// connectSheet / syncSheet / sheetServiceAccount. Requires the Google Sheets API
+// enabled in the project and `googleapis` installed. See handover/HANDOVER.md §Sheet sync.
+Object.assign(exports, require("./sheetsSync"));

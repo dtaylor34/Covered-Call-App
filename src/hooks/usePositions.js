@@ -18,6 +18,7 @@ import {
 import { useAuth } from "../contexts/AuthContext";
 import { positionId } from "../lib/positionParser";
 import { deliveryOrder } from "../lib/coveredCallMath";
+import { syncQuietly, openTransactions, closeTransactions, lotTransactions } from "../lib/sheetSync";
 
 const todayISO = () => new Date().toLocaleDateString("sv-SE"); // YYYY-MM-DD, local
 
@@ -42,6 +43,14 @@ export function usePositions() {
   const [positions, posLoading] = useCollection(uid, "positions");
   const [lots, lotsLoading] = useCollection(uid, "lots");
   const [closed, closedLoading] = useCollection(uid, "closed");
+
+  // Is a Google Sheet connected? Gates the fire-and-forget ledger sync.
+  const [sheetOn, setSheetOn] = useState(false);
+  useEffect(() => {
+    if (!uid) { setSheetOn(false); return; }
+    return onSnapshot(doc(getFirestore(), "users", uid), (d) => setSheetOn(!!d.data()?.sheetId), () => {});
+  }, [uid]);
+  const trySync = useCallback((payload) => { if (sheetOn) syncQuietly(payload); }, [sheetOn]);
 
   const posRef = (id) => doc(getFirestore(), "users", uid, "positions", id);
   const lotRef = (id) => doc(getFirestore(), "users", uid, "lots", id);
@@ -102,8 +111,11 @@ export function usePositions() {
 
     batch.set(posRef(id), next, { merge: true });
     await batch.commit();
+
+    // Sync a newly opened call to the ledger (edits are idempotent-skipped there).
+    if (!existing) trySync({ transactions: openTransactions(next, { includeShares: !chosenLot }) });
     return { ok: true, id };
-  }, [uid, positions, lots]);
+  }, [uid, positions, lots, trySync]);
 
   // ── Update live marks (price/call/gtc) on a position ────────────────────────
   const updateLive = useCallback(async (id, patch) => {
@@ -121,6 +133,7 @@ export function usePositions() {
     const batch = writeBatch(getFirestore());
     let stockGain = 0;
     const delivered = [];
+    const deliveredDetail = [];
 
     if (how === "called") {
       let need = q;
@@ -131,6 +144,7 @@ export function usePositions() {
         const remaining = l.shares - take;
         need -= take;
         delivered.push(l.id);
+        deliveredDetail.push({ lotId: l.id, shares: take });
         if (remaining > 0) batch.set(lotRef(l.id), { shares: remaining }, { merge: true });
         else batch.delete(lotRef(l.id));
       }
@@ -148,7 +162,9 @@ export function usePositions() {
     batch.set(closedRef(`${id}-${Date.now()}`), rec);
     batch.delete(posRef(id));
     await batch.commit();
-  }, [uid, positions, lots]);
+
+    trySync({ transactions: closeTransactions(p, how, how === "bought" ? buyback : 0, deliveredDetail) });
+  }, [uid, positions, lots, trySync]);
 
   // ── Lots ────────────────────────────────────────────────────────────────────
   const saveLot = useCallback(async (form) => {
@@ -158,9 +174,11 @@ export function usePositions() {
     const cost = Number(form.cost);
     if (!sym || shares <= 0 || !(cost > 0)) return { ok: false, missing: ["symbol, shares, price"] };
     const id = `${sym.toLowerCase()}-${Date.now().toString(36)}`;
-    await setDoc(lotRef(id), { sym, shares, cost, bought: form.bought || todayISO(), premiumKept: 0, lastPrice: cost });
+    const bought = form.bought || todayISO();
+    await setDoc(lotRef(id), { sym, shares, cost, bought, premiumKept: 0, lastPrice: cost });
+    trySync({ transactions: lotTransactions({ id, sym, shares, cost, bought }) });
     return { ok: true, id };
-  }, [uid]);
+  }, [uid, trySync]);
 
   const deletePosition = useCallback(async (id) => { if (uid) await deleteDoc(posRef(id)); }, [uid]);
   const deleteLot = useCallback(async (id) => { if (uid) await deleteDoc(lotRef(id)); }, [uid]);
