@@ -36,6 +36,17 @@ service cloud.firestore {
       match /savedViewCollections/{collId} {
         allow read, write: if request.auth != null && request.auth.uid == userId;
       }
+      // ── Covered-call positions, tax lots, and closed history ──
+      // Non-sensitive per-user trade data; owner reads and writes their own.
+      match /positions/{posId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+      match /lots/{lotId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+      match /closed/{closedId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
       // ── Broker API Connections (NON-SENSITIVE STATUS ONLY) ──
       // This doc holds only { broker, status, appKeyLast4, accountCount, ... }.
       // The owner may READ it to show connection state; NO client may write it.
