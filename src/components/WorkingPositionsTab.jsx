@@ -12,6 +12,7 @@ import { useTheme } from "../contexts/ThemeContext";
 import { usePositions } from "../hooks/usePositions";
 import { positionCalcs, stoplight, gtcFillEstimate } from "../lib/coveredCallMath";
 import { parsePaste } from "../lib/positionParser";
+import SharesByLot from "./SharesByLot";
 
 const DOT = { g: "#2F9E55", y: "#E3A91B", r: "#E0552A" };
 const LEGEND = [
@@ -34,7 +35,7 @@ const expShort = (iso) => {
 
 export default function WorkingPositionsTab() {
   const { T } = useTheme();
-  const { positions, closed, loading, savePosition, updateLive, closePosition } = usePositions();
+  const { positions, lots, closed, loading, savePosition, updateLive, closePosition, saveLot, deleteLot } = usePositions();
   const [open, setOpen] = useState({});
   const [hover, setHover] = useState(null);
   const [showAdd, setShowAdd] = useState(false);
@@ -67,7 +68,7 @@ export default function WorkingPositionsTab() {
         }}>{showAdd ? "Close" : "+ Add / Paste"}</button>
       </div>
 
-      {showAdd && <AddForm T={T} onSave={savePosition} onDone={() => setShowAdd(false)} />}
+      {showAdd && <AddForm T={T} lots={lots} positions={positions} onSave={savePosition} onDone={() => setShowAdd(false)} />}
 
       {/* Totals strip */}
       {rows.length > 0 && (
@@ -130,6 +131,9 @@ export default function WorkingPositionsTab() {
           </div>
         );
       })}
+
+      {/* Shares by lot */}
+      <SharesByLot positions={positions} lots={lots} onSaveLot={saveLot} onDeleteLot={deleteLot} />
 
       {closed.length > 0 && (
         <div style={{ color: T.textDim, fontSize: 12, marginTop: 8 }}>
@@ -220,9 +224,12 @@ function Detail({ T, p, c, fill, onUpdateLive, onClose }) {
 const btn = (T) => ({ marginTop: 8, width: "100%", padding: "8px 10px", borderRadius: 6, border: `1px solid ${T.border}`, background: T.card, color: T.text, fontFamily: T.fontMono, fontSize: 12, cursor: "pointer" });
 
 // ── Add / paste form ──────────────────────────────────────────────────────────
-function AddForm({ T, onSave, onDone }) {
-  const empty = { sym: "", contracts: "1", fillStock: "", fillCall: "", strike: "", expiry: "", gtc: "0.10" };
+function AddForm({ T, lots = [], positions = [], onSave, onDone }) {
+  const empty = { sym: "", contracts: "1", fillStock: "", fillCall: "", strike: "", expiry: "", gtc: "0.10", lotId: "new" };
   const [f, setF] = useState(empty);
+  // Free lots for the entered symbol (not already covered by a position).
+  const coveredLotIds = new Set(positions.map((p) => p.lotId).filter(Boolean));
+  const freeLots = lots.filter((l) => l.sym === String(f.sym || "").trim().toUpperCase() && !coveredLotIds.has(l.id));
   const [paste, setPaste] = useState("");
   const [msg, setMsg] = useState("");
   const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }));
@@ -261,6 +268,16 @@ function AddForm({ T, onSave, onDone }) {
         {field("expiry", "Expiry (YYYY-MM-DD)", "2026-10-16")}
         {field("gtc", "GTC buy back", "0.10")}
       </div>
+      {freeLots.length > 0 && (
+        <label style={{ fontSize: 11, color: T.textDim, display: "block", marginTop: 12 }}>Covers which shares?
+          <select value={f.lotId} onChange={set("lotId")} style={{ ...inp, marginTop: 4 }}>
+            <option value="new">New purchase (creates a lot)</option>
+            {freeLots.map((l) => (
+              <option key={l.id} value={l.id}>{l.shares} sh @ ${Number(l.cost).toFixed(2)} — bought {l.bought}</option>
+            ))}
+          </select>
+        </label>
+      )}
       <button onClick={submit} style={{ marginTop: 14, padding: "10px 18px", borderRadius: 8, border: "none", background: T.accent, color: "#0A0A0A", fontFamily: T.fontMono, fontWeight: 700, cursor: "pointer" }}>
         Save position
       </button>
