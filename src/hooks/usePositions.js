@@ -16,7 +16,7 @@ import {
   getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot, writeBatch, serverTimestamp,
 } from "firebase/firestore";
 import { useAuth } from "../contexts/AuthContext";
-import { positionId } from "../lib/positionParser";
+import { positionId, num } from "../lib/positionParser";
 import { deliveryOrder } from "../lib/coveredCallMath";
 import { syncQuietly, openTransactions, closeTransactions, lotTransactions } from "../lib/sheetSync";
 
@@ -61,8 +61,9 @@ export function usePositions() {
   // Returns { ok, missing } — missing lists required fields when incomplete.
   const savePosition = useCallback(async (form) => {
     if (!uid) return { ok: false, missing: ["sign-in"] };
+    const n = (v) => num(v); // lenient: tolerates "$27.80", "27.80 ", "1,234"
     const sym = String(form.sym || "").trim().toUpperCase();
-    const strike = Number(form.strike);
+    const strike = n(form.strike) || 0;
     const expiry = form.expiry;
     const id = positionId(sym, strike, expiry);
     const existing = positions.find((p) => p.id === id);
@@ -72,8 +73,8 @@ export function usePositions() {
     if (!sym) missing.push("symbol");
     if (!(strike > 0)) missing.push("strike");
     if (!/^\d{4}-\d{2}-\d{2}$/.test(String(expiry || ""))) missing.push("expiration");
-    if (!existing && !chosenLot && !(Number(form.fillStock) > 0)) missing.push("share price paid");
-    if (!existing && !(Number(form.fillCall) > 0)) missing.push("call sold at");
+    if (!existing && !chosenLot && !(n(form.fillStock) > 0)) missing.push("share price paid");
+    if (!existing && !(n(form.fillCall) > 0)) missing.push("call sold at");
     if (missing.length) return { ok: false, missing };
 
     const today = new Date(); today.setHours(0, 0, 0, 0);
@@ -81,7 +82,7 @@ export function usePositions() {
 
     const base = existing || { id, sym, strike, expiry, iv: 25, gtc: 0.1 };
     const next = { ...base, daysToExpiry: dte, updatedAt: serverTimestamp() };
-    const setIf = (k, v, ok) => { const n = Number(v); if (v != null && v !== "" && !isNaN(n) && ok(n)) next[k] = n; };
+    const setIf = (k, v, ok) => { const x = n(v); if (x != null && ok(x)) next[k] = x; };
     setIf("contracts", form.contracts, (v) => v >= 1);
     setIf("fillStock", form.fillStock, (v) => v > 0);
     setIf("fillCall", form.fillCall, (v) => v > 0);
@@ -95,7 +96,7 @@ export function usePositions() {
     if (!existing) {
       if (chosenLot) {
         next.lotId = chosenLot.id;
-        if (!(Number(form.fillStock) > 0)) next.fillStock = chosenLot.cost;
+        if (!(n(form.fillStock) > 0)) next.fillStock = chosenLot.cost;
       } else {
         const lot = { sym, shares: next.contracts * 100, cost: next.fillStock, bought: todayISO(), premiumKept: 0 };
         const newLotId = `${id}-lot`;
@@ -110,7 +111,12 @@ export function usePositions() {
     if (!existing && next.iv == null && sameSym) next.iv = sameSym.iv;
 
     batch.set(posRef(id), next, { merge: true });
-    await batch.commit();
+    try {
+      await batch.commit();
+    } catch (e) {
+      console.error("savePosition write failed:", e);
+      return { ok: false, error: e?.message || "Could not save the position. Please try again." };
+    }
 
     // Sync a newly opened call to the ledger (edits are idempotent-skipped there).
     if (!existing) trySync({ transactions: openTransactions(next, { includeShares: !chosenLot }) });

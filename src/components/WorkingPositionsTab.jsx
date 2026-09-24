@@ -325,6 +325,7 @@ function AddForm({ T, lots = [], positions = [], onSave, onDone }) {
     }
     const res = await onSave(data);
     if (res.ok) { setF(empty); setPaste(""); setMsg(""); onDone(); }
+    else if (res.error) setMsg(`Couldn't save: ${res.error}`);
     else setMsg("Still need: " + (res.missing || []).join(", ") + " — type it in, or also paste your opening BOT shares + SOLD call.");
   };
 
