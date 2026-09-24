@@ -2,9 +2,13 @@
 // Firestore-backed hook for managing broker API connections and accounts.
 // Branch: feature/api-integration
 //
-// Collections:
-//   users/{uid}/brokerConnections/{brokerId}  — credentials + token state
+// Collections (this hook only ever touches NON-SENSITIVE docs):
+//   users/{uid}/brokerConnections/{brokerId}  — status only (read-only here)
 //   users/{uid}/brokerAccounts/{accountId}    — linked account metadata
+//
+// SECURITY: credentials and tokens live encrypted in users/{uid}/private and
+// are handled exclusively by Cloud Functions. The browser never reads or writes
+// them. See docs/BROKER_CONNECTIONS.md.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useState, useEffect, useCallback } from "react";
@@ -13,11 +17,11 @@ import {
   collection,
   doc,
   setDoc,
-  deleteDoc,
   onSnapshot,
   serverTimestamp,
 } from "firebase/firestore";
 import { useAuth } from "../contexts/AuthContext";
+import { schwabDisconnect } from "../services/schwabApi";
 
 export function useBrokerConnection() {
   const { currentUser } = useAuth();
@@ -62,37 +66,16 @@ export function useBrokerConnection() {
     return unsub;
   }, [currentUser?.uid]);
 
-  // ── Save connection credentials ─────────────────────────────────────────────
-  // Called before initiating OAuth — stores appKey + appSecret in Firestore.
-  // The Cloud Function reads these during token exchange.
-  const saveConnection = useCallback(async (broker, appKey, appSecret) => {
-    if (!currentUser?.uid) return;
-    const db = getFirestore();
-    await setDoc(
-      doc(db, "users", currentUser.uid, "brokerConnections", broker),
-      {
-        broker,
-        appKey,
-        appSecret,
-        status: "pending",
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      },
-      { merge: true }
-    );
-  }, [currentUser?.uid]);
-
-  // ── Delete a connection ─────────────────────────────────────────────────────
+  // ── Disconnect ──────────────────────────────────────────────────────────────
+  // Credentials are wiped server-side (they live in the sealed /private doc the
+  // client cannot touch). The Cloud Function deletes the encrypted secret, the
+  // status doc, and all linked accounts for this broker.
   const deleteConnection = useCallback(async (broker) => {
     if (!currentUser?.uid) return;
-    const db = getFirestore();
-    await deleteDoc(doc(db, "users", currentUser.uid, "brokerConnections", broker));
-    // Also remove accounts for this broker
-    const brokerAccounts = accounts.filter((a) => a.broker === broker);
-    for (const account of brokerAccounts) {
-      await deleteDoc(doc(db, "users", currentUser.uid, "brokerAccounts", account.id));
+    if (broker === "schwab") {
+      await schwabDisconnect({});
     }
-  }, [currentUser?.uid, accounts]);
+  }, [currentUser?.uid]);
 
   // ── Set default account ─────────────────────────────────────────────────────
   const setDefaultAccount = useCallback(async (accountId) => {
@@ -123,7 +106,6 @@ export function useBrokerConnection() {
     activeConnection,
     activeAccount,
     loading,
-    saveConnection,
     deleteConnection,
     setDefaultAccount,
     setActiveAccountId,

@@ -1,3 +1,17 @@
+## [2.0.8] — 2026-09-21
+
+### Security
+- **Broker credentials are now bulletproof** — a user's Schwab App Key / Secret / OAuth tokens can never be seen by anyone but them. See new **docs/BROKER_CONNECTIONS.md**.
+  - Secrets are **AES-256-GCM encrypted** at rest (`functions/crypto.js`) with a key held in Secret Manager (`SCHWAB_ENC_KEY`), stored in a sealed `users/{uid}/private/schwabSecret` doc.
+  - `firestore.rules`: `private/**` is `read,write:false` for all clients (no admin exception); `brokerConnections` is now `read:owner, write:false` and holds **non-sensitive status only** (`status`, `appKeyLast4`, `accountCount`).
+  - The browser no longer writes or reads credentials — removed the client-side plaintext write in `useBrokerConnection`; `APITab` sends creds once to the Cloud Function over HTTPS; disconnect wipes secrets server-side via new `schwabDisconnect`.
+  - Functions never log credentials or Schwab response bodies.
+
+### Setup required before the Schwab tab works in an environment
+- `firebase functions:secrets:set SCHWAB_ENC_KEY` (see docs/BROKER_CONNECTIONS.md §5), then deploy `firestore:rules` + the `schwab*` functions.
+
+---
+
 ## [2.0.7] — 2026-09-21
 
 ### Fixed

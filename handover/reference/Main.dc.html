@@ -1,0 +1,488 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>PFE covered call position</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&amp;family=Instrument+Sans:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#F3F0E8}
+a{color:#1D4ED8}a:hover{color:#1E3A8A}
+input[type=range]{width:100%;height:28px;accent-color:#1D4ED8;margin:0}
+button:disabled{opacity:0.45;cursor:default}
+</style>
+</helmet>
+<div style="width: 1440px; height: 2000px; box-sizing: border-box; padding: 40px 48px; background: #F3F0E8; color: #1A1A17; font-family: 'Instrument Sans', system-ui, sans-serif; display: flex; flex-direction: column; gap: 28px">
+
+<header style="display: flex; justify-content: space-between; align-items: flex-end; gap: 24px">
+<div style="display: flex; flex-direction: column; gap: 6px">
+<div style="font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: #5E5B53">Covered call · 1 contract · Schwab</div>
+<h1 style="margin: 0; font-family: Fraunces, Georgia, serif; font-size: 44px; font-weight: 600; line-height: 1.05">PFE <span style="font-weight: 500; color: #5E5B53">Pfizer Inc</span></h1>
+<div style="font-size: 16px; color: #3A3833">Own 100 shares · Sold 1 × {{expLong}} {{kLabel}} call</div>
+</div>
+<div style="display: flex; gap: 12px; align-items: stretch">
+<div style="padding: 10px 16px; background: #FBFAF6; border: 1px solid #DDD8CC; border-radius: 12px; display: flex; flex-direction: column; gap: 2px">
+<span style="font-size: 12px; color: #5E5B53">PFE last</span>
+<span style="font-family: 'JetBrains Mono', monospace; font-size: 18px; font-weight: 500">{{liveStockLabel}}</span>
+</div>
+<div style="padding: 10px 16px; background: #FBFAF6; border: 1px solid #DDD8CC; border-radius: 12px; display: flex; flex-direction: column; gap: 2px">
+<span style="font-size: 12px; color: #5E5B53">Days left</span>
+<span style="font-family: 'JetBrains Mono', monospace; font-size: 18px; font-weight: 500">{{dte}}</span>
+</div>
+<div style="padding: 10px 16px; background: {{status.bg}}; color: {{status.fg}}; border-radius: 12px; display: flex; align-items: center; font-size: 15px; font-weight: 600">{{status.text}}</div>
+</div>
+</header>
+
+<section style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px">
+<div style="background: #FBFAF6; border: 1px solid #DDD8CC; border-radius: 14px; padding: 20px 22px; display: flex; flex-direction: column; gap: 8px">
+<div style="font-size: 14px; color: #5E5B53; font-weight: 500">Money in this trade</div>
+<div style="font-family: Fraunces, Georgia, serif; font-size: 38px; font-weight: 600; font-variant-numeric: tabular-nums">{{basisLabel}}</div>
+<div style="font-size: 14px; color: #3A3833; line-height: 1.4">Paid {{sharesCostLabel}} for 100 shares, minus {{premiumLabel}} collected</div>
+</div>
+<div style="background: #FBFAF6; border: 1px solid #DDD8CC; border-radius: 14px; padding: 20px 22px; display: flex; flex-direction: column; gap: 8px">
+<div style="font-size: 14px; color: #5E5B53; font-weight: 500">Cash collected</div>
+<div style="font-family: Fraunces, Georgia, serif; font-size: 38px; font-weight: 600; color: #1D4ED8; font-variant-numeric: tabular-nums">{{premiumLabel}}</div>
+<div style="font-size: 14px; color: #3A3833; line-height: 1.4">Already in your account from selling the call</div>
+</div>
+<div style="background: #FBFAF6; border: 1px solid #DDD8CC; border-radius: 14px; padding: 20px 22px; display: flex; flex-direction: column; gap: 8px">
+<div style="font-size: 14px; color: #5E5B53; font-weight: 500">If you close everything now</div>
+<div style="font-family: Fraunces, Georgia, serif; font-size: 38px; font-weight: 600; color: {{liveTotalTone}}; font-variant-numeric: tabular-nums">{{liveTotalLabel}}</div>
+<div style="font-size: 14px; color: #3A3833; line-height: 1.4">Shares {{liveStockPLLabel}} · Call {{liveCallPLLabel}}. {{liveNote}}</div>
+</div>
+<div style="background: #FBFAF6; border: 1px solid #DDD8CC; border-radius: 14px; padding: 20px 22px; display: flex; flex-direction: column; gap: 8px">
+<div style="font-size: 14px; color: #5E5B53; font-weight: 500">Best case by {{expShort}}</div>
+<div style="font-family: Fraunces, Georgia, serif; font-size: 38px; font-weight: 600; color: #1D4ED8; font-variant-numeric: tabular-nums">{{maxProfitLabel}}</div>
+<div style="font-size: 14px; color: #3A3833; line-height: 1.4">If PFE is at or above {{kLabel}} at expiry. Breakeven {{beLabel}}</div>
+</div>
+</section>
+
+<section style="background: #FBFAF6; border: 1px solid #DDD8CC; border-radius: 14px; padding: 24px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 32px">
+<div style="grid-column: span 2; display: flex; flex-direction: column; gap: 14px">
+<div style="display: flex; justify-content: space-between; align-items: baseline">
+<h2 style="margin: 0; font-family: Fraunces, Georgia, serif; font-size: 24px; font-weight: 600">You've earned {{meter.keptLabel}} of {{premiumLabel}}</h2>
+<span style="font-size: 13px; color: #5E5B53">Live</span>
+</div>
+<div style="position: relative; height: 44px">
+<div style="position: absolute; left: 0; right: 0; top: 10px; height: 20px; background: #E6E1D6; border-radius: 10px; overflow: hidden">
+<div style="height: 100%; width: {{meter.keptPct}}; background: #1D4ED8; border-radius: 10px"></div>
+</div>
+<div style="position: absolute; left: {{meter.gtcLeft}}; top: 2px; width: 2px; height: 36px; background: #B45309"></div>
+<div style="position: absolute; left: {{meter.gtcLeft}}; top: 38px; transform: translateX(-50%); font-size: 12px; color: #7C2D12; white-space: nowrap">GTC locks {{meter.gtcKeep}}</div>
+</div>
+<p style="margin: 8px 0 0; font-size: 15px; line-height: 1.5; color: #3A3833; max-width: 760px">The buyer paid {{premiumLabel}} for time. Every day PFE stays under {{kLabel}}, more of that becomes yours for good. You fully earn it when the call is worth $0.</p>
+<sc-if value="{{meter.behind}}" hint-placeholder-val="{{ true }}">
+<p style="margin: 0; font-size: 14px; line-height: 1.5; color: #7C2D12">Right now the call costs {{meter.behindBy}} more to buy back than you sold it for. That's normal in the first days after a fill.</p>
+</sc-if>
+</div>
+<div style="display: flex; flex-direction: column; gap: 12px; border-left: 1px solid #DDD8CC; padding-left: 32px">
+<div style="font-size: 14px; font-weight: 600">What the call is worth</div>
+<div style="display: flex; justify-content: space-between; font-size: 15px"><span style="color: #5E5B53">You sold it for</span><span style="font-family: 'JetBrains Mono', monospace">{{meter.soldLabel}}</span></div>
+<div style="display: flex; justify-content: space-between; font-size: 15px"><span style="color: #5E5B53">Costs to buy back now</span><span style="font-family: 'JetBrains Mono', monospace">{{meter.nowLabel}}</span></div>
+<div style="height: 1px; background: #DDD8CC"></div>
+<div style="display: flex; justify-content: space-between; font-size: 15px"><span style="color: #5E5B53">Real value (PFE over {{kLabel}})</span><span style="font-family: 'JetBrains Mono', monospace">{{meter.intrinsicLabel}}</span></div>
+<div style="display: flex; justify-content: space-between; font-size: 15px"><span style="color: #5E5B53">Time value, drains to $0</span><span style="font-family: 'JetBrains Mono', monospace; color: #1D4ED8">{{meter.timeLabel}}</span></div>
+</div>
+</section>
+
+<section style="background: #FBFAF6; border: 1px solid #DDD8CC; border-radius: 14px; padding: 24px; display: flex; flex-direction: column; gap: 12px">
+<div style="display: flex; justify-content: space-between; align-items: baseline">
+<h2 style="margin: 0; font-family: Fraunces, Georgia, serif; font-size: 24px; font-weight: 600">Where PFE is vs. your levels</h2>
+<span style="font-size: 13px; color: #5E5B53">Live</span>
+</div>
+<div style="position: relative; height: 128px">
+<div style="position: absolute; left: {{map.nowLeft}}; top: 0; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; font-size: 13px; font-weight: 600; white-space: nowrap">
+<span>Now</span><span style="font-family: 'JetBrains Mono', monospace">{{liveStockLabel}}</span>
+</div>
+<div style="position: absolute; left: 0; right: 0; top: 44px; height: 34px; display: flex; border-radius: 8px; overflow: hidden; font-size: 13px; font-weight: 500">
+<div style="width: {{map.lossW}}; background: #F1DCC6; color: #7C2D12; display: flex; align-items: center; justify-content: center">Loss zone</div>
+<div style="width: {{map.profitW}}; background: #D6E2FA; color: #1E3A8A; display: flex; align-items: center; justify-content: center">Profit zone · keep shares + {{premiumLabel}}</div>
+<div style="flex-grow: 1; background: #E4E0D6; color: #3A3833; display: flex; align-items: center; justify-content: center">Gains capped · shares called at {{kLabel}}</div>
+</div>
+<div style="position: absolute; left: {{map.nowLeft}}; top: 38px; width: 14px; height: 14px; margin-left: -7px; border-radius: 50%; background: #1A1A17; border: 2px solid #FBFAF6"></div>
+<sc-for list="{{map.marks}}" as="m" hint-placeholder-count="3">
+<div style="position: absolute; left: {{m.left}}; top: 44px; width: 2px; height: 44px; margin-left: -1px; background: {{m.color}}"></div>
+<div style="position: absolute; left: {{m.left}}; top: 92px; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; font-size: 12px; color: {{m.color}}; white-space: nowrap">
+<span>{{m.label}}</span><span style="font-family: 'JetBrains Mono', monospace">{{m.value}}</span>
+</div>
+</sc-for>
+</div>
+<p style="margin: 0; font-size: 15px; line-height: 1.5; color: #3A3833">Between {{beLabel}} and {{kLabel}} you make money and keep your shares. Above {{kLabel}} your profit tops out at {{maxProfitLabel}} and the shares can be sold at {{kLabel}}.</p>
+</section>
+
+<section style="display: flex; flex-direction: column; gap: 16px; padding-top: 8px; border-top: 1px solid #DDD8CC">
+<div style="display: flex; justify-content: space-between; align-items: flex-end; gap: 24px">
+<div style="display: flex; flex-direction: column; gap: 6px">
+<h2 style="margin: 0; font-family: Fraunces, Georgia, serif; font-size: 30px; font-weight: 600">What if: time vs. getting out early</h2>
+<p style="margin: 0; font-size: 15px; color: #3A3833">Drag PFE's price and the calendar. Everything below updates; the live numbers above don't.</p>
+</div>
+<button type="button" onClick="{{reset}}" disabled="{{isLive}}" style="min-height: 44px; padding: 0 20px; border-radius: 10px; border: 1px solid #1A1A17; background: #FBFAF6; color: #1A1A17; font: 600 15px 'Instrument Sans', system-ui, sans-serif; cursor: pointer">Back to live</button>
+</div>
+<div style="background: #FBFAF6; border: 1px solid #DDD8CC; border-radius: 14px; padding: 20px 24px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 40px">
+<div style="display: flex; flex-direction: column; gap: 8px">
+<div style="display: flex; justify-content: space-between; align-items: baseline">
+<label for="pfe-price" style="font-size: 15px; font-weight: 600">PFE price</label>
+<span style="font-family: 'JetBrains Mono', monospace; font-size: 15px">{{w.priceLabel}}</span>
+</div>
+<input id="pfe-price" type="range" min="25.5" max="30.5" step="0.05" value="{{w.price}}" onChange="{{onPrice}}">
+<div style="display: flex; justify-content: space-between; font-size: 12px; color: #5E5B53"><span>$25.50</span><span>Live {{liveStockLabel}}</span><span>$30.50</span></div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 8px">
+<div style="display: flex; justify-content: space-between; align-items: baseline">
+<label for="days-left" style="font-size: 15px; font-weight: 600">Calendar</label>
+<span style="font-family: 'JetBrains Mono', monospace; font-size: 15px">{{w.daysLabel}}</span>
+</div>
+<input id="days-left" type="range" min="0" max="{{dte}}" step="1" value="{{w.elapsed}}" onChange="{{onDays}}">
+<div style="display: flex; justify-content: space-between; font-size: 12px; color: #5E5B53"><span>Today · {{dte}} days left</span><span>Expiry {{expShort}}</span></div>
+</div>
+</div>
+</section>
+
+<section style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px">
+<div style="background: #FBFAF6; border: 1px solid #DDD8CC; border-radius: 14px; padding: 24px; display: flex; flex-direction: column; gap: 12px">
+<h3 style="margin: 0; font-family: Fraunces, Georgia, serif; font-size: 21px; font-weight: 600">Time: what the call costs to buy back</h3>
+<p style="margin: 0; font-size: 14px; color: #3A3833; line-height: 1.45">At PFE {{w.priceLabel}}, the call's value drains toward $0 by {{expShort}}. Your GTC order fills when it touches {{meter.gtcLabel}}.</p>
+<div style="position: relative; width: 612px; height: 240px">
+<svg width="612" height="240" style="position: absolute; left: 0; top: 0; overflow: visible">
+<path d="{{t.grid}}" style="fill: none; stroke: #E6E1D6; stroke-width: 1"></path>
+<path d="{{t.area}}" style="fill: #D6E2FA; stroke: none; opacity: 0.7"></path>
+<path d="{{t.sold}}" style="fill: none; stroke: #5E5B53; stroke-width: 1.5; stroke-dasharray: 5 5"></path>
+<path d="{{t.gtc}}" style="fill: none; stroke: #B45309; stroke-width: 1.5; stroke-dasharray: 5 5"></path>
+<path d="{{t.curve}}" style="fill: none; stroke: #1D4ED8; stroke-width: 2.5"></path>
+<path d="{{t.fillLine}}" style="fill: none; stroke: #B45309; stroke-width: 1.5; opacity: {{t.fillOpacity}}"></path>
+<path d="{{t.nowLine}}" style="fill: none; stroke: #1A1A17; stroke-width: 1"></path>
+<circle cx="{{t.nowX}}" cy="{{t.nowY}}" r="6" style="fill: #1D4ED8; stroke: #FBFAF6; stroke-width: 2"></circle>
+</svg>
+<sc-for list="{{t.yTicks}}" as="tk" hint-placeholder-count="4">
+<div style="position: absolute; left: 0; top: {{tk.top}}; width: 44px; text-align: right; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #5E5B53">{{tk.text}}</div>
+</sc-for>
+<sc-for list="{{t.xTicks}}" as="tk" hint-placeholder-count="6">
+<div style="position: absolute; left: {{tk.left}}; top: 216px; width: 60px; margin-left: -30px; text-align: center; font-size: 11px; color: #5E5B53">{{tk.text}}</div>
+</sc-for>
+<div style="position: absolute; right: 16px; top: {{t.soldTop}}; font-size: 12px; color: #3A3833">Sold at {{meter.soldLabel}}</div>
+<div style="position: absolute; right: 16px; top: {{t.gtcTop}}; font-size: 12px; color: #7C2D12">GTC buy-back {{meter.gtcLabel}}</div>
+<div style="position: absolute; left: {{t.nowLabelLeft}}; top: {{t.nowLabelTop}}; padding: 2px 8px; background: #1A1A17; color: #FBFAF6; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 12px; white-space: nowrap">{{t.nowText}}</div>
+</div>
+<p style="margin: 0; font-size: 14px; line-height: 1.5; color: #3A3833; background: #F3F0E8; border-radius: 10px; padding: 12px 14px">{{fillMsg}}</p>
+</div>
+
+<div style="background: #FBFAF6; border: 1px solid #DDD8CC; border-radius: 14px; padding: 24px; display: flex; flex-direction: column; gap: 12px">
+<h3 style="margin: 0; font-family: Fraunces, Georgia, serif; font-size: 21px; font-weight: 600">Price: what you make at each PFE price</h3>
+<div style="display: flex; gap: 20px; font-size: 13px; color: #3A3833">
+<span style="display: flex; align-items: center; gap: 8px"><span style="width: 22px; height: 3px; background: #1A1A17"></span>Hold to {{expShort}}</span>
+<span style="display: flex; align-items: center; gap: 8px"><span style="width: 22px; height: 0; border-top: 3px dashed #1D4ED8"></span>{{pc.exitLegend}}</span>
+</div>
+<div style="position: relative; width: 612px; height: 240px">
+<svg width="612" height="240" style="position: absolute; left: 0; top: 0; overflow: visible">
+<path d="{{pc.grid}}" style="fill: none; stroke: #E6E1D6; stroke-width: 1"></path>
+<path d="{{pc.levels}}" style="fill: none; stroke: #C9C3B5; stroke-width: 1; stroke-dasharray: 3 4"></path>
+<path d="{{pc.zero}}" style="fill: none; stroke: #8A867C; stroke-width: 1.25"></path>
+<path d="{{pc.hold}}" style="fill: none; stroke: #1A1A17; stroke-width: 2.5"></path>
+<path d="{{pc.exit}}" style="fill: none; stroke: #1D4ED8; stroke-width: 2.5; stroke-dasharray: 7 5"></path>
+<path d="{{pc.nowLine}}" style="fill: none; stroke: #1A1A17; stroke-width: 1"></path>
+<circle cx="{{pc.nowX}}" cy="{{pc.holdY}}" r="5" style="fill: #1A1A17; stroke: #FBFAF6; stroke-width: 2"></circle>
+<circle cx="{{pc.nowX}}" cy="{{pc.exitY}}" r="6" style="fill: #1D4ED8; stroke: #FBFAF6; stroke-width: 2"></circle>
+</svg>
+<sc-for list="{{pc.yTicks}}" as="tk" hint-placeholder-count="5">
+<div style="position: absolute; left: 0; top: {{tk.top}}; width: 44px; text-align: right; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #5E5B53">{{tk.text}}</div>
+</sc-for>
+<sc-for list="{{pc.xTicks}}" as="tk" hint-placeholder-count="5">
+<div style="position: absolute; left: {{tk.left}}; top: 216px; width: 50px; margin-left: -25px; text-align: center; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #5E5B53">{{tk.text}}</div>
+</sc-for>
+<div style="position: absolute; left: {{pc.beLeft}}; top: 0; transform: translateX(-100%); padding-right: 6px; font-size: 11px; color: #7C2D12; white-space: nowrap">Breakeven {{beLabel}}</div>
+<div style="position: absolute; left: {{pc.kLeft}}; top: 0; padding-left: 6px; font-size: 11px; color: #1E3A8A; white-space: nowrap">Strike {{kLabel}}</div>
+</div>
+<p style="margin: 0; font-size: 14px; line-height: 1.5; color: #3A3833; background: #F3F0E8; border-radius: 10px; padding: 12px 14px">The gap between the two lines is time exposure: value you'd leave behind by closing early. It shrinks every day and is widest right around the strike.</p>
+</div>
+</section>
+
+<section style="display: flex; flex-direction: column; gap: 14px">
+<h2 style="margin: 0; font-family: Fraunces, Georgia, serif; font-size: 24px; font-weight: 600">Ways out of this position</h2>
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px">
+
+<div style="background: #FBFAF6; border: 1px solid #DDD8CC; border-radius: 14px; padding: 20px; display: flex; flex-direction: column; gap: 10px">
+<span style="align-self: flex-start; font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 999px; background: #E6E1D6; color: #3A3833">Anytime</span>
+<h3 style="margin: 0; font-size: 18px; font-weight: 600">Close both legs</h3>
+<div style="font-size: 13px; color: #5E5B53">{{w.closeWhen}}</div>
+<div style="font-family: Fraunces, Georgia, serif; font-size: 34px; font-weight: 600; color: {{w.closeTone}}; font-variant-numeric: tabular-nums">{{w.closeVal}}</div>
+<div style="font-size: 14px; color: #3A3833; line-height: 1.45">{{w.closeDetail}}</div>
+<div style="margin-top: auto; padding-top: 10px; border-top: 1px solid #E6E1D6; font-size: 13px; color: #5E5B53; line-height: 1.45">Done today. You give up whatever time value is left.</div>
+</div>
+
+<div style="background: #FBFAF6; border: 2px solid #B45309; border-radius: 14px; padding: 19px; display: flex; flex-direction: column; gap: 10px">
+<span style="align-self: flex-start; font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 999px; background: #F6E3CF; color: #7C2D12">Working · GTC</span>
+<h3 style="margin: 0; font-size: 18px; font-weight: 600">Buy back at {{meter.gtcLabel}}</h3>
+<div style="font-size: 13px; color: #5E5B53">{{w.gtcWhen}}</div>
+<div style="font-family: Fraunces, Georgia, serif; font-size: 34px; font-weight: 600; color: #1D4ED8; font-variant-numeric: tabular-nums">{{w.gtcVal}}</div>
+<div style="font-size: 14px; color: #3A3833; line-height: 1.45">Kept on the call. Shares are {{w.stockPLLabel}} at this price and stay yours to sell another call.</div>
+<div style="margin-top: auto; padding-top: 10px; border-top: 1px solid #E6E1D6; font-size: 13px; color: #5E5B53; line-height: 1.45">Leaves {{w.gtcCostLabel}} on the table to free up your shares early.</div>
+</div>
+
+<div style="background: #FBFAF6; border: 1px solid #DDD8CC; border-radius: 14px; padding: 20px; display: flex; flex-direction: column; gap: 10px">
+<span style="align-self: flex-start; font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 999px; background: #D6E2FA; color: #1E3A8A">Do nothing</span>
+<h3 style="margin: 0; font-size: 18px; font-weight: 600">Hold to {{expShort}}</h3>
+<div style="font-size: 13px; color: #5E5B53">If PFE is {{w.priceLabel}} at expiry</div>
+<div style="font-family: Fraunces, Georgia, serif; font-size: 34px; font-weight: 600; color: {{w.holdTone}}; font-variant-numeric: tabular-nums">{{w.holdVal}}</div>
+<div style="font-size: 14px; color: #3A3833; line-height: 1.45">{{w.holdDetail}}</div>
+<div style="margin-top: auto; padding-top: 10px; border-top: 1px solid #E6E1D6; font-size: 13px; color: #5E5B53; line-height: 1.45">Most profit, and the most days exposed to a drop.</div>
+</div>
+
+<div style="background: #FBFAF6; border: 1px solid #DDD8CC; border-radius: 14px; padding: 20px; display: flex; flex-direction: column; gap: 10px">
+<span style="align-self: flex-start; font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 999px; background: #E6E1D6; color: #3A3833">If PFE runs past {{kLabel}}</span>
+<h3 style="margin: 0; font-size: 18px; font-weight: 600">Roll up and out</h3>
+<div style="font-size: 13px; color: #5E5B53">Buy back this call and sell a later, higher strike in one order</div>
+<div style="font-family: Fraunces, Georgia, serif; font-size: 34px; font-weight: 600; color: #5E5B53">[NET CREDIT]</div>
+<div style="font-size: 14px; color: #3A3833; line-height: 1.45">Keeps your shares and resets the clock. Needs live chain prices for the new strike.</div>
+<div style="margin-top: auto; padding-top: 10px; border-top: 1px solid #E6E1D6; font-size: 13px; color: #5E5B53; line-height: 1.45">Only worth it for a net credit.</div>
+</div>
+
+</div>
+</section>
+
+<section style="background: #FBFAF6; border: 1px solid #DDD8CC; border-radius: 14px; padding: 24px; display: flex; flex-direction: column; gap: 12px">
+<h2 style="margin: 0; font-family: Fraunces, Georgia, serif; font-size: 24px; font-weight: 600">Orders</h2>
+<div style="display: grid; grid-template-columns: 1.1fr 0.7fr 2fr 0.9fr 0.8fr 0.9fr; gap: 0; font-size: 14px">
+<div style="padding: 10px 0; border-bottom: 1px solid #DDD8CC; color: #5E5B53; font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em">Side</div>
+<div style="padding: 10px 0; border-bottom: 1px solid #DDD8CC; color: #5E5B53; font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em">Qty</div>
+<div style="padding: 10px 0; border-bottom: 1px solid #DDD8CC; color: #5E5B53; font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em">Instrument</div>
+<div style="padding: 10px 0; border-bottom: 1px solid #DDD8CC; color: #5E5B53; font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em">Price</div>
+<div style="padding: 10px 0; border-bottom: 1px solid #DDD8CC; color: #5E5B53; font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em">TIF</div>
+<div style="padding: 10px 0; border-bottom: 1px solid #DDD8CC; color: #5E5B53; font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em">Status</div>
+
+<div style="padding: 12px 0; border-bottom: 1px solid #E6E1D6; font-weight: 600">Buy to close</div>
+<div style="padding: 12px 0; border-bottom: 1px solid #E6E1D6; font-family: 'JetBrains Mono', monospace">+1</div>
+<div style="padding: 12px 0; border-bottom: 1px solid #E6E1D6; font-family: 'JetBrains Mono', monospace">PFE {{expShort}} {{kLabel}} CALL</div>
+<div style="padding: 12px 0; border-bottom: 1px solid #E6E1D6; font-family: 'JetBrains Mono', monospace">{{meter.gtcLabel}} LMT</div>
+<div style="padding: 12px 0; border-bottom: 1px solid #E6E1D6">GTC</div>
+<div style="padding: 12px 0; border-bottom: 1px solid #E6E1D6"><span style="font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 999px; background: #F6E3CF; color: #7C2D12">Working</span></div>
+
+<div style="padding: 12px 0; border-bottom: 1px solid #E6E1D6; font-weight: 600">Sell to open</div>
+<div style="padding: 12px 0; border-bottom: 1px solid #E6E1D6; font-family: 'JetBrains Mono', monospace">−1</div>
+<div style="padding: 12px 0; border-bottom: 1px solid #E6E1D6; font-family: 'JetBrains Mono', monospace">PFE {{expShort}} {{kLabel}} CALL</div>
+<div style="padding: 12px 0; border-bottom: 1px solid #E6E1D6; font-family: 'JetBrains Mono', monospace">{{meter.soldLabel}}</div>
+<div style="padding: 12px 0; border-bottom: 1px solid #E6E1D6">Day</div>
+<div style="padding: 12px 0; border-bottom: 1px solid #E6E1D6"><span style="font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 999px; background: #D6E2FA; color: #1E3A8A">Filled</span></div>
+
+<div style="padding: 12px 0; font-weight: 600">Buy</div>
+<div style="padding: 12px 0; font-family: 'JetBrains Mono', monospace">+100</div>
+<div style="padding: 12px 0; font-family: 'JetBrains Mono', monospace">PFE shares</div>
+<div style="padding: 12px 0; font-family: 'JetBrains Mono', monospace">{{fillStockLabel}}</div>
+<div style="padding: 12px 0">Day</div>
+<div style="padding: 12px 0"><span style="font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 999px; background: #D6E2FA; color: #1E3A8A">Filled</span></div>
+</div>
+</section>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"liveStock":{"editor":"float","default":27.775,"step":0.005,"section":"Live feed"},"liveCall":{"editor":"float","default":0.57,"step":0.01,"section":"Live feed"},"daysToExpiry":{"editor":"int","default":25,"min":1,"max":60,"section":"Live feed"},"impliedVol":{"editor":"float","default":22,"step":0.5,"unit":"%","section":"Live feed"},"fillStock":{"editor":"float","default":27.8,"step":0.01,"section":"Position"},"fillCall":{"editor":"float","default":0.55,"step":0.01,"section":"Position"},"strike":{"editor":"float","default":28,"step":0.5,"section":"Position"},"gtcPrice":{"editor":"float","default":0.1,"step":0.01,"section":"Position"},"expiry":{"editor":"text","default":"2026-10-16","section":"Position"},"$preview":{"width":1440,"height":2000}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { price: null, daysLeft: null };
+  }
+  ncdf(x) {
+    const t = 1 / (1 + 0.2316419 * Math.abs(x));
+    const d = 0.3989423 * Math.exp(-x * x / 2);
+    const p = d * t * (0.3193815 + t * (-0.3565638 + t * (1.781478 + t * (-1.821256 + t * 1.330274))));
+    return x > 0 ? 1 - p : p;
+  }
+  callVal(S, K, days, iv) {
+    if (days <= 0.001) return Math.max(0, S - K);
+    const T = days / 365, r = 0.04, v = iv * Math.sqrt(T);
+    const d1 = (Math.log(S / K) + (r + iv * iv / 2) * T) / v;
+    return S * this.ncdf(d1) - K * Math.exp(-r * T) * this.ncdf(d1 - v);
+  }
+  usd(n, signed) {
+    const a = Math.abs(n);
+    const s = '$' + a.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    if (!signed) return (n < -0.005 ? '−' : '') + s;
+    if (a < 0.005) return '$0.00';
+    return (n > 0 ? '+' : '−') + s;
+  }
+  tone(n) { return n > 0.005 ? '#1D4ED8' : (n < -0.005 ? '#B45309' : '#5E5B53'); }
+  expDate() {
+    const parts = String(this.props.expiry ?? '2026-10-16').split('-').map(Number);
+    return new Date(parts[0] || 2026, (parts[1] || 1) - 1, parts[2] || 1);
+  }
+  dateFor(daysLeft) {
+    const d = this.expDate();
+    d.setDate(d.getDate() - Math.round(daysLeft));
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  }
+  pick(range, maxTicks, steps) {
+    for (const s of steps) { if (range / s <= maxTicks) return s; }
+    return steps[steps.length - 1];
+  }
+  renderVals() {
+    const P = this.props, q = 100;
+    const fillStock = P.fillStock ?? 27.8, fillCall = P.fillCall ?? 0.55, K = P.strike ?? 28;
+    const dte = Math.max(1, Math.round(P.daysToExpiry ?? 25));
+    const liveStock = P.liveStock ?? 27.775, liveCall = P.liveCall ?? 0.57;
+    const iv = (P.impliedVol ?? 22) / 100, gtc = P.gtcPrice ?? 0.1;
+    const usd = (n, s) => this.usd(n, s), tone = (n) => this.tone(n);
+    const kLabel = K % 1 === 0 ? '$' + K : usd(K);
+    const expShort = this.dateFor(0);
+    const expLong = this.expDate().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+
+    const premium = fillCall * q, sharesCost = fillStock * q, basis = sharesCost - premium;
+    const be = fillStock - fillCall, maxProfit = (K - fillStock) * q + premium;
+    const liveStockPL = (liveStock - fillStock) * q, liveCallPL = (fillCall - liveCall) * q;
+    const liveTotal = liveStockPL + liveCallPL;
+
+    let status;
+    if (liveStock >= K) status = { text: 'Above strike · shares may be called', bg: '#F6E3CF', fg: '#7C2D12' };
+    else if (liveStock >= be) status = { text: 'In the profit zone', bg: '#D6E2FA', fg: '#1E3A8A' };
+    else status = { text: 'Below breakeven', bg: '#F6E3CF', fg: '#7C2D12' };
+
+    let liveNote = 'Small moves like this are normal day to day.';
+    if (liveTotal >= 10) liveNote = 'Time decay and price are working for you.';
+    else if (liveTotal <= -10) liveNote = 'The premium you collected is cushioning the dip.';
+
+    const kept = premium - liveCall * q;
+    const intrinsic = Math.max(0, liveStock - K);
+    const meter = {
+      keptLabel: usd(Math.max(0, kept)),
+      keptPct: (Math.max(0, Math.min(1, kept / premium)) * 100).toFixed(1) + '%',
+      gtcLeft: ((fillCall - gtc) / fillCall * 100).toFixed(1) + '%',
+      gtcKeep: usd((fillCall - gtc) * q),
+      behind: kept < -0.005,
+      behindBy: usd(-kept),
+      soldLabel: usd(fillCall), nowLabel: usd(liveCall), gtcLabel: usd(gtc),
+      intrinsicLabel: usd(intrinsic), timeLabel: usd(Math.max(0, liveCall - intrinsic))
+    };
+
+    const mLo = Math.min(26.5, liveStock - 0.4), mHi = Math.max(29, liveStock + 0.4);
+    const mpN = (p) => Math.max(0, Math.min(1, (p - mLo) / (mHi - mLo))) * 100;
+    const map = {
+      nowLeft: mpN(liveStock).toFixed(2) + '%',
+      lossW: mpN(be).toFixed(2) + '%',
+      profitW: (mpN(K) - mpN(be)).toFixed(2) + '%',
+      marks: [
+        { left: mpN(be).toFixed(2) + '%', label: 'Breakeven', value: usd(be), color: '#7C2D12' },
+        { left: mpN(fillStock).toFixed(2) + '%', label: 'You bought', value: usd(fillStock), color: '#3A3833' },
+        { left: mpN(K).toFixed(2) + '%', label: 'Strike', value: usd(K), color: '#1E3A8A' }
+      ]
+    };
+
+    const isLive = this.state.price === null && this.state.daysLeft === null;
+    const S = this.state.price ?? liveStock;
+    const dl = this.state.daysLeft ?? dte;
+    const cS = isLive ? liveCall : this.callVal(S, K, dl, iv);
+    const stockPL = (S - fillStock) * q, callPL = (fillCall - cS) * q, exitNow = stockPL + callPL;
+    const holdExp = (Math.min(S, K) - fillStock) * q + premium;
+    const gtcKeep = (fillCall - gtc) * q;
+
+    let fillD = null;
+    if (cS <= gtc) fillD = dl;
+    else { for (let d = dl; d >= 0; d -= 0.25) { if (this.callVal(S, K, Math.max(0, d), iv) <= gtc) { fillD = Math.max(0, d); break; } } }
+    let fillMsg, gtcWhen;
+    if (fillD !== null && fillD >= dl - 0.01) {
+      fillMsg = 'At this price the call is already at or under ' + usd(gtc) + ', so your GTC order would fill right away and lock in ' + usd(gtcKeep) + '.';
+      gtcWhen = 'Fills right away at this price';
+    } else if (fillD !== null) {
+      const when = fillD < 1 ? 'on expiration day' : 'with about ' + Math.round(fillD) + ' days left (around ' + this.dateFor(fillD) + ')';
+      fillMsg = 'At PFE ' + usd(S) + ', the call drifts down to ' + usd(gtc) + ' ' + when + '. ' + (fillD <= 5 ? 'Time alone works slowly until the final week. A dip in PFE gets you there sooner.' : 'That frees your shares well before expiry to sell a new call.');
+      gtcWhen = fillD < 1 ? 'Fills only on expiration day' : 'Likely fills ~' + Math.round(fillD) + ' days before expiry';
+    } else {
+      fillMsg = 'At PFE ' + usd(S) + ' the call stays above ' + usd(gtc) + ' all the way to ' + expShort + ' because the stock is over the ' + kLabel + ' strike. The GTC order will not fill; choose between letting the shares go or rolling.';
+      gtcWhen = 'Won\u2019t fill at this price';
+    }
+
+    const cw = 612, ch = 240, pl = 52, pr = 16, pt = 14, pb = 30, iw = cw - pl - pr, ih = ch - pt - pb;
+    const c0 = this.callVal(S, K, dte, iv);
+    let tMax = Math.max(fillCall * 1.35, c0 * 1.15, cS * 1.15, 0.2);
+    const tStep = this.pick(tMax, 5, [0.05, 0.1, 0.25, 0.5, 1, 2]);
+    tMax = Math.ceil(tMax / tStep) * tStep;
+    const tx = (d) => pl + (dte - d) / dte * iw;
+    const ty = (v) => pt + (1 - Math.min(v, tMax) / tMax) * ih;
+    const pts = [];
+    for (let d = dte; d > 0; d -= 0.25) pts.push(tx(d).toFixed(1) + ' ' + ty(this.callVal(S, K, d, iv)).toFixed(1));
+    pts.push(tx(0).toFixed(1) + ' ' + ty(this.callVal(S, K, 0, iv)).toFixed(1));
+    const curve = 'M' + pts.join(' L');
+    const hline = (y) => 'M' + pl + ' ' + y.toFixed(1) + ' L' + (cw - pr) + ' ' + y.toFixed(1);
+    const yT = [], gridParts = [];
+    for (let v = 0; v <= tMax + 1e-9; v += tStep) { gridParts.push(hline(ty(v))); yT.push({ top: (ty(v) - 7).toFixed(1) + 'px', text: usd(v) }); }
+    const xT = [];
+    for (let d = dte; d >= 0; d -= 5) xT.push({ left: tx(d).toFixed(1) + 'px', text: this.dateFor(d) });
+    if (dte % 5 !== 0) xT.push({ left: tx(0).toFixed(1) + 'px', text: this.dateFor(0) });
+    const nowX = tx(dl), nowY = ty(cS);
+    const fX = fillD !== null ? tx(fillD) : pl;
+    const t = {
+      grid: gridParts.join(' '), curve,
+      area: curve + ' L' + tx(0).toFixed(1) + ' ' + ty(0).toFixed(1) + ' L' + tx(dte).toFixed(1) + ' ' + ty(0).toFixed(1) + ' Z',
+      sold: hline(ty(fillCall)), gtc: hline(ty(gtc)),
+      soldTop: (ty(fillCall) - 19).toFixed(1) + 'px', gtcTop: (ty(gtc) - 19).toFixed(1) + 'px',
+      fillLine: 'M' + fX.toFixed(1) + ' ' + pt + ' L' + fX.toFixed(1) + ' ' + (ch - pb),
+      fillOpacity: fillD !== null ? 0.8 : 0,
+      nowLine: 'M' + nowX.toFixed(1) + ' ' + pt + ' L' + nowX.toFixed(1) + ' ' + (ch - pb),
+      nowX: +nowX.toFixed(1), nowY: +nowY.toFixed(1),
+      nowText: (isLive ? 'Now ' : '') + usd(cS),
+      nowLabelLeft: (nowX > cw - 120 ? nowX - 96 : nowX + 10).toFixed(1) + 'px',
+      nowLabelTop: (nowY - 30).toFixed(1) + 'px',
+      yTicks: yT, xTicks: xT
+    };
+
+    const pLo = 25.5, pHi = 30.5;
+    const px = (p) => pl + (p - pLo) / (pHi - pLo) * iw;
+    const holdF = (p) => (Math.min(p, K) - fillStock) * q + premium;
+    const exitF = (p) => (p - fillStock) * q + (fillCall - this.callVal(p, K, dl, iv)) * q;
+    const hv = [], ev = [];
+    for (let p = pLo; p <= pHi + 1e-9; p += 0.05) { hv.push([p, holdF(p)]); ev.push([p, exitF(p)]); }
+    const allV = hv.concat(ev).map((a) => a[1]).concat([0, exitNow]);
+    let yLo = Math.min.apply(null, allV), yHi = Math.max.apply(null, allV);
+    const pStep = this.pick(yHi - yLo, 6, [25, 50, 100, 200]);
+    yLo = Math.floor((yLo - 5) / pStep) * pStep; yHi = Math.ceil((yHi + 5) / pStep) * pStep;
+    const py = (v) => pt + (1 - (v - yLo) / (yHi - yLo)) * ih;
+    const toPath = (arr) => 'M' + arr.map((a) => px(a[0]).toFixed(1) + ' ' + py(a[1]).toFixed(1)).join(' L');
+    const pyT = [], pGrid = [];
+    for (let v = yLo; v <= yHi + 1e-9; v += pStep) { pGrid.push(hline(py(v))); pyT.push({ top: (py(v) - 7).toFixed(1) + 'px', text: v === 0 ? '$0' : (v > 0 ? '+$' : '−$') + Math.abs(v) }); }
+    const pxT = [];
+    for (let p = 26; p <= 30; p += 1) pxT.push({ left: px(p).toFixed(1) + 'px', text: '$' + p });
+    const vline = (x) => 'M' + x.toFixed(1) + ' ' + pt + ' L' + x.toFixed(1) + ' ' + (ch - pb);
+    const Sc = Math.max(pLo, Math.min(pHi, S));
+    const pc = {
+      grid: pGrid.join(' '), zero: hline(py(0)),
+      levels: vline(px(be)) + ' ' + vline(px(K)),
+      hold: toPath(hv), exit: toPath(ev),
+      nowLine: vline(px(Sc)), nowX: +px(Sc).toFixed(1),
+      holdY: +py(holdF(Sc)).toFixed(1), exitY: +py(exitNow).toFixed(1),
+      beLeft: px(be).toFixed(1) + 'px', kLeft: px(K).toFixed(1) + 'px',
+      exitLegend: dl === 0 ? 'Close at expiry' : 'Close both with ' + dl + ' days left',
+      yTicks: pyT, xTicks: pxT
+    };
+
+    const w = {
+      price: S, elapsed: dte - dl,
+      priceLabel: usd(S),
+      daysLabel: dl + (dl === 1 ? ' day' : ' days') + ' left · ' + this.dateFor(dl),
+      closeWhen: 'At PFE ' + usd(S) + ' with ' + dl + (dl === 1 ? ' day' : ' days') + ' left',
+      closeVal: usd(exitNow, true), closeTone: tone(exitNow),
+      closeDetail: 'Shares ' + usd(stockPL, true) + ' · Call ' + usd(callPL, true),
+      gtcWhen, gtcVal: usd(gtcKeep, true), gtcCostLabel: usd(gtc * q),
+      stockPLLabel: usd(stockPL, true),
+      holdVal: usd(holdExp, true), holdTone: tone(holdExp),
+      holdDetail: S >= K
+        ? 'Shares are called away at ' + kLabel + '. You receive ' + usd(K * q) + ' plus the ' + usd(premium) + ' you already have.'
+        : 'The call expires worthless. You keep the shares and all ' + usd(premium) + ', then sell a new call.'
+    };
+
+    return {
+      dte, kLabel, expShort, expLong, status, isLive,
+      liveStockLabel: usd(liveStock), fillStockLabel: usd(fillStock),
+      basisLabel: usd(basis), sharesCostLabel: usd(sharesCost), premiumLabel: usd(premium),
+      liveTotalLabel: usd(liveTotal, true), liveTotalTone: tone(liveTotal),
+      liveStockPLLabel: usd(liveStockPL, true), liveCallPLLabel: usd(liveCallPL, true), liveNote,
+      maxProfitLabel: usd(maxProfit, true), beLabel: usd(be),
+      meter, map, t, pc, w, fillMsg,
+      onPrice: (e) => this.setState({ price: parseFloat(e.target.value) }),
+      onDays: (e) => this.setState({ daysLeft: dte - parseInt(e.target.value, 10) }),
+      reset: () => this.setState({ price: null, daysLeft: null })
+    };
+  }
+}
+</script>
+</body>
+</html>

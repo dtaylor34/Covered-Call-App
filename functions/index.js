@@ -264,6 +264,7 @@ const schwab = require("./schwab");
 exports.schwabInitiateOAuth  = schwab.schwabInitiateOAuth;
 exports.schwabExchangeToken  = schwab.schwabExchangeToken;
 exports.schwabRefreshToken   = schwab.schwabRefreshToken;
+exports.schwabDisconnect     = schwab.schwabDisconnect;
 exports.schwabGetPositions   = schwab.schwabGetPositions;
 exports.schwabGetBuyingPower = schwab.schwabGetBuyingPower;
 exports.schwabGetQuotes      = schwab.schwabGetQuotes;

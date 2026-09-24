@@ -21,11 +21,21 @@ function call(name) {
 // ── OAuth ─────────────────────────────────────────────────────────────────────
 
 /**
- * Generates the Schwab OAuth URL and saves credentials to Firestore.
+ * Sends the user's credentials to the Cloud Function (which encrypts and stores
+ * them server-side — they never touch Firestore from the browser) and returns
+ * the Schwab OAuth URL.
  * Input:  { appKey, appSecret, redirectUri }
  * Output: { authUrl }
  */
 export const schwabInitiateOAuth  = (data) => call("schwabInitiateOAuth")(data);
+
+/**
+ * Disconnects Schwab: server-side wipe of the encrypted credentials, tokens,
+ * status, and linked accounts for the current user.
+ * Input:  {}
+ * Output: { success }
+ */
+export const schwabDisconnect     = (data) => call("schwabDisconnect")(data);
 
 /**
  * Exchanges an auth code for access + refresh tokens.

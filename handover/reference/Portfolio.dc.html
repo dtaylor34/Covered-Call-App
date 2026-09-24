@@ -1,0 +1,1194 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Covered calls portfolio</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&amp;family=Instrument+Sans:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#F3F0E8}
+a{color:#1D4ED8}a:hover{color:#1E3A8A}
+input[type=range]{width:100%;height:28px;accent-color:#1D4ED8;margin:0}
+button:disabled{opacity:0.45;cursor:default}
+</style>
+</helmet>
+<div style="width: 1440px; height: 2400px; overflow-y: auto; box-sizing: border-box; padding: 40px 48px 64px; background: #F3F0E8; color: #1A1A17; font-family: 'Instrument Sans', system-ui, sans-serif; display: flex; flex-direction: column; gap: 24px">
+
+<header style="display: flex; justify-content: space-between; align-items: flex-end; gap: 24px">
+<div style="display: flex; flex-direction: column; gap: 6px">
+<div style="font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: #5E5B53">Schwab · Covered calls</div>
+<h1 style="margin: 0; font-family: Fraunces, Georgia, serif; font-size: 44px; font-weight: 600; line-height: 1.05">Working covered calls</h1>
+<div style="font-size: 16px; color: #3A3833">{{tot.countLabel}} · {{tot.sharesLabel}} shares covered</div>
+</div>
+<div style="display: flex; gap: 12px; align-items: center">
+<span style="display: flex; gap: 8px; font-size: 13px; color: #5E5B53; align-items: center; margin-right: 8px"><span style="width: 8px; height: 8px; border-radius: 50%; background: #1D4ED8"></span>Live</span>
+<button type="button" onClick="{{toggleSheet}}" aria-expanded="{{sheet.openStr}}" style="min-height: 44px; padding: 0 14px; border-radius: 10px; border: 1px solid #C9C3B5; background: #FBFAF6; color: #1A1A17; font: 500 14px 'Instrument Sans', system-ui, sans-serif; cursor: pointer; display: flex; align-items: center; gap: 8px"><span style="width: 10px; height: 10px; border-radius: 50%; background: {{sheet.dot}}"></span>{{sheet.chip}}</button>
+<button type="button" onClick="{{openAdd}}" style="min-height: 44px; padding: 0 18px; border-radius: 10px; border: 1px solid #1A1A17; background: #FBFAF6; color: #1A1A17; font: 600 15px 'Instrument Sans', system-ui, sans-serif; cursor: pointer">Paste from thinkorswim</button>
+<button type="button" onClick="{{openAdd}}" style="min-height: 44px; padding: 0 18px; border-radius: 10px; border: 1px solid #1A1A17; background: #1A1A17; color: #FBFAF6; font: 600 15px 'Instrument Sans', system-ui, sans-serif; cursor: pointer">Add covered call</button>
+</div>
+</header>
+
+<sc-if value="{{sheet.open}}" hint-placeholder-val="{{ false }}">
+<section style="background: #FBFAF6; border: 1px solid #DDD8CC; border-radius: 14px; padding: 20px 24px; display: grid; grid-template-columns: 1fr 1.2fr; gap: 32px">
+<div style="display: flex; flex-direction: column; gap: 8px">
+<h2 style="margin: 0; font-family: Fraunces, Georgia, serif; font-size: 22px; font-weight: 600">Google Sheet</h2>
+<p style="margin: 0; font-size: 14px; line-height: 1.5; color: #3A3833">Import the Covered Calls ledger template into Google Sheets, then share it as an Editor with this address:</p>
+<div style="display: flex; gap: 8px; align-items: center">
+<span style="flex: 1 1 auto; padding: 10px 12px; background: #F3F0E8; border-radius: 8px; font-family: 'JetBrains Mono', monospace; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{sheet.serviceAccount}}</span>
+<button type="button" onClick="{{copySa}}" style="min-height: 44px; padding: 0 14px; border-radius: 10px; border: 1px solid #C9C3B5; background: #FBFAF6; color: #1A1A17; font: 600 14px 'Instrument Sans', system-ui, sans-serif; cursor: pointer">{{sheet.copyLabel}}</button>
+</div>
+<span style="font-size: 12px; color: #5E5B53">Trades, closes, lots and price updates then sync on every save.</span>
+</div>
+<div style="display: flex; flex-direction: column; gap: 8px">
+<label for="sheet-id" style="font-size: 14px; font-weight: 600">Sheet ID or URL</label>
+<div style="display: flex; gap: 10px">
+<input id="sheet-id" type="text" value="{{sheet.input}}" onChange="{{onSheetInput}}" placeholder="https://docs.google.com/spreadsheets/d/…/edit" style="flex: 1 1 auto; min-width: 0; min-height: 44px; padding: 0 12px; border: 1px solid #C9C3B5; border-radius: 8px; background: #FFFFFF; font: 500 14px 'JetBrains Mono', monospace; color: #1A1A17">
+<button type="button" onClick="{{connectSheet}}" style="min-height: 44px; padding: 0 20px; border-radius: 10px; border: 1px solid #1A1A17; background: #1A1A17; color: #FBFAF6; font: 600 15px 'Instrument Sans', system-ui, sans-serif; cursor: pointer">Connect</button>
+</div>
+<span role="status" style="font-size: 13px; line-height: 1.5; color: {{sheet.msgColor}}">{{sheet.msg}}</span>
+<sc-if value="{{sheet.connected}}" hint-placeholder-val="{{ false }}">
+<div style="display: flex; gap: 16px; align-items: center; font-size: 13px; color: #3A3833">
+<span>Sheet ID <span style="font-family: 'JetBrains Mono', monospace">{{sheet.shortId}}</span></span>
+<button type="button" onClick="{{disconnectSheet}}" style="min-height: 44px; padding: 0 8px; border: 0; background: transparent; color: #9A3412; font: 600 13px 'Instrument Sans', system-ui, sans-serif; cursor: pointer; text-decoration: underline">Disconnect</button>
+</div>
+</sc-if>
+</div>
+</section>
+</sc-if>
+
+<section style="display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 14px">
+<div style="background: #FBFAF6; border: 1px solid #DDD8CC; border-radius: 14px; padding: 18px 20px; display: flex; flex-direction: column; gap: 6px">
+<div style="font-size: 14px; color: #5E5B53; font-weight: 500">Total premium collected</div>
+<div style="font-family: Fraunces, Georgia, serif; font-size: 32px; font-weight: 600; color: #1D4ED8; font-variant-numeric: tabular-nums">{{tot.premium}}</div>
+<div style="font-size: 13px; color: #3A3833; line-height: 1.4">Cash already in your account across all calls</div>
+</div>
+<div style="background: #FBFAF6; border: 1px solid #DDD8CC; border-radius: 14px; padding: 18px 20px; display: flex; flex-direction: column; gap: 6px">
+<div style="font-size: 14px; color: #5E5B53; font-weight: 500">Total share cost used</div>
+<div style="font-family: Fraunces, Georgia, serif; font-size: 32px; font-weight: 600; font-variant-numeric: tabular-nums">{{tot.shareCost}}</div>
+<div style="font-size: 13px; color: #3A3833; line-height: 1.4">What you paid for the shares backing the calls. Worth {{tot.marketValue}} now</div>
+</div>
+<div style="background: #FBFAF6; border: 1px solid #DDD8CC; border-radius: 14px; padding: 18px 20px; display: flex; flex-direction: column; gap: 6px">
+<div style="font-size: 14px; color: #5E5B53; font-weight: 500">Buy back all calls now</div>
+<div style="font-family: Fraunces, Georgia, serif; font-size: 32px; font-weight: 600; font-variant-numeric: tabular-nums">{{tot.buyback}}</div>
+<div style="font-size: 13px; color: #3A3833; line-height: 1.4">You'd keep {{tot.kept}} ({{tot.keptPct}}) of your premium</div>
+</div>
+<div style="background: #FBFAF6; border: 1px solid #DDD8CC; border-radius: 14px; padding: 18px 20px; display: flex; flex-direction: column; gap: 6px">
+<div style="font-size: 14px; color: #5E5B53; font-weight: 500">If you closed everything</div>
+<div style="font-family: Fraunces, Georgia, serif; font-size: 32px; font-weight: 600; color: {{tot.closeTone}}; font-variant-numeric: tabular-nums">{{tot.close}}</div>
+<div style="font-size: 13px; color: #3A3833; line-height: 1.4">Shares {{tot.stockPL}} · Calls {{tot.callPL}}. Best case {{tot.maxProfit}}</div>
+</div>
+<div style="background: #1A1A17; color: #FBFAF6; border-radius: 14px; padding: 18px 20px; display: flex; flex-direction: column; gap: 8px">
+<div style="font-size: 14px; color: #D9D5CB; font-weight: 500">Account health</div>
+<div style="font-family: Fraunces, Georgia, serif; font-size: 32px; font-weight: 600; font-variant-numeric: tabular-nums">{{tot.health}}</div>
+<div style="position: relative; height: 10px; background: #3A3833; border-radius: 5px">
+<div style="position: absolute; left: 0; top: 0; bottom: 0; width: {{tot.healthBar}}; background: {{tot.healthColor}}; border-radius: 5px"></div>
+<div style="position: absolute; left: 50%; top: -3px; width: 2px; height: 16px; background: #FBFAF6"></div>
+</div>
+<div style="font-size: 12px; color: #D9D5CB; line-height: 1.4">Shares + premium kept vs. money in. 100% is even</div>
+<div style="display: flex; gap: 12px; font-size: 13px; font-weight: 600">
+<span style="display: flex; align-items: center; gap: 5px"><span style="width: 10px; height: 10px; border-radius: 50%; background: #3DBE6A"></span>{{tot.nGreen}} good</span>
+<span style="display: flex; align-items: center; gap: 5px"><span style="width: 10px; height: 10px; border-radius: 50%; background: #F2C230"></span>{{tot.nYellow}} watch</span>
+<span style="display: flex; align-items: center; gap: 5px"><span style="width: 10px; height: 10px; border-radius: 50%; background: #F0643A"></span>{{tot.nRed}} called</span>
+</div>
+</div>
+</section>
+
+<sc-if value="{{showAdd}}" hint-placeholder-val="{{ false }}">
+<section style="background: #FBFAF6; border: 2px solid #1A1A17; border-radius: 14px; padding: 24px; display: grid; grid-template-columns: 1fr 1.35fr; gap: 32px">
+<div style="display: flex; flex-direction: column; gap: 10px">
+<h2 style="margin: 0; font-family: Fraunces, Georgia, serif; font-size: 24px; font-weight: 600">Add or update a covered call</h2>
+<label for="paste-box" style="font-size: 14px; font-weight: 600">Paste from thinkorswim, or a quick note</label>
+<textarea id="paste-box" rows="7" value="{{form.paste}}" onChange="{{fh.paste}}" placeholder="Paste fill notifications or order rows here" style="padding: 12px; border: 1px solid #C9C3B5; border-radius: 8px; background: #FFFFFF; font: 13px/1.5 'JetBrains Mono', monospace; color: #1A1A17; resize: vertical"></textarea>
+<button type="button" onClick="{{parse}}" style="align-self: flex-start; min-height: 44px; padding: 0 18px; border-radius: 10px; border: 1px solid #1A1A17; background: #FBFAF6; color: #1A1A17; font: 600 15px 'Instrument Sans', system-ui, sans-serif; cursor: pointer">Read paste</button>
+<div style="font-size: 12px; color: #5E5B53; line-height: 1.6">Reads order lines like <span style="font-family: 'JetBrains Mono', monospace; color: #1A1A17">SOLD -1 PFE 100 16 OCT 26 28 CALL @.55</span>, <span style="font-family: 'JetBrains Mono', monospace; color: #1A1A17">BOT +100 PFE @27.80</span> and a GTC order-entry row. Quick note: <span style="font-family: 'JetBrains Mono', monospace; color: #1A1A17">PFE, 1, 27.80, .55, 28, 10/16/26, .10</span> (symbol, contracts, share price, call price, strike, expiry, GTC).</div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 14px">
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px">
+<label style="display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: #5E5B53; font-weight: 500">Symbol<input type="text" value="{{form.sym}}" onChange="{{fh.sym}}" style="min-height: 44px; padding: 0 12px; border: 1px solid #C9C3B5; border-radius: 8px; background: #FFFFFF; font: 500 15px 'JetBrains Mono', monospace; color: #1A1A17"></label>
+<label style="display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: #5E5B53; font-weight: 500">Contracts<input type="text" value="{{form.contracts}}" onChange="{{fh.contracts}}" style="min-height: 44px; padding: 0 12px; border: 1px solid #C9C3B5; border-radius: 8px; background: #FFFFFF; font: 500 15px 'JetBrains Mono', monospace; color: #1A1A17"></label>
+<label style="display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: #5E5B53; font-weight: 500">Share price paid<input type="text" value="{{form.fillStock}}" onChange="{{fh.fillStock}}" style="min-height: 44px; padding: 0 12px; border: 1px solid #C9C3B5; border-radius: 8px; background: #FFFFFF; font: 500 15px 'JetBrains Mono', monospace; color: #1A1A17"></label>
+<label style="display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: #5E5B53; font-weight: 500">Call sold at<input type="text" value="{{form.fillCall}}" onChange="{{fh.fillCall}}" style="min-height: 44px; padding: 0 12px; border: 1px solid #C9C3B5; border-radius: 8px; background: #FFFFFF; font: 500 15px 'JetBrains Mono', monospace; color: #1A1A17"></label>
+<label style="display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: #5E5B53; font-weight: 500">Strike<input type="text" value="{{form.strike}}" onChange="{{fh.strike}}" style="min-height: 44px; padding: 0 12px; border: 1px solid #C9C3B5; border-radius: 8px; background: #FFFFFF; font: 500 15px 'JetBrains Mono', monospace; color: #1A1A17"></label>
+<label style="display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: #5E5B53; font-weight: 500">Expiration<input type="date" value="{{form.expiry}}" onChange="{{fh.expiry}}" style="min-height: 44px; padding: 0 12px; border: 1px solid #C9C3B5; border-radius: 8px; background: #FFFFFF; font: 500 15px 'JetBrains Mono', monospace; color: #1A1A17"></label>
+<label style="display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: #5E5B53; font-weight: 500">GTC buy back<input type="text" value="{{form.gtc}}" onChange="{{fh.gtc}}" style="min-height: 44px; padding: 0 12px; border: 1px solid #C9C3B5; border-radius: 8px; background: #FFFFFF; font: 500 15px 'JetBrains Mono', monospace; color: #1A1A17"></label>
+<label style="display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: #5E5B53; font-weight: 500">IV % (optional)<input type="text" value="{{form.iv}}" onChange="{{fh.iv}}" style="min-height: 44px; padding: 0 12px; border: 1px solid #C9C3B5; border-radius: 8px; background: #FFFFFF; font: 500 15px 'JetBrains Mono', monospace; color: #1A1A17"></label>
+<label style="display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: #5E5B53; font-weight: 500; grid-column: span 2">Current stock price (optional)<input type="text" value="{{form.liveStock}}" onChange="{{fh.liveStock}}" style="min-height: 44px; padding: 0 12px; border: 1px solid #C9C3B5; border-radius: 8px; background: #FFFFFF; font: 500 15px 'JetBrains Mono', monospace; color: #1A1A17"></label>
+<label style="display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: #5E5B53; font-weight: 500; grid-column: span 2">Current call price (optional)<input type="text" value="{{form.liveCall}}" onChange="{{fh.liveCall}}" style="min-height: 44px; padding: 0 12px; border: 1px solid #C9C3B5; border-radius: 8px; background: #FFFFFF; font: 500 15px 'JetBrains Mono', monospace; color: #1A1A17"></label>
+</div>
+<div style="display: flex; flex-direction: column; gap: 6px">
+<span style="font-size: 12px; color: #5E5B53; font-weight: 500">Shares for this call</span>
+<div style="display: flex; gap: 8px; flex-wrap: wrap">
+<sc-for list="{{lotChoices}}" as="o" hint-placeholder-count="2">
+<button type="button" onClick="{{o.pick}}" aria-pressed="{{o.pressed}}" style="min-height: 40px; padding: 0 14px; border-radius: 999px; border: 1px solid {{o.border}}; background: {{o.bg}}; color: {{o.fg}}; font: 500 13px 'Instrument Sans', system-ui, sans-serif; cursor: pointer">{{o.label}}</button>
+</sc-for>
+</div>
+<span style="font-size: 12px; color: #5E5B53">{{lotChoiceHint}}</span>
+</div>
+<sc-if value="{{parseMsgShow}}" hint-placeholder-val="{{ false }}"><div style="font-size: 13px; line-height: 1.5; padding: 10px 12px; border-radius: 8px; background: #F3F0E8; color: #1A1A17">{{parseMsg}}</div></sc-if>
+<div style="display: flex; justify-content: space-between; align-items: center; gap: 12px">
+<span style="font-size: 13px; color: {{formMatch.color}}">{{formMatch.text}}</span>
+<div style="display: flex; gap: 10px">
+<button type="button" onClick="{{closeAdd}}" style="min-height: 44px; padding: 0 18px; border-radius: 10px; border: 1px solid #C9C3B5; background: #FBFAF6; color: #1A1A17; font: 600 15px 'Instrument Sans', system-ui, sans-serif; cursor: pointer">Cancel</button>
+<button type="button" onClick="{{save}}" style="min-height: 44px; padding: 0 20px; border-radius: 10px; border: 1px solid #1A1A17; background: #1A1A17; color: #FBFAF6; font: 600 15px 'Instrument Sans', system-ui, sans-serif; cursor: pointer">{{formMatch.cta}}</button>
+</div>
+</div>
+</div>
+</section>
+</sc-if>
+
+<section style="background: #FBFAF6; border: 1px solid #DDD8CC; border-radius: 14px; padding: 24px; display: flex; flex-direction: column; gap: 16px">
+<div style="display: flex; justify-content: space-between; align-items: baseline">
+<h2 style="margin: 0; font-family: Fraunces, Georgia, serif; font-size: 24px; font-weight: 600">{{ytd.year}} so far</h2>
+<span style="font-size: 13px; color: #5E5B53">Realized from closed calls + what's open today</span>
+</div>
+<div style="display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 14px">
+<div style="display: flex; flex-direction: column; gap: 4px"><span style="font-size: 13px; color: #5E5B53; font-weight: 500">Premium realized</span><span style="font-family: Fraunces, Georgia, serif; font-size: 28px; font-weight: 600; color: {{ytd.premTone}}">{{ytd.prem}}</span><span style="font-size: 12px; color: #3A3833">{{ytd.closedCount}}, after buy-backs</span></div>
+<div style="display: flex; flex-direction: column; gap: 4px"><span style="font-size: 13px; color: #5E5B53; font-weight: 500">Stock gains realized</span><span style="font-family: Fraunces, Georgia, serif; font-size: 28px; font-weight: 600; color: {{ytd.stockTone}}">{{ytd.stock}}</span><span style="font-size: 12px; color: #3A3833">From shares called away</span></div>
+<div style="display: flex; flex-direction: column; gap: 4px"><span style="font-size: 13px; color: #5E5B53; font-weight: 500">Open right now</span><span style="font-family: Fraunces, Georgia, serif; font-size: 28px; font-weight: 600; color: {{ytd.openTone}}">{{ytd.open}}</span><span style="font-size: 12px; color: #3A3833">Not taxed until each call closes</span></div>
+<div style="display: flex; flex-direction: column; gap: 4px"><span style="font-size: 13px; color: #5E5B53; font-weight: 500">Est. tax on premium</span><span style="font-family: Fraunces, Georgia, serif; font-size: 28px; font-weight: 600; color: #9A3412">{{ytd.premTax}}</span><span style="font-size: 12px; color: #3A3833">+ {{ytd.openPremTax}} more if open calls close at today's prices</span></div>
+<div style="display: flex; flex-direction: column; gap: 4px; padding-left: 14px; border-left: 1px solid #DDD8CC"><span style="font-size: 13px; color: #5E5B53; font-weight: 500">Net after est. tax</span><span style="font-family: Fraunces, Georgia, serif; font-size: 28px; font-weight: 600; color: {{ytd.netTone}}">{{ytd.net}}</span><span style="font-size: 12px; color: #3A3833">{{ytd.gross}} before tax · {{ytd.returnPct}} on share cost</span></div>
+</div>
+<div style="display: flex; align-items: flex-end; gap: 16px; padding-top: 14px; border-top: 1px solid #E6E1D6; flex-wrap: wrap">
+<label style="display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: #5E5B53; font-weight: 500">Federal rate %<input type="text" value="{{tax.fed}}" onChange="{{onFed}}" style="width: 90px; min-height: 44px; padding: 0 12px; border: 1px solid #C9C3B5; border-radius: 8px; background: #FFFFFF; font: 500 15px 'JetBrains Mono', monospace; color: #1A1A17"></label>
+<label style="display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: #5E5B53; font-weight: 500">California rate %<input type="text" value="{{tax.st}}" onChange="{{onSt}}" style="width: 90px; min-height: 44px; padding: 0 12px; border: 1px solid #C9C3B5; border-radius: 8px; background: #FFFFFF; font: 500 15px 'JetBrains Mono', monospace; color: #1A1A17"></label>
+<label style="display: flex; align-items: center; gap: 8px; min-height: 44px; font-size: 14px; color: #1A1A17"><input type="checkbox" checked="{{tax.niit}}" onChange="{{onNiit}}" style="width: 20px; height: 20px; accent-color: #1A1A17">Add 3.8% NIIT</label>
+<span style="min-height: 44px; display: flex; align-items: center; font-size: 14px; font-weight: 600">Combined {{ytd.rateLabel}}</span>
+<span style="flex: 1 1 360px; font-size: 12px; color: #5E5B53; line-height: 1.5">Premium from calls that expire or get bought back is a short-term gain, taxed like ordinary income; California taxes it the same way. If shares are called away, the premium is added to the sale price instead. Estimate only, not tax advice.</span>
+</div>
+</section>
+
+<section style="background: #FBFAF6; border: 1px solid #DDD8CC; border-radius: 14px">
+<div style="display: grid; grid-template-columns: 2.1fr 0.6fr 1fr 0.9fr 0.9fr 1.1fr 0.9fr 0.5fr 1.1fr 1.3fr 28px; gap: 12px; padding: 14px 20px; border-bottom: 1px solid #DDD8CC; font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: #5E5B53">
+<span>Position</span><span>Shares</span><span>Share cost</span><span>Premium</span><span>Buy back</span><span>Premium kept</span><span>If closed</span><span>Days</span><span>Status</span><span>Health</span><span></span>
+</div>
+
+<sc-for list="{{rows}}" as="r" hint-placeholder-count="3">
+<div style="border-bottom: 1px solid #DDD8CC">
+<button type="button" onClick="{{r.toggle}}" aria-expanded="{{r.openStr}}" style="width: 100%; display: grid; grid-template-columns: 2.1fr 0.6fr 1fr 0.9fr 0.9fr 1.1fr 0.9fr 0.5fr 1.1fr 1.3fr 28px; gap: 12px; align-items: center; padding: 16px 20px; min-height: 72px; background: {{r.rowBg}}; border: 0; text-align: left; cursor: pointer; font: inherit; color: inherit">
+<span style="display: flex; flex-direction: column; gap: 4px">
+<span style="display: flex; align-items: center; gap: 8px"><span style="font-size: 18px; font-weight: 600">{{r.sym}}</span><span style="font-size: 14px; color: #3A3833">{{r.contract}}</span>
+<sc-if value="{{r.example}}" hint-placeholder-val="{{ false }}"><span style="font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: #E6E1D6; color: #3A3833">Example</span></sc-if>
+</span>
+<span style="font-size: 12px; color: #7C2D12">GTC buy back {{r.gtcLabel}} · Working <span style="color: #5E5B53">· Covers {{r.lotTag}}</span></span>
+</span>
+<span style="font-family: 'JetBrains Mono', monospace; font-size: 14px">{{r.sharesLabel}}</span>
+<span style="font-family: 'JetBrains Mono', monospace; font-size: 14px">{{r.shareCostLabel}}</span>
+<span style="font-family: 'JetBrains Mono', monospace; font-size: 14px; color: #1D4ED8">{{r.premiumLabel}}</span>
+<span style="font-family: 'JetBrains Mono', monospace; font-size: 14px">{{r.buybackLabel}}</span>
+<span style="display: flex; flex-direction: column; gap: 5px">
+<span style="font-family: 'JetBrains Mono', monospace; font-size: 14px; color: {{r.keptTone}}">{{r.keptLabel}} <span style="color: #5E5B53">· {{r.keptPct}}</span></span>
+<span style="height: 5px; background: #E6E1D6; border-radius: 3px; overflow: hidden"><span style="display: block; height: 100%; width: {{r.keptPct}}; background: #1D4ED8"></span></span>
+</span>
+<span style="font-family: 'JetBrains Mono', monospace; font-size: 14px; color: {{r.closeTone}}">{{r.closeLabel}}</span>
+<span style="font-family: 'JetBrains Mono', monospace; font-size: 14px">{{r.dte}}</span>
+<span style="display: flex; flex-direction: column; gap: 4px; align-items: flex-start">
+<span style="font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 999px; background: {{r.status.bg}}; color: {{r.status.fg}}; white-space: nowrap">{{r.status.text}}</span>
+</span>
+<span onMouseEnter="{{r.hoverOn}}" onMouseLeave="{{r.hoverOff}}" style="position: relative; display: flex; align-items: center; gap: 10px">
+<span aria-hidden="true" style="width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; background: {{r.light.dot}}; box-shadow: 0 0 0 4px {{r.light.ring}}; transition: box-shadow 0.15s"></span>
+<span style="display: flex; flex-direction: column; gap: 2px">
+<span style="font-size: 13px; font-weight: 600; color: {{r.light.fg}}">{{r.light.label}}</span>
+<span style="font-size: 11px; color: #5E5B53">{{r.light.sub}}</span>
+<span style="font-size: 11px; color: #5E5B53">Health {{r.health}}</span>
+</span>
+<sc-if value="{{r.hover}}" hint-placeholder-val="{{ false }}">
+<span role="tooltip" style="position: absolute; right: -12px; top: calc(100% + 10px); z-index: 20; width: 300px; box-sizing: border-box; padding: 14px; background: #FFFFFF; border: 1px solid #C9C3B5; border-radius: 12px; box-shadow: 0 10px 28px rgba(26, 26, 23, 0.16); display: flex; flex-direction: column; gap: 6px; cursor: default; white-space: normal">
+<span style="font-size: 13px; font-weight: 600; color: #1A1A17">What the colors mean</span>
+<sc-for list="{{r.legend}}" as="lg" hint-placeholder-count="3">
+<span style="display: flex; gap: 10px; align-items: flex-start; padding: 8px; border-radius: 8px; background: {{lg.bg}}">
+<span style="width: 12px; height: 12px; margin-top: 3px; border-radius: 50%; flex-shrink: 0; background: {{lg.color}}"></span>
+<span style="display: flex; flex-direction: column; gap: 2px">
+<span style="font-size: 13px; font-weight: 600; color: {{lg.fg}}">{{lg.label}}</span>
+<span style="font-size: 12px; line-height: 1.4; color: #3A3833">{{lg.text}}</span>
+</span>
+</span>
+</sc-for>
+<span style="font-size: 12px; color: #5E5B53; padding-top: 4px; border-top: 1px solid #E6E1D6">This position: {{r.light.sub}}. Health {{r.health}} is share value plus premium kept vs. money in.</span>
+</span>
+</sc-if>
+</span>
+<svg width="20" height="20" style="transform: rotate({{r.chevRot}}); transition: transform 0.15s" aria-hidden="true"><path d="M5 8 L10 13 L15 8" style="fill: none; stroke: #1A1A17; stroke-width: 2"></path></svg>
+</button>
+
+<sc-if value="{{r.open}}" hint-placeholder-val="{{ false }}">
+<div style="padding: 8px 24px 28px; background: #F7F5EF; display: flex; flex-direction: column; gap: 20px; border-top: 1px solid #E6E1D6">
+
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; padding-top: 16px">
+<div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 13px; color: #5E5B53">Money in this trade</span><span style="font-family: Fraunces, Georgia, serif; font-size: 24px; font-weight: 600">{{r.basisLabel}}</span></div>
+<div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 13px; color: #5E5B53">Best case by {{r.expShort}}</span><span style="font-family: Fraunces, Georgia, serif; font-size: 24px; font-weight: 600; color: #1D4ED8">{{r.maxProfitLabel}}</span></div>
+<div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 13px; color: #5E5B53">Breakeven</span><span style="font-family: Fraunces, Georgia, serif; font-size: 24px; font-weight: 600">{{r.beLabel}}</span></div>
+<div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 13px; color: #5E5B53">{{r.sym}} last</span><span style="font-family: Fraunces, Georgia, serif; font-size: 24px; font-weight: 600">{{r.liveStockLabel}}</span></div>
+</div>
+
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px">
+<div style="background: #FBFAF6; border: 1px solid #DDD8CC; border-radius: 12px; padding: 18px 20px; display: flex; flex-direction: column; gap: 10px">
+<div style="font-size: 16px; font-weight: 600">Earned {{r.keptPosLabel}} of {{r.premiumLabel}}</div>
+<div style="position: relative; height: 40px">
+<div style="position: absolute; left: 0; right: 0; top: 6px; height: 16px; background: #E6E1D6; border-radius: 8px; overflow: hidden"><div style="height: 100%; width: {{r.keptPct}}; background: #1D4ED8"></div></div>
+<div style="position: absolute; left: {{r.gtcLeft}}; top: 0; width: 2px; height: 28px; background: #B45309"></div>
+<div style="position: absolute; left: {{r.gtcLeft}}; top: 26px; transform: translateX(-50%); font-size: 11px; color: #7C2D12; white-space: nowrap">GTC locks {{r.gtcKeepLabel}}</div>
+</div>
+<div style="font-size: 13px; color: #3A3833; line-height: 1.45">Sold at {{r.fillCallLabel}} · buy back {{r.liveCallLabel}} now · time value left {{r.timeLabel}}</div>
+</div>
+<div style="background: #FBFAF6; border: 1px solid #DDD8CC; border-radius: 12px; padding: 18px 20px; display: flex; flex-direction: column; gap: 10px">
+<div style="font-size: 16px; font-weight: 600">Where {{r.sym}} is vs. your levels</div>
+<div style="position: relative; height: 70px">
+<div style="position: absolute; left: 0; right: 0; top: 8px; height: 22px; display: flex; border-radius: 6px; overflow: hidden; font-size: 11px; font-weight: 500">
+<div style="width: {{r.map.lossW}}; background: #F1DCC6; color: #7C2D12; display: flex; align-items: center; justify-content: center">Loss</div>
+<div style="width: {{r.map.profitW}}; background: #D6E2FA; color: #1E3A8A; display: flex; align-items: center; justify-content: center">Profit</div>
+<div style="flex-grow: 1; background: #E4E0D6; color: #3A3833; display: flex; align-items: center; justify-content: center">Capped</div>
+</div>
+<div style="position: absolute; left: {{r.map.nowLeft}}; top: 4px; width: 14px; height: 14px; margin-left: -7px; margin-top: 4px; border-radius: 50%; background: #1A1A17; border: 2px solid #FBFAF6"></div>
+<sc-for list="{{r.map.marks}}" as="m" hint-placeholder-count="3">
+<div style="position: absolute; left: {{m.left}}; top: 36px; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; font-size: 11px; color: {{m.color}}; white-space: nowrap"><span>{{m.label}}</span><span style="font-family: 'JetBrains Mono', monospace">{{m.value}}</span></div>
+</sc-for>
+</div>
+</div>
+</div>
+
+<div style="background: #FBFAF6; border: 1px solid #DDD8CC; border-radius: 12px; padding: 16px 20px; display: grid; grid-template-columns: 1fr 1fr auto; gap: 32px; align-items: end">
+<div style="display: flex; flex-direction: column; gap: 6px">
+<div style="display: flex; justify-content: space-between"><label for="{{r.priceId}}" style="font-size: 14px; font-weight: 600">What if {{r.sym}} is</label><span style="font-family: 'JetBrains Mono', monospace; font-size: 14px">{{r.w.priceLabel}}</span></div>
+<input id="{{r.priceId}}" type="range" min="{{r.w.pMin}}" max="{{r.w.pMax}}" step="{{r.w.pStep}}" value="{{r.w.price}}" onChange="{{r.onPrice}}">
+</div>
+<div style="display: flex; flex-direction: column; gap: 6px">
+<div style="display: flex; justify-content: space-between"><label for="{{r.daysId}}" style="font-size: 14px; font-weight: 600">Calendar</label><span style="font-family: 'JetBrains Mono', monospace; font-size: 14px">{{r.w.daysLabel}}</span></div>
+<input id="{{r.daysId}}" type="range" min="0" max="{{r.dte}}" step="1" value="{{r.w.elapsed}}" onChange="{{r.onDays}}">
+</div>
+<button type="button" onClick="{{r.reset}}" disabled="{{r.isLive}}" style="min-height: 44px; padding: 0 18px; border-radius: 10px; border: 1px solid #1A1A17; background: #FBFAF6; color: #1A1A17; font: 600 14px 'Instrument Sans', system-ui, sans-serif; cursor: pointer">Back to live</button>
+</div>
+
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px">
+<div style="background: #FBFAF6; border: 1px solid #DDD8CC; border-radius: 12px; padding: 18px 20px; display: flex; flex-direction: column; gap: 10px">
+<div style="font-size: 16px; font-weight: 600">Time: buy-back cost until {{r.expShort}}</div>
+<div style="position: relative; width: 600px; height: 220px">
+<svg width="600" height="220" style="position: absolute; left: 0; top: 0; overflow: visible">
+<path d="{{r.t.grid}}" style="fill: none; stroke: #E6E1D6; stroke-width: 1"></path>
+<path d="{{r.t.area}}" style="fill: #D6E2FA; stroke: none; opacity: 0.7"></path>
+<path d="{{r.t.sold}}" style="fill: none; stroke: #5E5B53; stroke-width: 1.5; stroke-dasharray: 5 5"></path>
+<path d="{{r.t.gtc}}" style="fill: none; stroke: #B45309; stroke-width: 1.5; stroke-dasharray: 5 5"></path>
+<path d="{{r.t.curve}}" style="fill: none; stroke: #1D4ED8; stroke-width: 2.5"></path>
+<path d="{{r.t.fillLine}}" style="fill: none; stroke: #B45309; stroke-width: 1.5; opacity: {{r.t.fillOpacity}}"></path>
+<path d="{{r.t.nowLine}}" style="fill: none; stroke: #1A1A17; stroke-width: 1"></path>
+<circle cx="{{r.t.nowX}}" cy="{{r.t.nowY}}" r="6" style="fill: #1D4ED8; stroke: #FBFAF6; stroke-width: 2"></circle>
+</svg>
+<sc-for list="{{r.t.yTicks}}" as="tk" hint-placeholder-count="4"><div style="position: absolute; left: 0; top: {{tk.top}}; width: 44px; text-align: right; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #5E5B53">{{tk.text}}</div></sc-for>
+<sc-for list="{{r.t.xTicks}}" as="tk" hint-placeholder-count="6"><div style="position: absolute; left: {{tk.left}}; top: 196px; width: 60px; margin-left: -30px; text-align: center; font-size: 11px; color: #5E5B53">{{tk.text}}</div></sc-for>
+<div style="position: absolute; right: 16px; top: {{r.t.soldTop}}; font-size: 12px; color: #3A3833">Sold {{r.fillCallLabel}}</div>
+<div style="position: absolute; right: 16px; top: {{r.t.gtcTop}}; font-size: 12px; color: #7C2D12">GTC {{r.gtcLabel}}</div>
+<div style="position: absolute; left: {{r.t.nowLabelLeft}}; top: {{r.t.nowLabelTop}}; padding: 2px 8px; background: #1A1A17; color: #FBFAF6; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 12px; white-space: nowrap">{{r.t.nowText}}</div>
+</div>
+<div style="font-size: 13px; line-height: 1.5; color: #3A3833; background: #F3F0E8; border-radius: 8px; padding: 10px 12px">{{r.fillMsg}}</div>
+</div>
+<div style="background: #FBFAF6; border: 1px solid #DDD8CC; border-radius: 12px; padding: 18px 20px; display: flex; flex-direction: column; gap: 10px">
+<div style="display: flex; justify-content: space-between; align-items: center">
+<div style="font-size: 16px; font-weight: 600">Price: P&amp;L at each {{r.sym}} price</div>
+<div style="display: flex; gap: 14px; font-size: 12px; color: #3A3833">
+<span style="display: flex; align-items: center; gap: 6px"><span style="width: 18px; height: 3px; background: #1A1A17"></span>Hold</span>
+<span style="display: flex; align-items: center; gap: 6px"><span style="width: 18px; height: 0; border-top: 3px dashed #1D4ED8"></span>{{r.pc.exitLegend}}</span>
+</div>
+</div>
+<div style="position: relative; width: 600px; height: 220px">
+<svg width="600" height="220" style="position: absolute; left: 0; top: 0; overflow: visible">
+<path d="{{r.pc.grid}}" style="fill: none; stroke: #E6E1D6; stroke-width: 1"></path>
+<path d="{{r.pc.levels}}" style="fill: none; stroke: #C9C3B5; stroke-width: 1; stroke-dasharray: 3 4"></path>
+<path d="{{r.pc.zero}}" style="fill: none; stroke: #8A867C; stroke-width: 1.25"></path>
+<path d="{{r.pc.hold}}" style="fill: none; stroke: #1A1A17; stroke-width: 2.5"></path>
+<path d="{{r.pc.exit}}" style="fill: none; stroke: #1D4ED8; stroke-width: 2.5; stroke-dasharray: 7 5"></path>
+<path d="{{r.pc.nowLine}}" style="fill: none; stroke: #1A1A17; stroke-width: 1"></path>
+<circle cx="{{r.pc.nowX}}" cy="{{r.pc.holdY}}" r="5" style="fill: #1A1A17; stroke: #FBFAF6; stroke-width: 2"></circle>
+<circle cx="{{r.pc.nowX}}" cy="{{r.pc.exitY}}" r="6" style="fill: #1D4ED8; stroke: #FBFAF6; stroke-width: 2"></circle>
+</svg>
+<sc-for list="{{r.pc.yTicks}}" as="tk" hint-placeholder-count="5"><div style="position: absolute; left: 0; top: {{tk.top}}; width: 44px; text-align: right; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #5E5B53">{{tk.text}}</div></sc-for>
+<sc-for list="{{r.pc.xTicks}}" as="tk" hint-placeholder-count="5"><div style="position: absolute; left: {{tk.left}}; top: 196px; width: 56px; margin-left: -28px; text-align: center; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #5E5B53">{{tk.text}}</div></sc-for>
+<div style="position: absolute; left: {{r.pc.beLeft}}; top: 0; transform: translateX(-100%); padding-right: 6px; font-size: 11px; color: #7C2D12; white-space: nowrap">BE {{r.beLabel}}</div>
+<div style="position: absolute; left: {{r.pc.kLeft}}; top: 0; padding-left: 6px; font-size: 11px; color: #1E3A8A; white-space: nowrap">Strike {{r.kLabel}}</div>
+</div>
+<div style="font-size: 13px; line-height: 1.5; color: #3A3833; background: #F3F0E8; border-radius: 8px; padding: 10px 12px">The gap between the lines is value you'd leave behind by closing early. It shrinks every day.</div>
+</div>
+</div>
+
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px">
+<div style="background: #FBFAF6; border: 1px solid #DDD8CC; border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 6px">
+<span style="font-size: 15px; font-weight: 600">Close both legs</span>
+<span style="font-family: Fraunces, Georgia, serif; font-size: 26px; font-weight: 600; color: {{r.w.closeTone}}">{{r.w.closeVal}}</span>
+<span style="font-size: 13px; color: #3A3833">{{r.w.closeDetail}}</span>
+</div>
+<div style="background: #FBFAF6; border: 2px solid #B45309; border-radius: 12px; padding: 15px; display: flex; flex-direction: column; gap: 6px">
+<span style="font-size: 15px; font-weight: 600">GTC buy back {{r.gtcLabel}}</span>
+<span style="font-family: Fraunces, Georgia, serif; font-size: 26px; font-weight: 600; color: #1D4ED8">{{r.w.gtcVal}}</span>
+<span style="font-size: 13px; color: #3A3833">{{r.w.gtcWhen}}</span>
+</div>
+<div style="background: #FBFAF6; border: 1px solid #DDD8CC; border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 6px">
+<span style="font-size: 15px; font-weight: 600">Hold to {{r.expShort}}</span>
+<span style="font-family: Fraunces, Georgia, serif; font-size: 26px; font-weight: 600; color: {{r.w.holdTone}}">{{r.w.holdVal}}</span>
+<span style="font-size: 13px; color: #3A3833">{{r.w.holdDetail}}</span>
+</div>
+<div style="background: #FBFAF6; border: 1px solid #DDD8CC; border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 6px">
+<span style="font-size: 15px; font-weight: 600">Roll up and out</span>
+<span style="font-family: Fraunces, Georgia, serif; font-size: 26px; font-weight: 600; color: #5E5B53">[NET CREDIT]</span>
+<span style="font-size: 13px; color: #3A3833">If {{r.sym}} runs past {{r.kLabel}} and you want to keep the shares</span>
+</div>
+</div>
+
+<div style="background: #FBFAF6; border: 1px solid #DDD8CC; border-radius: 12px; padding: 16px 20px; display: grid; grid-template-columns: 1fr 1.5fr; gap: 32px">
+<div style="display: flex; flex-direction: column; gap: 10px">
+<div style="font-size: 15px; font-weight: 600">Update live marks</div>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px">
+<label style="display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: #5E5B53; font-weight: 500">{{r.sym}} price<input type="text" value="{{r.ed.liveStock}}" onChange="{{r.onEd.liveStock}}" style="min-height: 44px; padding: 0 10px; border: 1px solid #C9C3B5; border-radius: 8px; background: #FFFFFF; font: 500 14px 'JetBrains Mono', monospace; color: #1A1A17; min-width: 0"></label>
+<label style="display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: #5E5B53; font-weight: 500">Call mark<input type="text" value="{{r.ed.liveCall}}" onChange="{{r.onEd.liveCall}}" style="min-height: 44px; padding: 0 10px; border: 1px solid #C9C3B5; border-radius: 8px; background: #FFFFFF; font: 500 14px 'JetBrains Mono', monospace; color: #1A1A17; min-width: 0"></label>
+<label style="display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: #5E5B53; font-weight: 500">GTC buy back<input type="text" value="{{r.ed.gtc}}" onChange="{{r.onEd.gtc}}" style="min-height: 44px; padding: 0 10px; border: 1px solid #C9C3B5; border-radius: 8px; background: #FFFFFF; font: 500 14px 'JetBrains Mono', monospace; color: #1A1A17; min-width: 0"></label>
+</div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 10px">
+<div style="font-size: 15px; font-weight: 600">Close this position</div>
+<div style="display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap">
+<label style="display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: #5E5B53; font-weight: 500">Bought back at<input type="text" placeholder="{{r.gtcNum}}" value="{{r.bbVal}}" onChange="{{r.onBb}}" style="width: 100px; min-height: 44px; padding: 0 10px; border: 1px solid #C9C3B5; border-radius: 8px; background: #FFFFFF; font: 500 14px 'JetBrains Mono', monospace; color: #1A1A17"></label>
+<button type="button" onClick="{{r.recordBuyback}}" style="min-height: 44px; padding: 0 16px; border-radius: 10px; border: 1px solid #1A1A17; background: #1A1A17; color: #FBFAF6; font: 600 14px 'Instrument Sans', system-ui, sans-serif; cursor: pointer">Record buy back</button>
+<button type="button" onClick="{{r.expired}}" style="min-height: 44px; padding: 0 16px; border-radius: 10px; border: 1px solid #1A1A17; background: #FBFAF6; color: #1A1A17; font: 600 14px 'Instrument Sans', system-ui, sans-serif; cursor: pointer">Expired worthless</button>
+<button type="button" onClick="{{r.called}}" style="min-height: 44px; padding: 0 16px; border-radius: 10px; border: 1px solid #1A1A17; background: #FBFAF6; color: #1A1A17; font: 600 14px 'Instrument Sans', system-ui, sans-serif; cursor: pointer">Shares called away</button>
+<button type="button" onClick="{{r.remove}}" style="min-height: 44px; padding: 0 10px; border: 0; background: transparent; color: #9A3412; font: 600 14px 'Instrument Sans', system-ui, sans-serif; cursor: pointer; text-decoration: underline">Remove</button>
+</div>
+<sc-if value="{{r.bbErr}}" hint-placeholder-val="{{ false }}"><span style="font-size: 12px; color: #9A3412">Enter the price you paid to buy back the call.</span></sc-if>
+<span style="font-size: 12px; color: #5E5B53">Closing moves this call to the history below and into your {{r.year}} totals.</span>
+</div>
+</div>
+
+<div style="display: flex; justify-content: space-between; align-items: center; gap: 16px; font-size: 13px">
+<div style="display: flex; gap: 20px; color: #3A3833; font-family: 'JetBrains Mono', monospace">
+<span>BUY {{r.sharesLabel}} {{r.sym}} @ {{r.fillStockLabel}} · Filled</span>
+<span>SELL −{{r.contracts}} {{r.optSymbol}} @ {{r.fillCallLabel}} · Filled</span>
+<span style="color: #7C2D12">BUY +{{r.contracts}} {{r.optSymbol}} LMT {{r.gtcLabel}} GTC · Working</span>
+</div>
+<a href="Main.dc.html" style="font-weight: 600">Open full view</a>
+</div>
+
+</div>
+</sc-if>
+</div>
+</sc-for>
+
+<div style="display: grid; grid-template-columns: 2.1fr 0.6fr 1fr 0.9fr 0.9fr 1.1fr 0.9fr 0.5fr 1.1fr 1.3fr 28px; gap: 12px; align-items: center; padding: 16px 20px; background: #EFEBE1; border-radius: 0 0 13px 13px; font-weight: 600">
+<span style="font-size: 15px">Total · {{tot.countLabel}}</span>
+<span style="font-family: 'JetBrains Mono', monospace; font-size: 14px">{{tot.sharesLabel}}</span>
+<span style="font-family: 'JetBrains Mono', monospace; font-size: 14px">{{tot.shareCost}}</span>
+<span style="font-family: 'JetBrains Mono', monospace; font-size: 14px; color: #1D4ED8">{{tot.premium}}</span>
+<span style="font-family: 'JetBrains Mono', monospace; font-size: 14px">{{tot.buyback}}</span>
+<span style="font-family: 'JetBrains Mono', monospace; font-size: 14px; color: {{tot.keptTone}}">{{tot.keptSigned}} <span style="color: #5E5B53; font-weight: 500">· {{tot.keptPct}}</span></span>
+<span style="font-family: 'JetBrains Mono', monospace; font-size: 14px; color: {{tot.closeTone}}">{{tot.close}}</span>
+<span></span>
+<span></span>
+<span style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 13px">Health {{tot.health}}</span><span style="font-size: 11px; font-weight: 500; color: #3A3833">{{tot.nGreen}} good · {{tot.nYellow}} watch · {{tot.nRed}} called</span></span>
+<span></span>
+</div>
+</section>
+
+<section style="background: #FBFAF6; border: 1px solid #DDD8CC; border-radius: 14px">
+<div style="display: flex; justify-content: space-between; align-items: flex-end; gap: 24px; padding: 20px 20px 14px">
+<div style="display: flex; flex-direction: column; gap: 4px">
+<h2 style="margin: 0; font-family: Fraunces, Georgia, serif; font-size: 24px; font-weight: 600">Shares by lot</h2>
+<span style="font-size: 14px; color: #3A3833">Every block of shares you own, what it really cost, and whether it's safe to sell a call on it.</span>
+</div>
+<div style="display: flex; gap: 12px; align-items: flex-end">
+<label style="display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: #5E5B53; font-weight: 500">Ready when a call pays at least (% a month)<input type="text" value="{{lotSet.target}}" onChange="{{onTarget}}" style="width: 120px; min-height: 44px; padding: 0 12px; border: 1px solid #C9C3B5; border-radius: 8px; background: #FFFFFF; font: 500 14px 'JetBrains Mono', monospace; color: #1A1A17"></label>
+<button type="button" onClick="{{toggleAddLot}}" style="min-height: 44px; padding: 0 18px; border-radius: 10px; border: 1px solid #1A1A17; background: #FBFAF6; color: #1A1A17; font: 600 15px 'Instrument Sans', system-ui, sans-serif; cursor: pointer">Add shares</button>
+</div>
+</div>
+<div style="display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 14px; padding: 0 20px 18px">
+<div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 12px; color: #5E5B53">Shares held</span><span style="font-family: 'JetBrains Mono', monospace; font-size: 16px">{{lotSum.shares}}</span></div>
+<div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 12px; color: #5E5B53">Paid for them</span><span style="font-family: 'JetBrains Mono', monospace; font-size: 16px">{{lotSum.cost}}</span></div>
+<div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 12px; color: #5E5B53">Worth now</span><span style="font-family: 'JetBrains Mono', monospace; font-size: 16px">{{lotSum.value}}</span></div>
+<div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 12px; color: #5E5B53">Up or down vs. cost</span><span style="font-family: 'JetBrains Mono', monospace; font-size: 16px; color: {{lotSum.unrealTone}}">{{lotSum.unreal}}</span></div>
+<div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 12px; color: #5E5B53">Lots under cost</span><span style="font-family: 'JetBrains Mono', monospace; font-size: 16px">{{lotSum.under}}</span></div>
+<div style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 12px; color: #5E5B53">Free lots (no call)</span><span style="font-family: 'JetBrains Mono', monospace; font-size: 16px">{{lotSum.free}}</span></div>
+</div>
+
+<sc-if value="{{lotSet.showAdd}}" hint-placeholder-val="{{ false }}">
+<div style="display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; padding: 16px 20px; background: #F7F5EF; border-top: 1px solid #E6E1D6">
+<label style="display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: #5E5B53; font-weight: 500">Symbol<input type="text" value="{{lotForm.sym}}" onChange="{{lfh.sym}}" style="width: 110px; min-height: 44px; padding: 0 12px; border: 1px solid #C9C3B5; border-radius: 8px; background: #FFFFFF; font: 500 14px 'JetBrains Mono', monospace; color: #1A1A17"></label>
+<label style="display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: #5E5B53; font-weight: 500">Shares<input type="text" value="{{lotForm.shares}}" onChange="{{lfh.shares}}" style="width: 110px; min-height: 44px; padding: 0 12px; border: 1px solid #C9C3B5; border-radius: 8px; background: #FFFFFF; font: 500 14px 'JetBrains Mono', monospace; color: #1A1A17"></label>
+<label style="display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: #5E5B53; font-weight: 500">Price paid per share<input type="text" value="{{lotForm.cost}}" onChange="{{lfh.cost}}" style="width: 150px; min-height: 44px; padding: 0 12px; border: 1px solid #C9C3B5; border-radius: 8px; background: #FFFFFF; font: 500 14px 'JetBrains Mono', monospace; color: #1A1A17"></label>
+<label style="display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: #5E5B53; font-weight: 500">Date bought<input type="date" value="{{lotForm.bought}}" onChange="{{lfh.bought}}" style="min-height: 44px; padding: 0 12px; border: 1px solid #C9C3B5; border-radius: 8px; background: #FFFFFF; font: 500 14px 'JetBrains Mono', monospace; color: #1A1A17"></label>
+<button type="button" onClick="{{saveLot}}" style="min-height: 44px; padding: 0 18px; border-radius: 10px; border: 1px solid #1A1A17; background: #1A1A17; color: #FBFAF6; font: 600 15px 'Instrument Sans', system-ui, sans-serif; cursor: pointer">Add lot</button>
+<button type="button" onClick="{{toggleAddLot}}" style="min-height: 44px; padding: 0 14px; border-radius: 10px; border: 1px solid #C9C3B5; background: #FBFAF6; color: #1A1A17; font: 600 15px 'Instrument Sans', system-ui, sans-serif; cursor: pointer">Cancel</button>
+<span style="font-size: 13px; color: #9A3412">{{lotSet.err}}</span>
+</div>
+</sc-if>
+
+<sc-for list="{{groups}}" as="g" hint-placeholder-count="3">
+<div style="border-top: 1px solid #DDD8CC">
+<button type="button" onClick="{{g.toggle}}" aria-expanded="{{g.openStr}}" style="width: 100%; display: grid; grid-template-columns: 1.2fr 0.6fr 0.8fr 0.9fr 0.9fr 1.4fr 2.2fr 28px; gap: 12px; align-items: center; padding: 16px 20px; min-height: 64px; background: {{g.bg}}; border: 0; text-align: left; cursor: pointer; font: inherit; color: inherit">
+<span style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 18px; font-weight: 600">{{g.sym}}</span><span style="font-size: 12px; color: #5E5B53">{{g.lotCount}} · last {{g.priceLabel}}</span></span>
+<span style="font-family: 'JetBrains Mono', monospace; font-size: 14px">{{g.shares}}</span>
+<span style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 11px; color: #5E5B53">Avg cost</span><span style="font-family: 'JetBrains Mono', monospace; font-size: 14px">{{g.avgCost}}</span></span>
+<span style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 11px; color: #5E5B53">Effective</span><span style="font-family: 'JetBrains Mono', monospace; font-size: 14px">{{g.effCost}}</span></span>
+<span style="font-family: 'JetBrains Mono', monospace; font-size: 14px; color: {{g.unrealTone}}">{{g.unreal}}</span>
+<span style="font-size: 13px; color: #3A3833">{{g.coveredText}}</span>
+<span style="font-size: 13px; color: #3A3833">{{g.signalText}}</span>
+<svg width="20" height="20" style="transform: rotate({{g.chevRot}}); transition: transform 0.15s" aria-hidden="true"><path d="M5 8 L10 13 L15 8" style="fill: none; stroke: #1A1A17; stroke-width: 2"></path></svg>
+</button>
+<sc-if value="{{g.open}}" hint-placeholder-val="{{ false }}">
+<div style="background: #F7F5EF; border-top: 1px solid #E6E1D6">
+<div style="display: grid; grid-template-columns: 1.2fr 0.6fr 0.8fr 0.9fr 0.9fr 1.4fr 2.2fr 28px; gap: 12px; padding: 10px 20px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: #5E5B53; border-bottom: 1px solid #E6E1D6">
+<span>Lot</span><span>Shares</span><span>Cost</span><span>Effective cost</span><span>Up / down</span><span>Status</span><span>Signal</span><span></span>
+</div>
+<sc-for list="{{g.lots}}" as="l" hint-placeholder-count="3">
+<div style="display: grid; grid-template-columns: 1.2fr 0.6fr 0.8fr 0.9fr 0.9fr 1.4fr 2.2fr 28px; gap: 12px; align-items: start; padding: 14px 20px; border-bottom: 1px solid #E6E1D6">
+<span style="display: flex; flex-direction: column; gap: 3px">
+<span style="display: flex; align-items: center; gap: 8px"><span style="font-size: 15px; font-weight: 600">Lot {{l.label}}</span><sc-if value="{{l.example}}" hint-placeholder-val="{{ false }}"><span style="font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: #E6E1D6; color: #3A3833">Example</span></sc-if></span>
+<span style="font-size: 12px; color: #5E5B53">Bought {{l.bought}}</span>
+</span>
+<span style="font-family: 'JetBrains Mono', monospace; font-size: 14px">{{l.shares}}</span>
+<span style="font-family: 'JetBrains Mono', monospace; font-size: 14px">{{l.cost}}</span>
+<span style="display: flex; flex-direction: column; gap: 2px"><span style="font-family: 'JetBrains Mono', monospace; font-size: 14px">{{l.eff}}</span><span style="font-size: 11px; color: #5E5B53">{{l.effNote}}</span></span>
+<span style="font-family: 'JetBrains Mono', monospace; font-size: 14px; color: {{l.unrealTone}}">{{l.unreal}}</span>
+<span style="display: flex; flex-direction: column; gap: 6px; align-items: flex-start">
+<span style="font-size: 13px; color: #1A1A17">{{l.status}}</span>
+<sc-if value="{{l.deliver}}" hint-placeholder-val="{{ false }}"><span style="font-size: 11px; font-weight: 600; padding: 3px 8px; border-radius: 999px; background: #D6E2FA; color: #1E3A8A">Deliver first if called at {{l.deliverStrike}}</span></sc-if>
+</span>
+<span style="display: flex; gap: 10px; align-items: flex-start">
+<span aria-hidden="true" style="width: 12px; height: 12px; margin-top: 3px; border-radius: 50%; flex-shrink: 0; background: {{l.dot}}"></span>
+<span style="display: flex; flex-direction: column; gap: 3px">
+<span style="font-size: 13px; font-weight: 600; color: {{l.fg}}">{{l.signal}}</span>
+<span style="font-size: 12px; line-height: 1.45; color: #3A3833">{{l.signalSub}}</span>
+<sc-if value="{{l.wash}}" hint-placeholder-val="{{ false }}"><span style="font-size: 12px; line-height: 1.45; color: #9A3412">{{l.washText}}</span></sc-if>
+</span>
+</span>
+<span></span>
+</div>
+</sc-for>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; padding: 16px 20px 20px">
+<div style="display: flex; flex-direction: column; gap: 6px">
+<span style="font-size: 14px; font-weight: 600">If shares get called away</span>
+<span style="font-size: 13px; line-height: 1.5; color: #3A3833">{{g.deliverText}}</span>
+</div>
+<div style="display: flex; flex-direction: column; gap: 6px">
+<label for="{{g.rebuyId}}" style="font-size: 14px; font-weight: 600">Rebuy target for {{g.sym}}</label>
+<div style="display: flex; gap: 12px; align-items: flex-start">
+<input id="{{g.rebuyId}}" type="text" value="{{g.rebuyVal}}" onChange="{{g.onRebuy}}" placeholder="e.g. 26.50" style="width: 110px; min-height: 44px; padding: 0 12px; border: 1px solid #C9C3B5; border-radius: 8px; background: #FFFFFF; font: 500 14px 'JetBrains Mono', monospace; color: #1A1A17">
+<span style="font-size: 13px; line-height: 1.5; color: #3A3833">{{g.cspText}}</span>
+</div>
+</div>
+</div>
+</div>
+</sc-if>
+</div>
+</sc-for>
+</section>
+
+<section style="background: #FBFAF6; border: 1px solid #DDD8CC; border-radius: 14px; overflow: hidden">
+<div style="display: flex; justify-content: space-between; align-items: baseline; padding: 20px 20px 12px">
+<h2 style="margin: 0; font-family: Fraunces, Georgia, serif; font-size: 24px; font-weight: 600">Closed covered calls · {{ytd.year}}</h2>
+<span style="font-size: 13px; color: #5E5B53">Est. tax at {{ytd.rateLabel}} combined</span>
+</div>
+<div style="display: grid; grid-template-columns: 0.8fr 1.8fr 1.5fr 0.9fr 0.9fr 1fr 1fr 0.9fr; gap: 12px; padding: 10px 20px; border-top: 1px solid #DDD8CC; border-bottom: 1px solid #DDD8CC; font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: #5E5B53">
+<span>Closed</span><span>Position</span><span>How it closed</span><span>Premium</span><span>Buy back</span><span>Option P&amp;L</span><span>Stock gain</span><span>Est. tax</span>
+</div>
+<sc-if value="{{ytd.noClosed}}" hint-placeholder-val="{{ false }}"><div style="padding: 20px; font-size: 14px; color: #5E5B53">No closed calls yet this year. Use "Close this position" on a row when a call expires, gets bought back, or gets assigned.</div></sc-if>
+<sc-for list="{{closedRows}}" as="c" hint-placeholder-count="1">
+<div style="display: grid; grid-template-columns: 0.8fr 1.8fr 1.5fr 0.9fr 0.9fr 1fr 1fr 0.9fr; gap: 12px; align-items: center; padding: 14px 20px; border-bottom: 1px solid #E6E1D6; font-size: 14px">
+<span style="font-family: 'JetBrains Mono', monospace; font-size: 13px">{{c.date}}</span>
+<span style="display: flex; align-items: center; gap: 8px"><span style="font-weight: 600">{{c.sym}}</span><span style="color: #3A3833">{{c.contract}}</span><sc-if value="{{c.example}}" hint-placeholder-val="{{ false }}"><span style="font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: #E6E1D6; color: #3A3833">Example</span></sc-if></span>
+<span style="color: #3A3833">{{c.how}}</span>
+<span style="font-family: 'JetBrains Mono', monospace; color: #1D4ED8">{{c.premium}}</span>
+<span style="font-family: 'JetBrains Mono', monospace">{{c.buyback}}</span>
+<span style="font-family: 'JetBrains Mono', monospace; color: {{c.optTone}}">{{c.opt}}</span>
+<span style="font-family: 'JetBrains Mono', monospace; color: {{c.stockTone}}">{{c.stock}}</span>
+<span style="font-family: 'JetBrains Mono', monospace; color: #9A3412">{{c.tax}}</span>
+</div>
+</sc-for>
+<div style="display: grid; grid-template-columns: 0.8fr 1.8fr 1.5fr 0.9fr 0.9fr 1fr 1fr 0.9fr; gap: 12px; align-items: center; padding: 16px 20px; background: #EFEBE1; font-weight: 600; font-size: 14px">
+<span>Total</span><span>{{ytd.closedCount}}</span><span></span>
+<span style="font-family: 'JetBrains Mono', monospace; color: #1D4ED8">{{ytd.closedPremium}}</span>
+<span style="font-family: 'JetBrains Mono', monospace">{{ytd.closedBuyback}}</span>
+<span style="font-family: 'JetBrains Mono', monospace; color: {{ytd.premTone}}">{{ytd.prem}}</span>
+<span style="font-family: 'JetBrains Mono', monospace; color: {{ytd.stockTone}}">{{ytd.stock}}</span>
+<span style="font-family: 'JetBrains Mono', monospace; color: #9A3412">{{ytd.realizedTax}}</span>
+</div>
+</section>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"positions":{"editor":null,"default":[{"id":"pfe","sym":"PFE","contracts":1,"fillStock":27.8,"fillCall":0.55,"strike":28,"expiry":"2026-10-16","daysToExpiry":25,"liveStock":27.775,"liveCall":0.57,"iv":22,"gtc":0.1,"lotId":"pfe-a","example":false},{"id":"spyd","sym":"SPYD","contracts":3,"fillStock":44.2,"fillCall":0.35,"strike":45,"expiry":"2026-10-16","daysToExpiry":25,"liveStock":44.35,"liveCall":0.31,"iv":14,"gtc":0.05,"lotId":"spyd-a","example":true},{"id":"f","sym":"F","contracts":5,"fillStock":11.4,"fillCall":0.22,"strike":12,"expiry":"2026-10-16","daysToExpiry":25,"liveStock":11.25,"liveCall":0.15,"iv":32,"gtc":0.03,"lotId":"f-a","example":true}]},"lots":{"editor":null,"default":[{"id":"pfe-a","sym":"PFE","shares":100,"cost":27.8,"bought":"2026-09-21","premiumKept":0,"example":false},{"id":"pfe-b","sym":"PFE","shares":100,"cost":29.1,"bought":"2026-08-14","premiumKept":0,"example":true},{"id":"pfe-c","sym":"PFE","shares":100,"cost":26.4,"bought":"2026-09-02","premiumKept":0,"example":true},{"id":"spyd-a","sym":"SPYD","shares":300,"cost":44.2,"bought":"2026-08-20","premiumKept":75,"example":true},{"id":"f-a","sym":"F","shares":500,"cost":11.4,"bought":"2026-09-21","premiumKept":0,"example":true}]},"closed":{"editor":null,"default":[{"id":"ex-closed-1","sym":"SPYD","contracts":3,"strike":45,"expiry":"2026-09-18","fillStock":44.2,"fillCall":0.3,"buyback":0.05,"how":"bought","stockGain":0,"closedOn":"2026-09-17","example":true}]},"$preview":{"width":1440,"height":2400}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = {
+      open: { pfe: true }, sc: {}, positions: null, closed: null,
+      showAdd: false, form: this.blankForm(), parseMsg: '', bb: {}, bbErr: {}, ed: {},
+      tax: { fed: '24', st: '9.3', niit: false },
+      lots: null, grpOpen: { PFE: true }, targetYield: '1.0', rebuy: {},
+      showAddLot: false, lotForm: this.blankLot(), lotErr: '',
+      sheet: { id: '', title: '', at: '', input: '', msg: '', err: false, open: false, copied: false }
+    };
+  }
+  blankForm() { return { paste: '', sym: '', contracts: '1', fillStock: '', fillCall: '', strike: '', expiry: '', gtc: '0.10', iv: '', liveStock: '', liveCall: '', lotId: 'new' }; }
+  blankLot() { return { sym: '', shares: '100', cost: '', bought: new Date().toLocaleDateString('sv-SE') }; }
+  lotsList() { return this.state.lots ?? (this.props.lots ?? []); }
+  strikeStep(S) { return S < 50 ? 0.5 : (S < 200 ? 1 : 5); }
+  ceilTo(x, step) { return Math.ceil(x / step - 1e-9) * step; }
+  floorTo(x, step) { return Math.floor(x / step + 1e-9) * step; }
+  // Lots of one symbol in the order they should be delivered if shares are called at strike K:
+  // highest cost at or under K first (smallest gain), then the rest from lowest cost up (smallest loss).
+  deliveryOrder(sym, K, lots) {
+    const held = lots.filter((l) => l.sym === sym && l.shares > 0);
+    const under = held.filter((l) => l.cost <= K).sort((a, b) => b.cost - a.cost);
+    const over = held.filter((l) => l.cost > K).sort((a, b) => a.cost - b.cost);
+    return under.concat(over);
+  }
+  lotLabels(lots) {
+    const map = {}, bySym = {};
+    lots.slice().sort((a, b) => String(a.bought).localeCompare(String(b.bought)) || String(a.id).localeCompare(String(b.id)))
+      .forEach((l) => { bySym[l.sym] = (bySym[l.sym] || 0) + 1; map[l.id] = String.fromCharCode(64 + bySym[l.sym]); });
+    return map;
+  }
+  saveLot() {
+    const f = this.state.lotForm, sym = String(f.sym || '').trim().toUpperCase();
+    const shares = Math.round(this.num(f.shares) || 0), cost = this.num(f.cost);
+    if (!sym || shares <= 0 || !(cost > 0)) { this.setState({ lotErr: 'Add a symbol, share count and price paid.' }); return; }
+    const lot = { id: sym.toLowerCase() + '-' + Date.now().toString(36), sym, shares, cost, bought: this.normDate(f.bought) || new Date().toLocaleDateString('sv-SE'), premiumKept: 0, lastPrice: cost };
+    const grpOpen = Object.assign({}, this.state.grpOpen); grpOpen[sym] = true;
+    this.setState({ lots: this.lotsList().concat([lot]), showAddLot: false, lotForm: this.blankLot(), lotErr: '', grpOpen });
+  }
+  num(s) { const v = parseFloat(String(s ?? '').replace(/[$,\s]/g, '')); return isNaN(v) ? null : v; }
+  positions() { return this.state.positions ?? (this.props.positions ?? []); }
+  closedList() { return this.state.closed ?? (this.props.closed ?? []); }
+  updatePos(id, patch) { this.setState({ positions: this.positions().map((p) => p.id === id ? Object.assign({}, p, patch) : p) }); }
+  editField(id, field, raw) {
+    const ed = Object.assign({}, this.state.ed); ed[id] = Object.assign({}, ed[id]); ed[id][field] = raw;
+    const v = this.num(raw);
+    const patch = {};
+    if (v !== null && (field === 'liveStock' ? v > 0 : v >= 0)) patch[field] = v;
+    this.setState({ ed, positions: this.positions().map((p) => p.id === id ? Object.assign({}, p, patch) : p) });
+  }
+  closePos(id, how) {
+    const p = this.positions().find((x) => x.id === id); if (!p) return;
+    const q = (p.contracts || 1) * 100;
+    let buyback = 0;
+    if (how === 'bought') {
+      const v = this.num(this.state.bb[id]);
+      if (v === null || v < 0) { const e = Object.assign({}, this.state.bbErr); e[id] = true; this.setState({ bbErr: e }); return; }
+      buyback = v;
+    }
+    const labels = this.lotLabels(this.lotsList());
+    let lots = this.lotsList().map((l) => Object.assign({}, l));
+    let stockGain = 0; const delivered = [];
+    if (how === 'called') {
+      let need = q;
+      for (const l of this.deliveryOrder(p.sym, p.strike, lots)) {
+        if (need <= 0) break;
+        const take = Math.min(need, l.shares);
+        stockGain += (p.strike - l.cost) * take;
+        l.shares -= take; need -= take;
+        delivered.push('Lot ' + labels[l.id]);
+      }
+      if (need > 0) stockGain += (p.strike - p.fillStock) * need;
+      lots = lots.filter((l) => l.shares > 0);
+    } else {
+      lots = lots.map((l) => l.id === p.lotId ? Object.assign(l, { premiumKept: (l.premiumKept || 0) + (p.fillCall - buyback) * q }) : l);
+    }
+    const rec = {
+      id: id + '-' + Date.now(), sym: p.sym, contracts: p.contracts || 1, strike: p.strike, expiry: p.expiry,
+      fillStock: p.fillStock, fillCall: p.fillCall, buyback, how, stockGain, delivered: delivered.join(', '),
+      closedOn: new Date().toISOString().slice(0, 10), example: !!p.example
+    };
+    this.setState({ positions: this.positions().filter((x) => x.id !== id), closed: this.closedList().concat([rec]), lots });
+  }
+  normDate(s) {
+    s = String(s || '').trim();
+    let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+    if (m) return m[1] + '-' + m[2].padStart(2, '0') + '-' + m[3].padStart(2, '0');
+    m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2}|\d{4})$/);
+    if (m) return (m[3].length === 2 ? '20' + m[3] : m[3]) + '-' + m[1].padStart(2, '0') + '-' + m[2].padStart(2, '0');
+    return s;
+  }
+  parsePaste(text) {
+    const MON = { JAN: 1, FEB: 2, MAR: 3, APR: 4, MAY: 5, JUN: 6, JUL: 7, AUG: 8, SEP: 9, OCT: 10, NOV: 11, DEC: 12 };
+    const out = {}, found = [];
+    const optRe = /([A-Z][A-Z.]{0,5})\s+(?:100\s+)?(\d{1,2})\s+(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)\s+(\d{2})\s+(\d+(?:\.\d+)?)\s+CALL/;
+    const lines = String(text || '').toUpperCase().replace(/\(WEEKLYS?\)/g, ' ').split(/\n|;/);
+    for (const raw of lines) {
+      const line = raw.replace(/\s+/g, ' ').trim(); if (!line) continue;
+      const csv = line.split(',').map((s) => s.trim());
+      if (csv.length >= 6 && /^[A-Z.]+$/.test(csv[0]) && this.num(csv[1]) !== null) {
+        Object.assign(out, { sym: csv[0], contracts: csv[1], fillStock: csv[2], fillCall: csv[3], strike: csv[4], expiry: this.normDate(csv[5]) });
+        if (csv[6]) out.gtc = csv[6];
+        found.push('quick note'); continue;
+      }
+      const pm = line.match(/@\s*\$?(\d*\.?\d+)/) || line.match(/(\d*\.\d+)\s+LMT/);
+      const price = pm ? pm[1] : null;
+      const om = line.match(optRe);
+      if (om) {
+        out.sym = om[1]; out.strike = om[5];
+        out.expiry = '20' + om[4] + '-' + String(MON[om[3]]).padStart(2, '0') + '-' + om[2].padStart(2, '0');
+        const qm = line.match(/([+-])\s?(\d+)\s+(?:AUTO\s+|TO\s+(?:OPEN|CLOSE)\s+)?[A-Z]/);
+        if (qm) out.contracts = qm[2];
+        const isSell = /\b(SOLD|SELL)\b/.test(line) || (qm && qm[1] === '-');
+        const isBuy = /\b(BOT|BUY|BOUGHT)\b/.test(line) || (qm && qm[1] === '+');
+        if (isSell && price) { out.fillCall = price; found.push('call sale'); }
+        else if (isBuy && price) { out.gtc = price; found.push('buy-back order'); }
+        else found.push('contract');
+        continue;
+      }
+      const sm = line.match(/\b(BOT|BUY|BOUGHT)\b\s*\+?(\d+)\s+([A-Z][A-Z.]{0,5})\b[^@]*@\s*\$?(\d*\.?\d+)/);
+      if (sm) {
+        out.sym = out.sym || sm[3]; out.fillStock = sm[4];
+        if (!out.contracts) out.contracts = String(Math.max(1, Math.round(parseInt(sm[2], 10) / 100)));
+        found.push('share purchase');
+      }
+    }
+    return { out, found: found.filter((v, i) => found.indexOf(v) === i) };
+  }
+  findMatch(f) {
+    const sym = String(f.sym || '').trim().toUpperCase(), strike = this.num(f.strike), expiry = this.normDate(f.expiry);
+    if (!sym || strike === null) return null;
+    return this.positions().find((p) => p.sym === sym && +p.strike === strike && p.expiry === expiry) || null;
+  }
+  saveForm() {
+    const f = this.state.form, n = (k) => this.num(f[k]);
+    const sym = String(f.sym || '').trim().toUpperCase(), strike = n('strike'), expiry = this.normDate(f.expiry);
+    const match = this.findMatch(f);
+    const chosenLot = !match && f.lotId && f.lotId !== 'new' ? this.lotsList().find((l) => l.id === f.lotId) : null;
+    const missing = [];
+    if (!sym) missing.push('symbol');
+    if (!(strike > 0)) missing.push('strike');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(expiry)) missing.push('expiration');
+    if (!match && !chosenLot && !(n('fillStock') > 0)) missing.push('share price paid');
+    if (!match && !(n('fillCall') > 0)) missing.push('call sold at');
+    if (missing.length) { this.setState({ parseMsg: 'Still need: ' + missing.join(', ') + '.' }); return; }
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const dte = Math.max(1, Math.round((this.expDate(expiry) - today) / 86400000));
+    const base = match || { id: (sym + '-' + strike + '-' + expiry).toLowerCase().replace(/[^a-z0-9]+/g, '-'), sym, strike, expiry, iv: 25, gtc: 0.1, example: false };
+    const next = Object.assign({}, base, { daysToExpiry: dte });
+    const setIf = (key, v, ok) => { if (v !== null && ok(v)) next[key] = v; };
+    setIf('contracts', n('contracts'), (v) => v >= 1);
+    setIf('fillStock', n('fillStock'), (v) => v > 0);
+    setIf('fillCall', n('fillCall'), (v) => v > 0);
+    setIf('gtc', n('gtc'), (v) => v >= 0);
+    setIf('iv', n('iv'), (v) => v > 0);
+    setIf('liveStock', n('liveStock'), (v) => v > 0);
+    setIf('liveCall', n('liveCall'), (v) => v >= 0);
+    next.contracts = Math.round(next.contracts || 1);
+    let lots = this.lotsList();
+    if (!match) {
+      if (chosenLot) {
+        next.lotId = chosenLot.id;
+        if (!(n('fillStock') > 0)) next.fillStock = chosenLot.cost;
+      } else {
+        const lot = { id: next.id + '-lot', sym, shares: next.contracts * 100, cost: next.fillStock, bought: new Date().toLocaleDateString('sv-SE'), premiumKept: 0 };
+        next.lotId = lot.id;
+        lots = lots.concat([lot]);
+      }
+    }
+    const sameSym = this.positions().find((p) => p.sym === sym && p.id !== next.id);
+    if (next.liveStock == null) next.liveStock = sameSym ? sameSym.liveStock : next.fillStock;
+    if (!match && n('iv') === null && sameSym) next.iv = sameSym.iv;
+    if (next.liveCall == null) next.liveCall = next.fillCall;
+    const list = match ? this.positions().map((p) => p.id === match.id ? next : p) : this.positions().concat([next]);
+    const open = Object.assign({}, this.state.open); open[next.id] = true;
+    const ed = Object.assign({}, this.state.ed); delete ed[next.id];
+    this.setState({ positions: list, lots, open, ed, showAdd: false, form: this.blankForm(), parseMsg: '' });
+  }
+  callDelta(S, K, days, iv) {
+    if (days <= 0.001) return S >= K ? 1 : 0;
+    const T = days / 365, v = iv * Math.sqrt(T);
+    return this.ncdf((Math.log(S / K) + (0.04 + iv * iv / 2) * T) / v);
+  }
+  ncdf(x) {
+    const t = 1 / (1 + 0.2316419 * Math.abs(x));
+    const d = 0.3989423 * Math.exp(-x * x / 2);
+    const p = d * t * (0.3193815 + t * (-0.3565638 + t * (1.781478 + t * (-1.821256 + t * 1.330274))));
+    return x > 0 ? 1 - p : p;
+  }
+  callVal(S, K, days, iv) {
+    if (days <= 0.001) return Math.max(0, S - K);
+    const T = days / 365, r = 0.04, v = iv * Math.sqrt(T);
+    const d1 = (Math.log(S / K) + (r + iv * iv / 2) * T) / v;
+    return S * this.ncdf(d1) - K * Math.exp(-r * T) * this.ncdf(d1 - v);
+  }
+  usd(n, signed) {
+    const a = Math.abs(n);
+    const s = '$' + a.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    if (!signed) return (n < -0.005 ? '−' : '') + s;
+    if (a < 0.005) return '$0.00';
+    return (n > 0 ? '+' : '−') + s;
+  }
+  tone(n) { return n > 0.005 ? '#1D4ED8' : (n < -0.005 ? '#B45309' : '#5E5B53'); }
+  pct(n) { return (n * 100).toFixed(1) + '%'; }
+  expDate(s) {
+    const parts = String(s || '2026-10-16').split('-').map(Number);
+    return new Date(parts[0] || 2026, (parts[1] || 1) - 1, parts[2] || 1);
+  }
+  dateFor(exp, daysLeft) {
+    const d = this.expDate(exp);
+    d.setDate(d.getDate() - Math.round(daysLeft));
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  }
+  pick(range, maxTicks, steps) {
+    for (const s of steps) { if (range / s <= maxTicks) return s; }
+    return steps[steps.length - 1];
+  }
+  setSc(id, patch) {
+    const sc = Object.assign({}, this.state.sc);
+    sc[id] = Object.assign({ price: null, daysLeft: null }, sc[id], patch);
+    this.setState({ sc });
+  }
+  buildRow(p) {
+    const usd = (n, s) => this.usd(n, s), tone = (n) => this.tone(n);
+    const n = p.contracts || 1, q = n * 100;
+    const fillStock = p.fillStock, fillCall = p.fillCall, K = p.strike;
+    const dte = Math.max(1, Math.round(p.daysToExpiry || 1));
+    const liveStock = p.liveStock, liveCall = p.liveCall, iv = (p.iv || 25) / 100, gtc = p.gtc ?? 0.1;
+    const exp = p.expiry;
+    const expShort = this.dateFor(exp, 0);
+    const kLabel = K % 1 === 0 ? '$' + K : usd(K);
+    const open = !!this.state.open[p.id];
+    const sc = this.state.sc[p.id] || { price: null, daysLeft: null };
+
+    const shareCost = fillStock * q, premium = fillCall * q, buyback = liveCall * q;
+    const kept = premium - buyback, marketValue = liveStock * q;
+    const stockPL = marketValue - shareCost, close = stockPL + kept;
+    const be = fillStock - fillCall, maxProfit = (K - fillStock) * q + premium;
+    const health = (marketValue + premium - buyback) / shareCost;
+    const keptFrac = Math.max(0, Math.min(1, kept / premium));
+
+    let status;
+    if (liveStock >= K) status = { text: 'Above strike', bg: '#F6E3CF', fg: '#7C2D12' };
+    else if (liveStock >= be) status = { text: 'Profit zone', bg: '#D6E2FA', fg: '#1E3A8A' };
+    else status = { text: 'Below breakeven', bg: '#F6E3CF', fg: '#7C2D12' };
+
+    const row = {
+      id: p.id, sym: p.sym, lotId: p.lotId, contracts: n, example: !!p.example, open,
+      openStr: open ? 'true' : 'false', chevRot: open ? '180deg' : '0deg',
+      rowBg: open ? '#F7F5EF' : '#FBFAF6',
+      contract: expShort + ' ' + kLabel + ' call ×' + n,
+      optSymbol: p.sym + ' ' + expShort.toUpperCase() + ' ' + K + ' CALL',
+      dte, expShort, kLabel, status,
+      sharesLabel: q.toLocaleString('en-US'),
+      shareCostLabel: usd(shareCost), premiumLabel: usd(premium), buybackLabel: usd(buyback),
+      keptLabel: usd(kept, true), keptPosLabel: usd(Math.max(0, kept)), keptTone: tone(kept), keptPct: this.pct(keptFrac),
+      closeLabel: usd(close, true), closeTone: tone(close),
+      health: this.pct(health), gtcLabel: usd(gtc),
+      basisLabel: usd(shareCost - premium), maxProfitLabel: usd(maxProfit, true), beLabel: usd(be),
+      liveStockLabel: usd(liveStock), fillStockLabel: usd(fillStock),
+      fillCallLabel: usd(fillCall), liveCallLabel: usd(liveCall),
+      timeLabel: usd(Math.max(0, liveCall - Math.max(0, liveStock - K))),
+      gtcLeft: ((fillCall - gtc) / fillCall * 100).toFixed(1) + '%',
+      gtcKeepLabel: usd((fillCall - gtc) * q),
+      priceId: 'price-' + p.id, daysId: 'days-' + p.id,
+      toggle: () => { const o = Object.assign({}, this.state.open); o[p.id] = !o[p.id]; this.setState({ open: o }); },
+      onPrice: (e) => this.setSc(p.id, { price: parseFloat(e.target.value) }),
+      onDays: (e) => this.setSc(p.id, { daysLeft: dte - parseInt(e.target.value, 10) }),
+      reset: () => this.setSc(p.id, { price: null, daysLeft: null }),
+      totals: { shareCost, premium, buyback, marketValue, stockPL, kept, close, maxProfit, shares: q }
+    };
+    const delta = this.callDelta(liveStock, K, dte, iv);
+    let light;
+    if (liveStock >= K || delta >= 0.6) light = { key: 'r', label: 'Likely called', fg: '#9A3412' };
+    else if (delta >= 0.35 || liveStock < be) light = { key: 'y', label: liveStock < be ? 'Watch · below BE' : 'Watch · near strike', fg: '#8A6100' };
+    else light = { key: 'g', label: 'Good', fg: '#1F6B3A' };
+    const COL = { g: '#2F9E55', y: '#E3A91B', r: '#E0552A' };
+    const RING = { g: 'rgba(47, 158, 85, 0.25)', y: 'rgba(227, 169, 27, 0.3)', r: 'rgba(224, 85, 42, 0.25)' };
+    const hovered = this.state.hover === p.id;
+    light.dot = COL[light.key];
+    light.ring = hovered ? RING[light.key] : 'transparent';
+    light.sub = Math.round(delta * 100) + '% chance called';
+    row.light = light;
+    row.hover = hovered;
+    row.hoverOn = () => this.setState({ hover: p.id });
+    row.hoverOff = () => { if (this.state.hover === p.id) this.setState({ hover: null }); };
+    row.legend = [
+      { key: 'g', label: 'Good', fg: '#1F6B3A', text: 'Under 35% chance the call ends above the strike, and the stock is above your breakeven.' },
+      { key: 'y', label: 'Watch', fg: '#8A6100', text: '35 to 60% chance of being called, or the stock has dropped below breakeven.' },
+      { key: 'r', label: 'Likely called', fg: '#9A3412', text: 'Stock is at or over the strike, or 60%+ chance. Shares will probably sell unless you buy back or roll.' }
+    ].map((l) => Object.assign(l, { color: COL[l.key], bg: l.key === light.key ? '#F3F0E8' : 'transparent' }));
+    row.year = new Date().getFullYear();
+
+    const ed = this.state.ed[p.id] || {};
+    row.ed = {
+      liveStock: ed.liveStock ?? String(liveStock),
+      liveCall: ed.liveCall ?? String(liveCall),
+      gtc: ed.gtc ?? String(gtc)
+    };
+    row.onEd = {
+      liveStock: (e) => this.editField(p.id, 'liveStock', e.target.value),
+      liveCall: (e) => this.editField(p.id, 'liveCall', e.target.value),
+      gtc: (e) => this.editField(p.id, 'gtc', e.target.value)
+    };
+    row.gtcNum = gtc.toFixed(2);
+    row.bbVal = this.state.bb[p.id] ?? '';
+    row.bbErr = !!this.state.bbErr[p.id];
+    row.onBb = (e) => {
+      const bb = Object.assign({}, this.state.bb); bb[p.id] = e.target.value;
+      const be2 = Object.assign({}, this.state.bbErr); delete be2[p.id];
+      this.setState({ bb, bbErr: be2 });
+    };
+    row.recordBuyback = () => this.closePos(p.id, 'bought');
+    row.expired = () => this.closePos(p.id, 'expired');
+    row.called = () => this.closePos(p.id, 'called');
+    row.remove = () => this.setState({ positions: this.positions().filter((x) => x.id !== p.id) });
+
+    if (!open) return row;
+
+    const span = K - be;
+    const mLo = Math.min(be - span * 1.2, liveStock - span * 0.6);
+    const mHi = Math.max(K + span * 1.2, liveStock + span * 0.6);
+    const mp = (x) => (Math.max(0, Math.min(1, (x - mLo) / (mHi - mLo))) * 100);
+    row.map = {
+      nowLeft: mp(liveStock).toFixed(2) + '%', lossW: mp(be).toFixed(2) + '%', profitW: (mp(K) - mp(be)).toFixed(2) + '%',
+      marks: [
+        { left: mp(be).toFixed(2) + '%', label: 'Breakeven', value: usd(be), color: '#7C2D12' },
+        { left: mp(K).toFixed(2) + '%', label: 'Strike', value: usd(K), color: '#1E3A8A' }
+      ]
+    };
+
+    const isLive = sc.price === null && sc.daysLeft === null;
+    const pStep = fillStock < 20 ? 0.01 : 0.05;
+    const pMin = Math.floor(fillStock * 0.9 / pStep) * pStep, pMax = Math.ceil(fillStock * 1.1 / pStep) * pStep;
+    const S = sc.price ?? liveStock, dl = sc.daysLeft ?? dte;
+    const cS = isLive ? liveCall : this.callVal(S, K, dl, iv);
+    const sPL = (S - fillStock) * q, cPL = (fillCall - cS) * q, exitNow = sPL + cPL;
+    const holdExp = (Math.min(S, K) - fillStock) * q + premium;
+    const gtcKeep = (fillCall - gtc) * q;
+
+    let fillD = null;
+    if (cS <= gtc) fillD = dl;
+    else { for (let d = dl; d >= 0; d -= 0.25) { if (this.callVal(S, K, Math.max(0, d), iv) <= gtc) { fillD = Math.max(0, d); break; } } }
+    let fillMsg, gtcWhen;
+    if (fillD !== null && fillD >= dl - 0.01) { fillMsg = 'The call is already at or under ' + usd(gtc) + ' here, so the GTC order fills right away.'; gtcWhen = 'Fills right away at this price'; }
+    else if (fillD !== null) {
+      const when = fillD < 1 ? 'on expiration day' : 'with about ' + Math.round(fillD) + ' days left (around ' + this.dateFor(exp, fillD) + ')';
+      fillMsg = 'At ' + usd(S) + ', the call drifts to ' + usd(gtc) + ' ' + when + '. ' + (fillD <= 5 ? 'Time works slowly until the final week; a dip gets you there sooner.' : 'That frees the shares early for a new call.');
+      gtcWhen = fillD < 1 ? 'Fills only on expiration day' : 'Likely fills ~' + Math.round(fillD) + ' days before expiry';
+    } else { fillMsg = 'Above the strike, the call stays over ' + usd(gtc) + ' until expiry. The GTC order won\u2019t fill; let the shares go or roll.'; gtcWhen = 'Won\u2019t fill at this price'; }
+
+    const cw = 600, ch = 220, pl = 52, pr = 16, pt = 14, pb = 30, iw = cw - pl - pr, ih = ch - pt - pb;
+    const hline = (y) => 'M' + pl + ' ' + y.toFixed(1) + ' L' + (cw - pr) + ' ' + y.toFixed(1);
+    const vline = (x) => 'M' + x.toFixed(1) + ' ' + pt + ' L' + x.toFixed(1) + ' ' + (ch - pb);
+    let tMax = Math.max(fillCall * 1.35, this.callVal(S, K, dte, iv) * 1.15, cS * 1.15, gtc * 2);
+    const tStep = this.pick(tMax, 5, [0.02, 0.05, 0.1, 0.25, 0.5, 1, 2]);
+    tMax = Math.ceil(tMax / tStep) * tStep;
+    const tx = (d) => pl + (dte - d) / dte * iw;
+    const ty = (v) => pt + (1 - Math.min(v, tMax) / tMax) * ih;
+    const pts = [];
+    for (let d = dte; d > 0; d -= 0.25) pts.push(tx(d).toFixed(1) + ' ' + ty(this.callVal(S, K, d, iv)).toFixed(1));
+    pts.push(tx(0).toFixed(1) + ' ' + ty(this.callVal(S, K, 0, iv)).toFixed(1));
+    const curve = 'M' + pts.join(' L');
+    const tg = [], tyT = [];
+    for (let v = 0; v <= tMax + 1e-9; v += tStep) { tg.push(hline(ty(v))); tyT.push({ top: (ty(v) - 7).toFixed(1) + 'px', text: usd(v) }); }
+    const txT = [];
+    for (let d = dte; d >= 0; d -= 5) txT.push({ left: tx(d).toFixed(1) + 'px', text: this.dateFor(exp, d) });
+    if (dte % 5 !== 0) txT.push({ left: tx(0).toFixed(1) + 'px', text: this.dateFor(exp, 0) });
+    const nowX = tx(dl), nowY = ty(cS), fX = fillD !== null ? tx(fillD) : pl;
+    row.t = {
+      grid: tg.join(' '), curve,
+      area: curve + ' L' + tx(0).toFixed(1) + ' ' + ty(0).toFixed(1) + ' L' + tx(dte).toFixed(1) + ' ' + ty(0).toFixed(1) + ' Z',
+      sold: hline(ty(fillCall)), gtc: hline(ty(gtc)),
+      soldTop: (ty(fillCall) - 19).toFixed(1) + 'px', gtcTop: (ty(gtc) - 19).toFixed(1) + 'px',
+      fillLine: vline(fX), fillOpacity: fillD !== null ? 0.8 : 0,
+      nowLine: vline(nowX), nowX: +nowX.toFixed(1), nowY: +nowY.toFixed(1),
+      nowText: (isLive ? 'Now ' : '') + usd(cS),
+      nowLabelLeft: (nowX > cw - 120 ? nowX - 96 : nowX + 10).toFixed(1) + 'px',
+      nowLabelTop: (nowY - 30).toFixed(1) + 'px',
+      yTicks: tyT, xTicks: txT
+    };
+
+    const px = (x) => pl + (x - pMin) / (pMax - pMin) * iw;
+    const holdF = (x) => (Math.min(x, K) - fillStock) * q + premium;
+    const exitF = (x) => (x - fillStock) * q + (fillCall - this.callVal(x, K, dl, iv)) * q;
+    const hv = [], ev = [], inc = (pMax - pMin) / 100;
+    for (let x = pMin; x <= pMax + 1e-9; x += inc) { hv.push([x, holdF(x)]); ev.push([x, exitF(x)]); }
+    const allV = hv.concat(ev).map((a) => a[1]).concat([0, exitNow]);
+    let yLo = Math.min.apply(null, allV), yHi = Math.max.apply(null, allV);
+    const yStep = this.pick(yHi - yLo, 6, [10, 25, 50, 100, 200, 500, 1000]);
+    yLo = Math.floor((yLo - yStep * 0.2) / yStep) * yStep; yHi = Math.ceil((yHi + yStep * 0.2) / yStep) * yStep;
+    const py = (v) => pt + (1 - (v - yLo) / (yHi - yLo)) * ih;
+    const toPath = (arr) => 'M' + arr.map((a) => px(a[0]).toFixed(1) + ' ' + py(a[1]).toFixed(1)).join(' L');
+    const pg = [], pyT = [];
+    for (let v = yLo; v <= yHi + 1e-9; v += yStep) { pg.push(hline(py(v))); pyT.push({ top: (py(v) - 7).toFixed(1) + 'px', text: v === 0 ? '$0' : (v > 0 ? '+$' : '−$') + Math.abs(v) }); }
+    const pxT = [];
+    for (let i = 0; i <= 4; i++) { const x = pMin + (pMax - pMin) * i / 4; pxT.push({ left: px(x).toFixed(1) + 'px', text: '$' + x.toFixed(x < 20 ? 2 : 1) }); }
+    const Sc = Math.max(pMin, Math.min(pMax, S));
+    row.pc = {
+      grid: pg.join(' '), zero: hline(py(0)), levels: vline(px(be)) + ' ' + vline(px(K)),
+      hold: toPath(hv), exit: toPath(ev),
+      nowLine: vline(px(Sc)), nowX: +px(Sc).toFixed(1),
+      holdY: +py(holdF(Sc)).toFixed(1), exitY: +py(exitNow).toFixed(1),
+      beLeft: px(be).toFixed(1) + 'px', kLeft: px(K).toFixed(1) + 'px',
+      exitLegend: dl === 0 ? 'Close at expiry' : 'Close with ' + dl + 'd left',
+      yTicks: pyT, xTicks: pxT
+    };
+    row.isLive = isLive;
+    row.fillMsg = fillMsg;
+    row.w = {
+      price: S, pMin, pMax, pStep, elapsed: dte - dl,
+      priceLabel: usd(S),
+      daysLabel: dl + (dl === 1 ? ' day' : ' days') + ' left · ' + this.dateFor(exp, dl),
+      closeVal: usd(exitNow, true), closeTone: tone(exitNow),
+      closeDetail: 'Shares ' + usd(sPL, true) + ' · Call ' + usd(cPL, true),
+      gtcVal: usd(gtcKeep, true), gtcWhen,
+      holdVal: usd(holdExp, true), holdTone: tone(holdExp),
+      holdDetail: S >= K ? 'Shares called away at ' + kLabel : 'Call expires worthless; keep shares + ' + usd(premium)
+    };
+    return row;
+  }
+  renderVals() {
+    const usd = (n, s) => this.usd(n, s), tone = (n) => this.tone(n);
+    const positions = this.positions();
+    const rows = positions.map((p) => this.buildRow(p));
+    const T = rows.reduce((a, r) => { for (const k in r.totals) a[k] = (a[k] || 0) + r.totals[k]; return a; }, {});
+    const shareCost = T.shareCost || 0, premium = T.premium || 0, buyback = T.buyback || 0;
+    const health = shareCost ? ((T.marketValue || 0) + premium - buyback) / shareCost : 1;
+    const hBar = Math.max(0, Math.min(1, (health - 0.9) / 0.2));
+    const tot = {
+      countLabel: rows.length + (rows.length === 1 ? ' position' : ' positions'),
+      sharesLabel: (T.shares || 0).toLocaleString('en-US'),
+      premium: usd(premium), shareCost: usd(shareCost), marketValue: usd(T.marketValue || 0),
+      buyback: usd(buyback), kept: usd(Math.max(0, T.kept || 0)), keptSigned: usd(T.kept || 0, true), keptTone: tone(T.kept || 0),
+      keptPct: this.pct(premium ? Math.max(0, Math.min(1, (T.kept || 0) / premium)) : 0),
+      close: usd(T.close || 0, true), closeTone: tone(T.close || 0),
+      stockPL: usd(T.stockPL || 0, true), callPL: usd(T.kept || 0, true), maxProfit: usd(T.maxProfit || 0, true),
+      health: this.pct(health), healthBar: (hBar * 100).toFixed(1) + '%',
+      healthColor: health >= 1 ? '#7FA2F5' : (health >= 0.97 ? '#D9D5CB' : '#E08A4A')
+    };
+    tot.nGreen = rows.filter((r) => r.light.key === 'g').length;
+    tot.nYellow = rows.filter((r) => r.light.key === 'y').length;
+    tot.nRed = rows.filter((r) => r.light.key === 'r').length;
+
+    const tax = this.state.tax;
+    const ratePct = (this.num(tax.fed) || 0) + (this.num(tax.st) || 0) + (tax.niit ? 3.8 : 0), rate = ratePct / 100;
+    const year = new Date().getFullYear();
+    const HOW = { bought: 'Bought back', expired: 'Expired worthless', called: 'Called away' };
+    const closedYr = this.closedList().filter((c) => String(c.closedOn || '').slice(0, 4) === String(year));
+    let cPrem = 0, cBuy = 0, cOpt = 0, cStock = 0;
+    const closedRows = closedYr.map((c) => {
+      const q = (c.contracts || 1) * 100, prem = c.fillCall * q, bb = (c.buyback || 0) * q;
+      const opt = prem - bb, stock = c.stockGain || 0, total = opt + stock;
+      cPrem += prem; cBuy += bb; cOpt += opt; cStock += stock;
+      const d = this.expDate(c.closedOn);
+      return {
+        sym: c.sym, example: !!c.example,
+        contract: this.dateFor(c.expiry, 0) + ' ' + (c.strike % 1 === 0 ? '$' + c.strike : usd(c.strike)) + ' ×' + (c.contracts || 1),
+        date: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        how: (HOW[c.how] || c.how) + (c.how === 'bought' ? ' at ' + usd(c.buyback || 0) : c.how === 'called' ? ' at ' + usd(c.strike) : '') + (c.delivered ? ' · delivered ' + c.delivered : ''),
+        premium: usd(prem), buyback: usd(bb), opt: usd(opt, true), optTone: tone(opt),
+        stock: usd(stock, true), stockTone: tone(stock), tax: usd(Math.max(0, total) * rate)
+      };
+    });
+    const realized = cOpt + cStock, openPL = T.close || 0, gross = realized + openPL;
+    const net = gross - Math.max(0, gross) * rate;
+    const ytd = {
+      year, rateLabel: ratePct.toFixed(1).replace(/\.0$/, '') + '%',
+      noClosed: closedRows.length === 0,
+      closedCount: closedRows.length + (closedRows.length === 1 ? ' closed call' : ' closed calls'),
+      closedPremium: usd(cPrem), closedBuyback: usd(cBuy),
+      prem: usd(cOpt, true), premTone: tone(cOpt),
+      stock: usd(cStock, true), stockTone: tone(cStock),
+      open: usd(openPL, true), openTone: tone(openPL),
+      premTax: usd(Math.max(0, cOpt) * rate),
+      openPremTax: usd(Math.max(0, T.kept || 0) * rate),
+      realizedTax: usd(Math.max(0, realized) * rate),
+      gross: usd(gross, true), net: usd(net, true), netTone: tone(net),
+      returnPct: shareCost ? (gross / shareCost * 100).toFixed(2) + '%' : '0%'
+    };
+
+    const form = this.state.form;
+    const fh = {};
+    Object.keys(form).forEach((k) => { fh[k] = (e) => { const f = Object.assign({}, this.state.form); f[k] = e.target.value; this.setState({ form: f }); }; });
+    const match = this.findMatch(form);
+    const formMatch = match
+      ? { text: 'Matches your ' + match.sym + ' ' + this.dateFor(match.expiry, 0) + ' $' + match.strike + ' line. Saving updates it.', cta: 'Update line item', color: '#1E3A8A' }
+      : { text: form.sym ? 'This adds a new line item.' : '', cta: 'Add line item', color: '#5E5B53' };
+    const setTax = (k) => (e) => { const t = Object.assign({}, this.state.tax); t[k] = k === 'niit' ? e.target.checked : e.target.value; this.setState({ tax: t }); };
+
+    // ---- Lots ----
+    const lotsAll = this.lotsList();
+    const labels = this.lotLabels(lotsAll);
+    const target = this.num(this.state.targetYield) || 1;
+    const todayD = new Date(); todayD.setHours(0, 0, 0, 0);
+    const fmtD = (d) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    const COLS = { g: '#2F9E55', y: '#E3A91B', r: '#E0552A' };
+    const rowByLot = {}; rows.forEach((r) => { if (r.lotId) rowByLot[r.lotId] = r; });
+    const posByLot = {}; positions.forEach((p) => { if (p.lotId) posByLot[p.lotId] = p; });
+    rows.forEach((r) => { const l = lotsAll.find((x) => x.id === r.lotId); r.lotTag = l ? 'Lot ' + labels[l.id] + ' · ' + usd(l.cost) : 'no lot linked'; });
+    const quote = (sym) => {
+      const p = positions.find((x) => x.sym === sym);
+      if (p) return { S: p.liveStock, iv: (p.iv || 25) / 100 };
+      const l = lotsAll.find((x) => x.sym === sym);
+      return { S: l ? (l.lastPrice || l.cost) : 0, iv: 0.25 };
+    };
+    const syms = []; lotsAll.forEach((l) => { if (syms.indexOf(l.sym) < 0) syms.push(l.sym); });
+    let sShares = 0, sCost = 0, sValue = 0, sUnder = 0, sFree = 0;
+    const groups = syms.map((sym) => {
+      const { S, iv } = quote(sym);
+      const step = this.strikeStep(S);
+      const lots = lotsAll.filter((l) => l.sym === sym).sort((a, b) => labels[a.id].localeCompare(labels[b.id]));
+      const deliverMap = {};
+      let deliverText = 'No open calls on ' + sym + ' right now, so nothing can be called away.';
+      const strikes = positions.filter((p) => p.sym === sym).map((p) => p.strike).filter((k, i, a) => a.indexOf(k) === i);
+      strikes.forEach((K, i) => {
+        const first = this.deliveryOrder(sym, K, lots)[0];
+        if (!first) return;
+        if (deliverMap[first.id] === undefined) deliverMap[first.id] = K;
+        if (i === 0) {
+          deliverText = 'If ' + sym + ' is called away at ' + usd(K) + ', tell Schwab to sell Lot ' + labels[first.id] + ' (specific lot, before the trade settles). ' +
+            (first.cost <= K
+              ? 'It has the highest cost at or under the strike, so the taxable gain stays small (' + usd((K - first.cost) * 100, true) + ' per 100 shares) and your cheaper lots stay.'
+              : 'Every lot cost more than the strike, so this one takes the smallest loss.');
+        }
+      });
+      let gShares = 0, gCost = 0, gEff = 0, gUnreal = 0, nReady = 0, nThin = 0, nHold = 0, nCov = 0, covShares = 0;
+      const lotRows = lots.map((l) => {
+        const pos = posByLot[l.id], row = rowByLot[l.id];
+        const kept = (l.premiumKept || 0) + (pos ? pos.fillCall * (pos.contracts || 1) * 100 : 0);
+        const eff = l.cost - kept / l.shares;
+        const unreal = (S - l.cost) * l.shares;
+        gShares += l.shares; gCost += l.cost * l.shares; gEff += eff * l.shares; gUnreal += unreal;
+        let dot, fg, signal, sub;
+        if (row) {
+          nCov++; covShares += l.shares;
+          dot = COLS[row.light.key]; fg = row.light.fg; signal = 'Covered · ' + row.light.label;
+          sub = row.light.sub + '. Manage it in the call row above.';
+        } else {
+          const K = this.ceilTo(Math.max(eff, S), step);
+          const prem = this.callVal(S, K, 30, iv), y = prem / S * 100;
+          if (y >= target) {
+            nReady++; dot = COLS.g; fg = '#1F6B3A'; signal = 'Ready to sell a call';
+            sub = 'A ~30-day ' + usd(K) + ' call pays about ' + usd(prem) + ' (' + y.toFixed(1) + '% a month), at or above your cost.';
+          } else if (y >= target * 0.35) {
+            nThin++; dot = COLS.y; fg = '#8A6100'; signal = 'Thin premium';
+            sub = 'Best call at or above cost: ' + usd(K) + ' for about ' + usd(prem) + ' (' + y.toFixed(1) + '% a month). Worth waiting for a bounce.';
+          } else {
+            nHold++; dot = COLS.r; fg = '#9A3412'; signal = 'Hold · no call yet';
+            let X = null;
+            for (let s2 = S; s2 <= Math.max(eff, S) * 1.25; s2 += step / 10) {
+              const K2 = this.ceilTo(Math.max(eff, s2), step);
+              if (this.callVal(s2, K2, 30, iv) / s2 * 100 >= target) { X = s2; break; }
+            }
+            sub = 'A call at or above your ' + usd(eff) + ' effective cost pays too little today. ' + (X ? 'Watch for ' + sym + ' around ' + usd(X) + '.' : 'Needs ' + sym + ' back near ' + usd(eff) + '.');
+          }
+        }
+        let wash = false, washText = '';
+        if (unreal < -0.005) {
+          sUnder++;
+          const recent = lots.filter((o) => { const age = (todayD - this.expDate(o.bought)) / 86400000; return o.id !== l.id && age >= 0 && age <= 30; })
+            .map((o) => this.expDate(o.bought)).sort((a, b) => b - a)[0];
+          if (recent) {
+            const clear = new Date(recent); clear.setDate(clear.getDate() + 31);
+            wash = true;
+            washText = 'Selling this lot at a loss now would be a wash sale (' + sym + ' bought ' + fmtD(recent) + '). Clear after ' + fmtD(clear) + ', and don\u2019t rebuy within 30 days of the sale.';
+          }
+        }
+        if (!row) sFree++;
+        return {
+          label: labels[l.id], example: !!l.example, bought: fmtD(this.expDate(l.bought)),
+          shares: l.shares.toLocaleString('en-US'), cost: usd(l.cost), eff: usd(eff),
+          effNote: kept > 0.005 ? usd(kept) + ' premium applied' : 'No premium yet',
+          unreal: usd(unreal, true), unrealTone: tone(unreal),
+          status: row ? 'Covered by ' + row.contract : 'Free, no call on it',
+          deliver: deliverMap[l.id] !== undefined, deliverStrike: deliverMap[l.id] !== undefined ? usd(deliverMap[l.id]) : '',
+          dot, fg, signal, signalSub: sub, wash, washText
+        };
+      });
+      sShares += gShares; sCost += gCost; sValue += S * gShares;
+      const rb = this.state.rebuy[sym] ?? '';
+      const tgt = this.num(rb);
+      let cspText = 'Set a price you\u2019d happily buy more at. You\u2019ll see a cash-secured put that pays you while you wait.';
+      if (tgt !== null && tgt > 0) {
+        if (tgt >= S) cspText = 'That\u2019s at or above today\u2019s ' + usd(S) + ', so buying shares now is simpler than a put.';
+        else {
+          const K = this.floorTo(tgt, step);
+          const put = Math.max(0.01, this.callVal(S, K, 30, iv) - S + K * Math.exp(-0.04 * 30 / 365));
+          cspText = 'Sell a ~30-day ' + usd(K) + ' cash-secured put for about ' + usd(put) + ' (' + usd(put * 100) + '). If ' + sym + ' dips to ' + usd(K) + ' you buy 100 shares, effectively at ' + usd(K - put) + '. Keep ' + usd(K * 100) + ' in cash for it.';
+        }
+      }
+      const gOpen = !!this.state.grpOpen[sym];
+      const sig = [];
+      if (nCov) sig.push(nCov + ' covered');
+      if (nReady) sig.push(nReady + ' ready');
+      if (nThin) sig.push(nThin + ' thin');
+      if (nHold) sig.push(nHold + ' hold');
+      return {
+        sym, open: gOpen, openStr: gOpen ? 'true' : 'false', chevRot: gOpen ? '180deg' : '0deg', bg: gOpen ? '#F7F5EF' : '#FBFAF6',
+        lotCount: lots.length + (lots.length === 1 ? ' lot' : ' lots'), priceLabel: usd(S),
+        shares: gShares.toLocaleString('en-US'), avgCost: usd(gShares ? gCost / gShares : 0), effCost: usd(gShares ? gEff / gShares : 0),
+        unreal: usd(gUnreal, true), unrealTone: tone(gUnreal),
+        coveredText: covShares.toLocaleString('en-US') + ' covered · ' + (gShares - covShares).toLocaleString('en-US') + ' free',
+        signalText: sig.join(' · '), lots: lotRows, deliverText, cspText,
+        rebuyId: 'rebuy-' + sym.toLowerCase(), rebuyVal: rb,
+        onRebuy: (e) => { const r2 = Object.assign({}, this.state.rebuy); r2[sym] = e.target.value; this.setState({ rebuy: r2 }); },
+        toggle: () => { const g2 = Object.assign({}, this.state.grpOpen); g2[sym] = !g2[sym]; this.setState({ grpOpen: g2 }); }
+      };
+    });
+    const lotSum = { shares: sShares.toLocaleString('en-US'), cost: usd(sCost), value: usd(sValue), unreal: usd(sValue - sCost, true), unrealTone: tone(sValue - sCost), under: String(sUnder), free: String(sFree) };
+    const lotForm = this.state.lotForm, lfh = {};
+    Object.keys(lotForm).forEach((k) => { lfh[k] = (e) => { const f2 = Object.assign({}, this.state.lotForm); f2[k] = e.target.value; this.setState({ lotForm: f2, lotErr: '' }); }; });
+
+    // Add-form lot choice: a new purchase, or a free lot of the same symbol.
+    const fSym = String(form.sym || '').trim().toUpperCase();
+    const freeLots = lotsAll.filter((l) => l.sym === fSym && !posByLot[l.id]);
+    const choice = freeLots.some((l) => l.id === form.lotId) ? form.lotId : 'new';
+    const mk = (value, label) => {
+      const on = choice === value;
+      return { label, pressed: on ? 'true' : 'false', bg: on ? '#1A1A17' : '#FFFFFF', fg: on ? '#FBFAF6' : '#1A1A17', border: on ? '#1A1A17' : '#C9C3B5',
+        pick: () => { const f2 = Object.assign({}, this.state.form); f2.lotId = value; this.setState({ form: f2 }); } };
+    };
+    const lotChoices = [mk('new', 'New purchase')].concat(freeLots.map((l) => mk(l.id, 'Lot ' + labels[l.id] + ' · ' + l.shares + ' @ ' + usd(l.cost))));
+    const chosen = freeLots.find((l) => l.id === choice);
+    const lotChoiceHint = chosen
+      ? 'Uses Lot ' + labels[chosen.id] + '\u2019s ' + usd(chosen.cost) + ' cost as the share price.'
+      : (fSym && freeLots.length === 0 ? 'No free ' + fSym + ' lots, so this creates a new lot at the share price above.' : 'Creates a new lot at the share price above.');
+
+    // Google Sheet settings. The real app's server verifies access; this prototype simulates it.
+    const sh = this.state.sheet;
+    const setSheet = (patch) => this.setState({ sheet: Object.assign({}, this.state.sheet, patch) });
+    const sheet = {
+      open: sh.open, openStr: sh.open ? 'true' : 'false', connected: !!sh.id, input: sh.input,
+      dot: sh.id ? '#2F9E55' : '#C9C3B5', chip: sh.id ? 'Sheet synced ' + sh.at : 'Connect Google Sheet',
+      serviceAccount: 'covered-calls-sync@[YOUR-PROJECT].iam.gserviceaccount.com',
+      copyLabel: sh.copied ? 'Copied' : 'Copy',
+      msg: sh.msg || (sh.id ? '' : 'Paste the ID or the whole URL. The app checks it can read and edit the sheet before saving.'),
+      msgColor: sh.err ? '#9A3412' : (sh.id ? '#1F6B3A' : '#5E5B53'),
+      shortId: sh.id ? sh.id.slice(0, 6) + '…' + sh.id.slice(-4) : ''
+    };
+
+    return {
+      groups, lotSum, lotForm, lfh, lotChoices, lotChoiceHint, sheet,
+      lotSet: { target: this.state.targetYield, showAdd: this.state.showAddLot, err: this.state.lotErr },
+      onTarget: (e) => this.setState({ targetYield: e.target.value }),
+      toggleAddLot: () => this.setState({ showAddLot: !this.state.showAddLot, lotErr: '', lotForm: this.blankLot() }),
+      saveLot: () => this.saveLot(),
+      toggleSheet: () => setSheet({ open: !this.state.sheet.open }),
+      onSheetInput: (e) => setSheet({ input: e.target.value, err: false, msg: '' }),
+      connectSheet: () => {
+        const raw = String(this.state.sheet.input || '').trim();
+        const m = raw.match(/\/d\/([A-Za-z0-9_-]{20,})/);
+        const id = m ? m[1] : (/^[A-Za-z0-9_-]{20,}$/.test(raw) ? raw : '');
+        if (!id) { setSheet({ err: true, msg: 'That doesn\u2019t look like a Sheet ID. Paste the full URL or the code between /d/ and /edit.' }); return; }
+        const at = new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+        setSheet({ id, at, err: false, msg: 'Connected to \u201cCovered Calls Ledger\u201d. New trades, closes, lots and prices sync automatically.' });
+      },
+      disconnectSheet: () => setSheet({ id: '', at: '', input: '', msg: 'Disconnected. Nothing new will sync until you connect again.', err: false }),
+      copySa: () => { try { navigator.clipboard.writeText(sheet.serviceAccount); } catch (e) {} setSheet({ copied: true }); },
+      rows, tot, ytd, closedRows, tax, form, fh, formMatch,
+      showAdd: this.state.showAdd, parseMsg: this.state.parseMsg, parseMsgShow: !!this.state.parseMsg,
+      openAdd: () => this.setState({ showAdd: true }),
+      closeAdd: () => this.setState({ showAdd: false, form: this.blankForm(), parseMsg: '' }),
+      parse: () => {
+        const res = this.parsePaste(this.state.form.paste);
+        const f = Object.assign({}, this.state.form, res.out);
+        const msg = res.found.length ? 'Found: ' + res.found.join(', ') + '. Check the fields, then save.' : 'Couldn\u2019t read that. Try a thinkorswim order line or the quick note format.';
+        this.setState({ form: f, parseMsg: msg });
+      },
+      save: () => this.saveForm(),
+      onFed: setTax('fed'), onSt: setTax('st'), onNiit: setTax('niit')
+    };
+  }
+}
+</script>
+</body>
+</html>

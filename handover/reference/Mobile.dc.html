@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>PFE covered call glance</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&amp;family=Instrument+Sans:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#F3F0E8}
+a{color:#1D4ED8}a:hover{color:#1E3A8A}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; padding: 24px 20px; background: #F3F0E8; color: #1A1A17; font-family: 'Instrument Sans', system-ui, sans-serif; display: flex; flex-direction: column; gap: 16px">
+
+<header style="display: flex; justify-content: space-between; align-items: flex-start; gap: 12px">
+<div style="display: flex; flex-direction: column; gap: 4px">
+<h1 style="margin: 0; font-family: Fraunces, Georgia, serif; font-size: 30px; font-weight: 600; line-height: 1.1">PFE</h1>
+<div style="font-size: 14px; color: #3A3833">{{expShort}} {{kLabel}} call · {{dte}} days left</div>
+</div>
+<span style="padding: 6px 12px; background: {{status.bg}}; color: {{status.fg}}; border-radius: 999px; font-size: 13px; font-weight: 600; white-space: nowrap">{{status.text}}</span>
+</header>
+
+<div style="background: #FBFAF6; border: 1px solid #DDD8CC; border-radius: 16px; padding: 20px; display: flex; flex-direction: column; gap: 6px">
+<div style="font-size: 14px; color: #5E5B53; font-weight: 500">If you closed everything now</div>
+<div style="font-family: Fraunces, Georgia, serif; font-size: 46px; font-weight: 600; color: {{totalTone}}; font-variant-numeric: tabular-nums; line-height: 1.1">{{totalLabel}}</div>
+<div style="font-size: 14px; color: #3A3833">Shares {{stockPLLabel}} · Call {{callPLLabel}}</div>
+<div style="height: 1px; background: #E6E1D6; margin: 8px 0"></div>
+<div style="display: flex; justify-content: space-between; font-size: 14px"><span style="color: #5E5B53">Money in this trade</span><span style="font-family: 'JetBrains Mono', monospace">{{basisLabel}}</span></div>
+<div style="display: flex; justify-content: space-between; font-size: 14px"><span style="color: #5E5B53">PFE last</span><span style="font-family: 'JetBrains Mono', monospace">{{liveStockLabel}}</span></div>
+</div>
+
+<div style="background: #FBFAF6; border: 1px solid #DDD8CC; border-radius: 16px; padding: 20px; display: flex; flex-direction: column; gap: 10px">
+<div style="font-size: 16px; font-weight: 600">Earned {{keptLabel}} of {{premiumLabel}}</div>
+<div style="position: relative; height: 34px">
+<div style="position: absolute; left: 0; right: 0; top: 4px; height: 14px; background: #E6E1D6; border-radius: 7px; overflow: hidden">
+<div style="height: 100%; width: {{keptPct}}; background: #1D4ED8"></div>
+</div>
+<div style="position: absolute; left: {{gtcLeft}}; top: 0; width: 2px; height: 22px; background: #B45309"></div>
+<div style="position: absolute; left: {{gtcLeft}}; top: 22px; transform: translateX(-50%); font-size: 11px; color: #7C2D12; white-space: nowrap">GTC {{gtcKeep}}</div>
+</div>
+<div style="font-size: 13px; color: #3A3833; line-height: 1.45">Time value left in the call: {{timeLabel}}. It drains to $0 by {{expShort}} if PFE stays under {{kLabel}}.</div>
+</div>
+
+<div style="background: #FBFAF6; border: 1px solid #DDD8CC; border-radius: 16px; padding: 20px; display: flex; flex-direction: column; gap: 10px">
+<div style="font-size: 16px; font-weight: 600">Your levels</div>
+<div style="position: relative; height: 62px">
+<div style="position: absolute; left: 0; right: 0; top: 8px; height: 16px; display: flex; border-radius: 6px; overflow: hidden">
+<div style="width: {{lossW}}; background: #F1DCC6"></div>
+<div style="width: {{profitW}}; background: #D6E2FA"></div>
+<div style="flex-grow: 1; background: #E4E0D6"></div>
+</div>
+<div style="position: absolute; left: {{nowLeft}}; top: 3px; width: 14px; height: 14px; margin-left: -7px; margin-top: 4px; border-radius: 50%; background: #1A1A17; border: 2px solid #FBFAF6"></div>
+<div style="position: absolute; left: {{beLeft}}; top: 30px; transform: translateX(-50%); font-size: 11px; color: #7C2D12; text-align: center; white-space: nowrap">BE<br>{{beLabel}}</div>
+<div style="position: absolute; left: {{kLeft}}; top: 30px; transform: translateX(-50%); font-size: 11px; color: #1E3A8A; text-align: center; white-space: nowrap">Strike<br>{{kLabel}}</div>
+</div>
+<div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px">
+<div style="background: #F3F0E8; border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 2px"><span style="font-size: 12px; color: #5E5B53">Best case</span><span style="font-family: 'JetBrains Mono', monospace; font-size: 16px; color: #1D4ED8">{{maxProfitLabel}}</span></div>
+<div style="background: #F3F0E8; border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 2px"><span style="font-size: 12px; color: #5E5B53">Breakeven</span><span style="font-family: 'JetBrains Mono', monospace; font-size: 16px">{{beLabel}}</span></div>
+</div>
+</div>
+
+<div style="background: #FBFAF6; border: 2px solid #B45309; border-radius: 16px; padding: 14px 18px; display: flex; justify-content: space-between; align-items: center; gap: 12px">
+<div style="display: flex; flex-direction: column; gap: 2px">
+<span style="font-size: 15px; font-weight: 600">Buy back at {{gtcLabel}} · GTC</span>
+<span style="font-size: 13px; color: #3A3833">Locks in {{gtcKeep}} when it fills</span>
+</div>
+<span style="font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 999px; background: #F6E3CF; color: #7C2D12">Working</span>
+</div>
+
+<a href="Main.dc.html" style="margin-top: auto; min-height: 48px; display: flex; align-items: center; justify-content: center; border-radius: 12px; background: #1A1A17; color: #FBFAF6; font-size: 16px; font-weight: 600; text-decoration: none">Explore what-ifs</a>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"liveStock":{"editor":"float","default":27.775,"step":0.005,"section":"Live feed"},"liveCall":{"editor":"float","default":0.57,"step":0.01,"section":"Live feed"},"daysToExpiry":{"editor":"int","default":25,"min":1,"max":60,"section":"Live feed"},"fillStock":{"editor":"float","default":27.8,"step":0.01,"section":"Position"},"fillCall":{"editor":"float","default":0.55,"step":0.01,"section":"Position"},"strike":{"editor":"float","default":28,"step":0.5,"section":"Position"},"gtcPrice":{"editor":"float","default":0.1,"step":0.01,"section":"Position"},"expiry":{"editor":"text","default":"2026-10-16","section":"Position"},"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  usd(n, signed) {
+    const a = Math.abs(n);
+    const s = '$' + a.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    if (!signed) return (n < -0.005 ? '−' : '') + s;
+    if (a < 0.005) return '$0.00';
+    return (n > 0 ? '+' : '−') + s;
+  }
+  renderVals() {
+    const P = this.props, q = 100;
+    const fillStock = P.fillStock ?? 27.8, fillCall = P.fillCall ?? 0.55, K = P.strike ?? 28;
+    const dte = Math.round(P.daysToExpiry ?? 25), liveStock = P.liveStock ?? 27.775, liveCall = P.liveCall ?? 0.57;
+    const gtc = P.gtcPrice ?? 0.1;
+    const usd = (n, s) => this.usd(n, s);
+    const tone = (n) => n > 0.005 ? '#1D4ED8' : (n < -0.005 ? '#B45309' : '#5E5B53');
+    const parts = String(P.expiry ?? '2026-10-16').split('-').map(Number);
+    const exp = new Date(parts[0] || 2026, (parts[1] || 1) - 1, parts[2] || 1);
+    const premium = fillCall * q, be = fillStock - fillCall;
+    const stockPL = (liveStock - fillStock) * q, callPL = (fillCall - liveCall) * q, total = stockPL + callPL;
+    const kept = premium - liveCall * q;
+    let status;
+    if (liveStock >= K) status = { text: 'Above strike', bg: '#F6E3CF', fg: '#7C2D12' };
+    else if (liveStock >= be) status = { text: 'Profit zone', bg: '#D6E2FA', fg: '#1E3A8A' };
+    else status = { text: 'Below breakeven', bg: '#F6E3CF', fg: '#7C2D12' };
+    const lo = Math.min(26.5, liveStock - 0.4), hi = Math.max(29, liveStock + 0.4);
+    const pct = (p) => Math.max(0, Math.min(1, (p - lo) / (hi - lo))) * 100;
+    return {
+      dte, status,
+      kLabel: K % 1 === 0 ? '$' + K : usd(K),
+      expShort: exp.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+      totalLabel: usd(total, true), totalTone: tone(total),
+      stockPLLabel: usd(stockPL, true), callPLLabel: usd(callPL, true),
+      basisLabel: usd(fillStock * q - premium), liveStockLabel: usd(liveStock),
+      premiumLabel: usd(premium), keptLabel: usd(Math.max(0, kept)),
+      keptPct: (Math.max(0, Math.min(1, kept / premium)) * 100).toFixed(1) + '%',
+      gtcLeft: ((fillCall - gtc) / fillCall * 100).toFixed(1) + '%',
+      gtcKeep: usd((fillCall - gtc) * q), gtcLabel: usd(gtc),
+      timeLabel: usd(Math.max(0, liveCall - Math.max(0, liveStock - K))),
+      lossW: pct(be).toFixed(2) + '%', profitW: (pct(K) - pct(be)).toFixed(2) + '%',
+      nowLeft: pct(liveStock).toFixed(2) + '%', beLeft: pct(be).toFixed(2) + '%', kLeft: pct(K).toFixed(2) + '%',
+      beLabel: usd(be), maxProfitLabel: usd((K - fillStock) * q + premium, true)
+    };
+  }
+}
+</script>
+</body>
+</html>

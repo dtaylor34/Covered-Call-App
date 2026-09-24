@@ -245,7 +245,6 @@ const DATA_FEATURES = [
 
 function SchwabSetupFlow({ broker, onClose }) {
   const { T } = useTheme();
-  const { saveConnection } = useBrokerConnection();
   const [appKey, setAppKey]         = useState("");
   const [appSecret, setAppSecret]   = useState("");
   const [showSecret, setShowSecret] = useState(false);
@@ -263,7 +262,8 @@ function SchwabSetupFlow({ broker, onClose }) {
     setConnecting(true);
     setError(null);
     try {
-      await saveConnection("schwab", appKey.trim(), appSecret.trim());
+      // Credentials go straight to the Cloud Function over HTTPS — the browser
+      // never writes them to Firestore. The function encrypts + stores them.
       const result = await schwabInitiateOAuth({ appKey: appKey.trim(), appSecret: appSecret.trim(), redirectUri: REDIRECT_URI });
       const { authUrl } = result.data;
       window.open(authUrl, "_blank", "width=600,height=700,noopener");
@@ -272,7 +272,7 @@ function SchwabSetupFlow({ broker, onClose }) {
     } finally {
       setConnecting(false);
     }
-  }, [appKey, appSecret, saveConnection, REDIRECT_URI]);
+  }, [appKey, appSecret, REDIRECT_URI]);
 
   const inputStyle = {
     width: "100%", boxSizing: "border-box",
@@ -683,7 +683,7 @@ export default function APITab() {
   const { T } = useTheme();
   const {
     connections, accounts, activeConnection, activeAccount,
-    saveConnection, deleteConnection, setDefaultAccount,
+    deleteConnection, setDefaultAccount,
   } = useBrokerConnection();
 
   const [selectedBroker, setSelectedBroker] = useState(null);
