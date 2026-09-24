@@ -33,6 +33,16 @@ const expShort = (iso) => {
   if (!y) return iso || "—";
   return new Date(y, (m || 1) - 1, d || 1).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 };
+// Schwab-style expiration, e.g. "16 OCT 26"
+const MON3 = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
+const csExp = (iso) => {
+  const [y, m, d] = String(iso || "").split("-").map(Number);
+  if (!y) return "";
+  return `${d} ${MON3[(m || 1) - 1]} ${String(y).slice(-2)}`;
+};
+// Column grid matching the Schwab covered-call order row (see examples/Example CS Liste Item.png):
+// Strategy | Side | Qty | Pos Effect | Symbol | Exp | Strike | Strike Type | Price | Order | TIF | Exch | Health | ▾
+const CS_COLS = "104px 56px 56px 74px 62px 96px 58px 88px 108px 70px 50px 56px 132px 26px";
 
 export default function WorkingPositionsTab() {
   const { T } = useTheme();
@@ -108,45 +118,80 @@ export default function WorkingPositionsTab() {
             Use “+ Add / Paste” to enter a covered call — or paste a thinkorswim fill and it fills the form for you.
           </div>
         </div>
-      ) : rows.map(({ p, c, light, fill }) => {
-        const isOpen = !!open[p.id];
-        return (
-          <div key={p.id} style={{ ...card, padding: 0, overflow: "hidden" }}>
-            {/* Row header */}
-            <div onClick={() => setOpen((o) => ({ ...o, [p.id]: !o[p.id] }))}
-              style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 18px", cursor: "pointer" }}>
-              {/* Stoplight */}
-              <div style={{ position: "relative" }}
-                onMouseEnter={() => setHover(p.id)} onMouseLeave={() => setHover((h) => h === p.id ? null : h)}>
-                <span aria-label={light.label} style={{ display: "inline-block", width: 14, height: 14, borderRadius: "50%", background: DOT[light.key], boxShadow: hover === p.id ? `0 0 0 5px ${DOT[light.key]}33` : "none" }} />
-                {hover === p.id && (
-                  <div role="tooltip" style={{ position: "absolute", zIndex: 20, top: 22, left: 0, width: 260, background: T.card, border: `1px solid ${T.border}`, borderRadius: 8, padding: 10, boxShadow: "0 8px 24px rgba(0,0,0,0.4)" }}>
-                    {LEGEND.map((l) => (
-                      <div key={l.key} style={{ display: "flex", gap: 8, padding: "4px 0", opacity: l.key === light.key ? 1 : 0.6 }}>
-                        <span style={{ width: 10, height: 10, borderRadius: "50%", background: DOT[l.key], marginTop: 3, flexShrink: 0 }} />
-                        <span style={{ fontSize: 11, color: T.textDim, lineHeight: 1.4 }}><b style={{ color: T.text }}>{l.label}.</b> {l.text}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-              {/* Symbol + contract */}
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ color: T.text, fontWeight: 700, fontFamily: T.fontMono, fontSize: 15 }}>{p.sym}</div>
-                <div style={{ color: T.textDim, fontSize: 12 }}>{expShort(p.expiry)} ${p.strike} call ×{p.contracts || 1} · {light.label} ({Math.round(light.delta * 100)}%)</div>
-              </div>
-              {/* Quick stats */}
-              <div style={{ textAlign: "right" }}>
-                <div style={{ color: c.close >= 0 ? T.success : T.danger, fontFamily: T.fontMono, fontWeight: 700 }}>{usd(c.close, true)}</div>
-                <div style={{ color: T.textDim, fontSize: 11 }}>if closed · {(c.health * 100).toFixed(1)}% health</div>
-              </div>
-              <span style={{ transform: isOpen ? "rotate(180deg)" : "none", transition: "transform .15s", color: T.textDim }}>▾</span>
+      ) : (
+        <div style={{ ...card, padding: 0, overflowX: "auto" }}>
+          <div style={{ minWidth: 1040 }}>
+            {/* Column header — Schwab covered-call order-row columns */}
+            <div style={{ display: "grid", gridTemplateColumns: CS_COLS, padding: "9px 16px", borderBottom: `1px solid ${T.border}` }}>
+              {["Strategy", "Side", "Qty", "Pos Effect", "Symbol", "Exp", "Strike", "Strike Type", "Price", "Order", "TIF", "Exch", "", ""].map((h, i) => (
+                <div key={i} style={{ color: T.textDim, fontSize: 9, fontFamily: T.fontMono, letterSpacing: 0.5, textTransform: "uppercase", fontWeight: 600 }}>{h}</div>
+              ))}
             </div>
-
-            {isOpen && <Detail T={T} p={p} c={c} fill={fill} onUpdateLive={updateLive} onClose={closePosition} />}
+            {rows.map(({ p, c, light, fill }) => {
+              const isOpen = !!open[p.id];
+              const n = p.contracts || 1;
+              const cellBase = { fontFamily: T.fontMono, fontSize: 12.5, color: T.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", paddingRight: 6 };
+              const dim = { ...cellBase, color: T.textDim };
+              const leg = { display: "grid", gridTemplateColumns: CS_COLS, alignItems: "center" };
+              return (
+                <div key={p.id} style={{ borderBottom: `1px solid ${T.border}`, background: isOpen ? T.card : "transparent" }}>
+                  <div onClick={() => setOpen((o) => ({ ...o, [p.id]: !o[p.id] }))} style={{ cursor: "pointer", padding: "10px 16px" }}>
+                    {/* Leg 1 — SELL the call */}
+                    <div style={leg}>
+                      <div style={{ ...cellBase, display: "flex", alignItems: "center", gap: 7, fontWeight: 700, position: "relative" }}
+                        onMouseEnter={() => setHover(p.id)} onMouseLeave={() => setHover((h) => (h === p.id ? null : h))}>
+                        <span style={{ width: 11, height: 11, borderRadius: "50%", background: DOT[light.key], flexShrink: 0, boxShadow: hover === p.id ? `0 0 0 4px ${DOT[light.key]}33` : "none" }} />
+                        COVERED
+                        {hover === p.id && (
+                          <div role="tooltip" style={{ position: "absolute", zIndex: 30, top: 20, left: 0, width: 250, whiteSpace: "normal", background: T.surface, border: `1px solid ${T.border}`, borderRadius: 8, padding: 10, boxShadow: "0 8px 24px rgba(0,0,0,0.5)" }}>
+                            {LEGEND.map((l) => (
+                              <div key={l.key} style={{ display: "flex", gap: 8, padding: "4px 0", opacity: l.key === light.key ? 1 : 0.6 }}>
+                                <span style={{ width: 10, height: 10, borderRadius: "50%", background: DOT[l.key], marginTop: 3, flexShrink: 0 }} />
+                                <span style={{ fontSize: 11, color: T.textDim, lineHeight: 1.4 }}><b style={{ color: T.text }}>{l.label}.</b> {l.text}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      <div style={{ ...cellBase, color: T.danger, fontWeight: 700 }}>SELL</div>
+                      <div style={cellBase}>−{n}</div>
+                      <div style={dim}>AUTO</div>
+                      <div style={{ ...cellBase, fontWeight: 700 }}>{p.sym}</div>
+                      <div style={cellBase}>{csExp(p.expiry)}</div>
+                      <div style={cellBase}>{p.strike}</div>
+                      <div style={cellBase}>CALL</div>
+                      <div style={cellBase}>{c.breakeven.toFixed(2)} <span style={{ color: T.textDim }}>LMT</span></div>
+                      <div style={dim}>LIMIT</div>
+                      <div style={dim}>DAY</div>
+                      <div style={dim}>BEST</div>
+                      <div style={{ ...cellBase, color: DOT[light.key], fontSize: 11 }}>{light.label} · {Math.round(light.delta * 100)}%</div>
+                      <div style={{ ...cellBase, textAlign: "right", color: T.textDim, transform: isOpen ? "rotate(180deg)" : "none" }}>▾</div>
+                    </div>
+                    {/* Leg 2 — BUY the shares */}
+                    <div style={{ ...leg, marginTop: 2 }}>
+                      <div />
+                      <div style={{ ...cellBase, color: T.success, fontWeight: 700 }}>BUY</div>
+                      <div style={cellBase}>+{n * 100}</div>
+                      <div style={dim}>AUTO</div>
+                      <div style={{ ...cellBase, fontWeight: 700 }}>{p.sym}</div>
+                      <div />
+                      <div />
+                      <div style={cellBase}>STOCK</div>
+                      <div style={dim}>DEBIT</div>
+                      <div />
+                      <div />
+                      <div />
+                      <div style={{ ...cellBase, fontSize: 11, color: c.close >= 0 ? T.success : T.danger }}>if closed {usd(c.close, true)} · {(c.health * 100).toFixed(1)}%</div>
+                      <div />
+                    </div>
+                  </div>
+                  {isOpen && <Detail T={T} p={p} c={c} fill={fill} onUpdateLive={updateLive} onClose={closePosition} />}
+                </div>
+              );
+            })}
           </div>
-        );
-      })}
+        </div>
+      )}
 
       {/* Shares by lot — fed by the same live marks */}
       <SharesByLot positions={livePositions} lots={lots} onSaveLot={saveLot} onDeleteLot={deleteLot} />

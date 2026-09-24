@@ -1,3 +1,10 @@
+## [2.0.13] — 2026-09-24
+
+### Changed
+- **Working tab — Schwab-style covered-call rows** — each position now renders as a Schwab/thinkorswim **COVERED** order row with two legs (SELL −N call / BUY +N×100 stock) and Schwab's columns (Side, Qty, Pos Effect, Symbol, Exp `16 OCT 26`, Strike, Strike Type, net Price LMT, Order, TIF, Exch), matching `examples/Example CS Liste Item.png`. Health stoplight + if-closed retained; row expands to full detail. Horizontally scrolls on narrow screens.
+
+---
+
 ## [2.0.12] — 2026-09-24
 
 ### Changed
