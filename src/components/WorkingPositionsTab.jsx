@@ -10,6 +10,7 @@
 import { useState, useMemo } from "react";
 import { useTheme } from "../contexts/ThemeContext";
 import { usePositions } from "../hooks/usePositions";
+import { useLivePortfolio } from "../hooks/useLivePortfolio";
 import { positionCalcs, stoplight, gtcFillEstimate } from "../lib/coveredCallMath";
 import { parsePaste } from "../lib/positionParser";
 import SharesByLot from "./SharesByLot";
@@ -36,17 +37,21 @@ const expShort = (iso) => {
 export default function WorkingPositionsTab() {
   const { T } = useTheme();
   const { positions, lots, closed, loading, savePosition, updateLive, closePosition, saveLot, deleteLot } = usePositions();
+  const { live, status } = useLivePortfolio(positions);
   const [open, setOpen] = useState({});
   const [hover, setHover] = useState(null);
   const [showAdd, setShowAdd] = useState(false);
 
-  const rows = useMemo(() => positions.map((p) => {
+  // Overlay live Yahoo/Schwab marks onto the stored positions for all math.
+  const livePositions = useMemo(() => positions.map((p) => ({ ...p, ...(live[p.id] || {}) })), [positions, live]);
+
+  const rows = useMemo(() => livePositions.map((p) => {
     const c = positionCalcs(p);
     const iv = (p.iv || 25) / 100;
     const light = stoplight({ liveStock: p.liveStock, strike: p.strike, daysToExpiry: p.daysToExpiry, iv, breakeven: c.breakeven });
     const fill = gtcFillEstimate({ S: p.liveStock, strike: p.strike, daysLeft: Math.max(1, Math.round(p.daysToExpiry || 1)), iv, gtc: p.gtc ?? 0.1, fillCall: p.fillCall, contracts: p.contracts || 1 });
-    return { p, c, light, fill };
-  }), [positions]);
+    return { p, c, light, fill, liveSource: live[p.id]?.source };
+  }), [livePositions, live]);
 
   const totals = useMemo(() => rows.reduce((a, { c }) => ({
     shareCost: a.shareCost + c.shareCost, premium: a.premium + c.premium, buyback: a.buyback + c.buyback,
@@ -60,7 +65,18 @@ export default function WorkingPositionsTab() {
     <div role="region" aria-label="Working covered calls">
       {/* Header */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16, flexWrap: "wrap", gap: 8 }}>
-        <h2 style={{ ...h3, fontSize: 20 }}>Working Covered Calls</h2>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          <h2 style={{ ...h3, fontSize: 20 }}>Working Covered Calls</h2>
+          {positions.length > 0 && (
+            <span title={status.at ? `Updated ${new Date(status.at).toLocaleTimeString()}` : "Fetching…"} style={{
+              fontSize: 10, fontWeight: 700, padding: "2px 8px", borderRadius: 999, fontFamily: T.fontMono,
+              color: status.source === "schwab" ? T.success : T.textDim,
+              background: `${status.source === "schwab" ? T.success : T.textDim}1e`,
+            }}>
+              {status.loading ? "◌ updating" : status.source === "schwab" ? "● Schwab live" : "● Yahoo · 15-min delayed"}
+            </span>
+          )}
+        </div>
         <button onClick={() => setShowAdd((v) => !v)} style={{
           padding: "10px 16px", borderRadius: 8, border: `1px solid ${T.accent}`, cursor: "pointer",
           background: showAdd ? "transparent" : T.accent, color: showAdd ? T.accent : "#0A0A0A",
@@ -132,8 +148,8 @@ export default function WorkingPositionsTab() {
         );
       })}
 
-      {/* Shares by lot */}
-      <SharesByLot positions={positions} lots={lots} onSaveLot={saveLot} onDeleteLot={deleteLot} />
+      {/* Shares by lot — fed by the same live marks */}
+      <SharesByLot positions={livePositions} lots={lots} onSaveLot={saveLot} onDeleteLot={deleteLot} />
 
       {closed.length > 0 && (
         <div style={{ color: T.textDim, fontSize: 12, marginTop: 8 }}>
