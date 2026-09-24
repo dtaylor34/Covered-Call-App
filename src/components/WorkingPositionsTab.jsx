@@ -12,7 +12,7 @@ import { useTheme } from "../contexts/ThemeContext";
 import { usePositions } from "../hooks/usePositions";
 import { useLivePortfolio } from "../hooks/useLivePortfolio";
 import { positionCalcs, stoplight, gtcFillEstimate } from "../lib/coveredCallMath";
-import { parsePaste } from "../lib/positionParser";
+import { parsePaste, positionId } from "../lib/positionParser";
 import SharesByLot from "./SharesByLot";
 
 const DOT = { g: "#2F9E55", y: "#E3A91B", r: "#E0552A" };
@@ -241,20 +241,24 @@ const btn = (T) => ({ marginTop: 8, width: "100%", padding: "8px 10px", borderRa
 
 // ── Add / paste form ──────────────────────────────────────────────────────────
 function AddForm({ T, lots = [], positions = [], onSave, onDone }) {
-  const empty = { sym: "", contracts: "1", fillStock: "", fillCall: "", strike: "", expiry: "", gtc: "0.10", lotId: "new" };
+  const empty = { sym: "", contracts: "1", fillStock: "", fillCall: "", strike: "", expiry: "", gtc: "0.10", iv: "", liveStock: "", liveCall: "", lotId: "new" };
   const [f, setF] = useState(empty);
-  // Free lots for the entered symbol (not already covered by a position).
-  const coveredLotIds = new Set(positions.map((p) => p.lotId).filter(Boolean));
-  const freeLots = lots.filter((l) => l.sym === String(f.sym || "").trim().toUpperCase() && !coveredLotIds.has(l.id));
   const [paste, setPaste] = useState("");
   const [msg, setMsg] = useState("");
   const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }));
-  const inp = { width: "100%", minHeight: 40, padding: "0 10px", border: `1px solid ${T.border}`, borderRadius: 8, background: T.inputBg || T.card, color: T.text, fontFamily: T.fontMono, fontSize: 13 };
+
+  const symU = String(f.sym || "").trim().toUpperCase();
+  const coveredLotIds = new Set(positions.map((p) => p.lotId).filter(Boolean));
+  const freeLots = lots.filter((l) => l.sym === symU && !coveredLotIds.has(l.id));
+  const match = symU && f.strike && f.expiry ? positions.find((p) => p.id === positionId(symU, Number(f.strike), f.expiry)) : null;
+
+  const inp = { width: "100%", boxSizing: "border-box", minHeight: 44, padding: "0 12px", border: `1px solid ${T.border}`, borderRadius: 8, background: T.inputBg || T.card, color: T.text, fontFamily: T.fontMono, fontSize: 14 };
+  const lbl = { display: "flex", flexDirection: "column", gap: 4, fontSize: 12, color: T.textDim, fontWeight: 500 };
 
   const doParse = () => {
     const { out, found } = parsePaste(paste);
     setF((s) => ({ ...s, ...Object.fromEntries(Object.entries(out).filter(([, v]) => v != null && v !== "")) }));
-    setMsg(found.length ? `Read: ${found.join(", ")}.` : "Couldn't read that — fill the fields below.");
+    setMsg(found.length ? `Read ${found.join(", ")}. Check the fields, then save.` : "Couldn't read that — fill the fields on the right.");
   };
   const submit = async () => {
     const res = await onSave(f);
@@ -262,41 +266,69 @@ function AddForm({ T, lots = [], positions = [], onSave, onDone }) {
     else setMsg("Still need: " + (res.missing || []).join(", ") + ".");
   };
 
-  const field = (k, label, ph) => (
-    <label style={{ fontSize: 11, color: T.textDim, display: "block" }}>{label}
-      <input value={f[k]} onChange={set(k)} placeholder={ph} style={{ ...inp, marginTop: 4 }} /></label>
+  const field = (k, label, ph, type = "text", span = 1) => (
+    <label style={{ ...lbl, gridColumn: `span ${span}` }}>{label}
+      <input type={type} value={f[k]} onChange={set(k)} placeholder={ph} style={inp} /></label>
   );
+  const Code = ({ children }) => <code style={{ color: T.text, fontFamily: T.fontMono }}>{children}</code>;
 
   return (
-    <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: T.r || 10, padding: 18, marginBottom: 16 }}>
-      <textarea value={paste} onChange={(e) => setPaste(e.target.value)} rows={3} placeholder="Paste a thinkorswim fill or order row here…"
-        style={{ ...inp, minHeight: 64, padding: 10, resize: "vertical" }} />
-      <div style={{ display: "flex", gap: 8, margin: "8px 0 14px" }}>
-        <button onClick={doParse} style={{ ...btn(T), width: "auto", padding: "8px 14px" }}>Read paste</button>
-        {msg && <span style={{ color: T.textDim, fontSize: 12, alignSelf: "center" }}>{msg}</span>}
+    <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: T.r || 12, padding: 22, marginBottom: 16 }}>
+      <h3 style={{ color: T.text, fontFamily: T.fontDisplay, fontSize: 18, margin: "0 0 14px" }}>Add or update a covered call</h3>
+      <div style={{ display: "flex", gap: 24, flexWrap: "wrap" }}>
+        {/* Left — paste, with the exact formats shown */}
+        <div style={{ flex: "1 1 260px", minWidth: 240, display: "flex", flexDirection: "column", gap: 10 }}>
+          <label style={{ fontSize: 13, fontWeight: 600, color: T.text }}>Paste from thinkorswim, or a quick note</label>
+          <textarea value={paste} onChange={(e) => setPaste(e.target.value)} rows={6} placeholder="Paste fill notifications or order rows here"
+            style={{ ...inp, minHeight: 120, padding: 12, resize: "vertical", lineHeight: 1.5 }} />
+          <button onClick={doParse} style={{ ...btn(T), width: "auto", alignSelf: "flex-start", padding: "10px 18px" }}>Read paste</button>
+          <div style={{ fontSize: 12, color: T.textDim, lineHeight: 1.7 }}>
+            Reads lines like <Code>SOLD -1 PFE 100 16 OCT 26 28 CALL @.55</Code>, <Code>BOT +100 PFE @27.80</Code>, and a GTC order row. Quick note: <Code>PFE, 1, 27.80, .55, 28, 10/16/26, .10</Code> — symbol, contracts, share price, call price, strike, expiry, GTC.
+          </div>
+        </div>
+        {/* Right — fields */}
+        <div style={{ flex: "1.4 1 320px", minWidth: 300, display: "flex", flexDirection: "column", gap: 14 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: 12 }}>
+            {field("sym", "Symbol", "PFE")}
+            {field("contracts", "Contracts", "1")}
+            {field("fillStock", "Share price paid", "27.80")}
+            {field("fillCall", "Call sold at", "0.55")}
+            {field("strike", "Strike", "28")}
+            {field("expiry", "Expiration", "", "date")}
+            {field("gtc", "GTC buy back", "0.10")}
+            {field("iv", "IV % (optional)", "25")}
+            {field("liveStock", "Current stock price (optional)", "", "text", 2)}
+            {field("liveCall", "Current call price (optional)", "", "text", 2)}
+          </div>
+          {symU && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              <span style={{ fontSize: 12, color: T.textDim, fontWeight: 500 }}>Shares for this call</span>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                {[{ id: "new", label: "New purchase" }, ...freeLots.map((l) => ({ id: l.id, label: `${l.shares} sh @ $${Number(l.cost).toFixed(2)}` }))].map((o) => {
+                  const on = f.lotId === o.id;
+                  return (
+                    <button key={o.id} onClick={() => setF((s) => ({ ...s, lotId: o.id }))}
+                      style={{ minHeight: 38, padding: "0 14px", borderRadius: 999, cursor: "pointer", fontFamily: T.fontMono, fontSize: 13,
+                        border: `1px solid ${on ? T.accent : T.border}`, background: on ? T.accentDim : T.card, color: on ? T.accent : T.textDim }}>
+                      {o.label}
+                    </button>
+                  );
+                })}
+              </div>
+              <span style={{ fontSize: 12, color: T.textDim }}>
+                {f.lotId === "new" ? "Creates a new lot at the share price above." : "Covers a lot you already hold — no new shares bought."}
+              </span>
+            </div>
+          )}
+          {msg && <div style={{ fontSize: 13, lineHeight: 1.5, padding: "10px 12px", borderRadius: 8, background: T.card, color: T.text }}>{msg}</div>}
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
+            <button onClick={onDone} style={{ ...btn(T), width: "auto", padding: "10px 18px" }}>Cancel</button>
+            <button onClick={submit} style={{ padding: "10px 22px", borderRadius: 8, border: "none", background: T.accent, color: "#0A0A0A", fontFamily: T.fontMono, fontWeight: 700, cursor: "pointer" }}>
+              {match ? "Update position" : "Add position"}
+            </button>
+          </div>
+        </div>
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(110px, 1fr))", gap: 10 }}>
-        {field("sym", "Symbol", "PFE")}
-        {field("contracts", "Contracts", "1")}
-        {field("fillStock", "Share price paid", "27.80")}
-        {field("fillCall", "Call sold at", "0.55")}
-        {field("strike", "Strike", "28")}
-        {field("expiry", "Expiry (YYYY-MM-DD)", "2026-10-16")}
-        {field("gtc", "GTC buy back", "0.10")}
-      </div>
-      {freeLots.length > 0 && (
-        <label style={{ fontSize: 11, color: T.textDim, display: "block", marginTop: 12 }}>Covers which shares?
-          <select value={f.lotId} onChange={set("lotId")} style={{ ...inp, marginTop: 4 }}>
-            <option value="new">New purchase (creates a lot)</option>
-            {freeLots.map((l) => (
-              <option key={l.id} value={l.id}>{l.shares} sh @ ${Number(l.cost).toFixed(2)} — bought {l.bought}</option>
-            ))}
-          </select>
-        </label>
-      )}
-      <button onClick={submit} style={{ marginTop: 14, padding: "10px 18px", borderRadius: 8, border: "none", background: T.accent, color: "#0A0A0A", fontFamily: T.fontMono, fontWeight: 700, cursor: "pointer" }}>
-        Save position
-      </button>
     </div>
   );
 }

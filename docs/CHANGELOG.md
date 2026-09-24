@@ -1,3 +1,10 @@
+## [2.0.12] — 2026-09-24
+
+### Changed
+- **Working tab — easier covered-call entry** — rebuilt the Add/Update form to match the prototype: two columns (paste box with the exact TOS/quick-note formats shown, and a fields grid), a real **date picker** for expiration, optional IV / current-price fields, a **lot picker as pills**, and a dynamic **Add/Update** button. Responsive — stacks cleanly on mobile/tablet. Field labels aligned to the prototype ("Share price paid", "Call sold at", "GTC buy back", "Shares for this call").
+
+---
+
 ## [2.0.11] — 2026-09-24
 
 ### Security
