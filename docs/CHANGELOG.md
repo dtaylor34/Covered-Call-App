@@ -1,3 +1,10 @@
+## [2.0.10] — 2026-09-24
+
+### Security
+- **Shared-device isolation** — logout now wipes all per-user `cc:*` localStorage (transactions, tax rates, last position/symbol/tab), and signing in as a different user on the same browser clears the previous user's local state first. Prevents any UI-state bleed between accounts on a shared device. Server-side data isolation (Firestore rules + function uid-scoping) was already enforced and re-verified with a two-user cross-tenant attack test.
+
+---
+
 ## [2.0.9] — 2026-09-24
 
 ### Added

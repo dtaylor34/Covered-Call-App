@@ -17,6 +17,7 @@ import {
   doc, getDoc, setDoc, updateDoc,
 } from "firebase/firestore";
 import { auth, db, googleProvider, appleProvider } from "../firebase";
+import { clearPersistedState } from "../hooks/usePersistedState";
 import { useTheme } from "./ThemeContext";
 
 const AuthContext = createContext(null);
@@ -90,6 +91,13 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
+        // Account switch on a shared device: if a different user signs in without
+        // an explicit logout, wipe the previous user's cc:* localStorage first.
+        try {
+          const lastUid = localStorage.getItem("cc:lastUid");
+          if (lastUid && lastUid !== firebaseUser.uid) clearPersistedState();
+          localStorage.setItem("cc:lastUid", firebaseUser.uid);
+        } catch { /* localStorage unavailable — ignore */ }
         try {
           const userRef = doc(db, "users", firebaseUser.uid);
           let snap = await getDoc(userRef);
@@ -238,6 +246,7 @@ export function AuthProvider({ children }) {
 
   // ── Sign Out ──
   const logout = useCallback(async () => {
+    clearPersistedState(); // wipe per-user cc:* localStorage so nothing bleeds to the next user on a shared device
     await signOut(auth);
     setUserData(null);
   }, []);
