@@ -1,3 +1,17 @@
+## [2.0.9] — 2026-09-24
+
+### Added
+- **Working covered calls, tax lots & Google Sheet sync** (handover build) — new portfolio tracker:
+  - Working tab: totals, per-call rows with a health stoplight + hover legend, expandable detail (Position Summary, GTC fill estimate, four exit paths), thinkorswim paste parser.
+  - Shares by lot: effective cost, Ready/Thin/Hold signal, delivery hints, wash-sale flags, lot picker.
+  - Dashboard year-to-date strip + Trades closed history with per-row estimated tax.
+  - Pure math module (`coveredCallMath.js`) + parser + YTD, 30 unit tests (vitest).
+  - New per-user Firestore collections `positions` / `lots` / `closed` (owner-scoped rules).
+- **Live portfolio data** — Working portfolio runs off Yahoo (always) and Schwab (real-time, when the user's key is connected; Yahoo fallback).
+- **Google Sheet ledger sync** — `sheetsSync` functions + dark `SheetSettings` in the APIs tab; requires the Google Sheets API enabled in the project.
+
+---
+
 ## [2.0.8] — 2026-09-21
 
 ### Security
