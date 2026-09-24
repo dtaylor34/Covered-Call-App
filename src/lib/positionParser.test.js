@@ -50,6 +50,24 @@ describe("parsePaste", () => {
     expect(found).toContain("share purchase");
   });
 
+  it("thinkorswim Position Statement grid (captures held-share cost basis)", () => {
+    const grid = [
+      "META\t+200\t\t\t\t\t146,677.63\t4,640.00\t115,361.18",
+      "META PLATFORMS INC A\t+200\t\t34.6799\t775.750\t+31.65\t148,214.02\t6,330.00\t",
+      "100 (Weeklys) 23 OCT 26 820 CALL\t-2\t29\t14.90\t22.575\t+8.45\t(1,536.39)\t(1,690.00)\t",
+    ].join("\n");
+    const { out, found } = parsePaste(grid, new Date("2026-09-21T00:00:00"));
+    expect(out.sym).toBe("META");
+    expect(num(out.contracts)).toBe(2);
+    expect(num(out.strike)).toBe(820);
+    expect(out.expiry).toBe("2026-10-23");
+    expect(num(out.fillStock)).toBeCloseTo(34.6799, 3); // cost basis, not the mark
+    expect(num(out.liveStock)).toBeCloseTo(775.75, 2);
+    expect(num(out.fillCall)).toBeCloseTo(14.90, 2);
+    expect(num(out.liveCall)).toBeCloseTo(22.575, 2);
+    expect(found).toContain("position");
+  });
+
   it("plain-English note (the app 'Add covered call' example)", () => {
     const note = [
       "100 shares of PFE",

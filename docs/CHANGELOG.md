@@ -1,3 +1,10 @@
+## [2.0.15] — 2026-09-24
+
+### Added
+- **"Read paste" understands the thinkorswim Position Statement grid** — paste your stock + call rows from Monitor → Position Statement and it captures everything, including your **cost basis** (Trade Price) for long-held shares and live prices (Mark) — the best one-paste source. Also more forgiving number entry (\$, commas, spaces) and clearer save errors.
+
+---
+
 ## [2.0.14] — 2026-09-24
 
 ### Changed

@@ -34,12 +34,54 @@ export function normDate(s) {
  *          fillCall, strike, expiry, gtc } (strings, as pasted); found = the kinds
  *          of rows recognized, de-duplicated.
  */
+// thinkorswim Position Statement grid (tab-separated). Columns:
+//   Instrument | Qty | Days | Trade Price | Mark | Mrk Chng | P/L Open | P/L Day | BP Effect
+// Carries the cost basis (Trade Price) + live Mark for both legs — the best
+// source for shares held a long time. Returns true if it recognized rows.
+function parsePositionStatement(text, out) {
+  const rows = String(text || "").split(/\r?\n/).filter((l) => l.includes("\t"));
+  if (!rows.length) return false;
+  let sym = null, hit = false;
+  for (const raw of rows) {
+    const cells = raw.split("\t").map((s) => s.trim());
+    const name = (cells[0] || "").toUpperCase();
+    const qty = num(cells[1]), trade = num(cells[3]), mark = num(cells[4]);
+    if (/\bCALL\b/.test(name)) {
+      const clean = name.replace(/\(WEEKLYS?\)/g, " ").replace(/\s+/g, " ");
+      const m = clean.match(/(\d{1,2})\s+(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)\s+(\d{2,4})\s+(\d+(?:\.\d+)?)\s+CALL/);
+      if (m) {
+        const yr = m[3].length === 2 ? "20" + m[3] : m[3];
+        out.expiry = `${yr}-${String(MONTHS[m[2]]).padStart(2, "0")}-${m[1].padStart(2, "0")}`;
+        out.strike = m[4];
+      }
+      if (qty != null) out.contracts = String(Math.max(1, Math.round(Math.abs(qty))));
+      if (trade != null) out.fillCall = String(trade);
+      if (mark != null) out.liveCall = String(mark);
+      hit = true;
+    } else if (qty != null && Math.abs(qty) >= 1 && trade > 0 && mark > 0 && !/\bPUT\b/.test(name)) {
+      const t = name.match(/\b([A-Z]{1,5})\b/);
+      if (t && !sym) sym = t[1];
+      out.fillStock = String(trade);
+      out.liveStock = String(mark);
+      if (!out.contracts) out.contracts = String(Math.max(1, Math.round(Math.abs(qty) / 100)));
+      hit = true;
+    } else if (/^[A-Z]{1,5}$/.test(name) && !sym) {
+      sym = name; hit = true;
+    }
+  }
+  if (sym && !out.sym) out.sym = sym;
+  return hit;
+}
+
 export function parsePaste(text, now = new Date()) {
   const out = {}, found = [];
+  // Position-statement grid (thinkorswim Monitor) takes priority — richest source.
+  const psHit = parsePositionStatement(text, out);
+  if (psHit) found.push("position");
   const optRe = /([A-Z][A-Z.]{0,5})\s+(?:100\s+)?(\d{1,2})\s+(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)\s+(\d{2})\s+(\d+(?:\.\d+)?)\s+CALL/;
   const lines = String(text || "").toUpperCase().replace(/\(WEEKLYS?\)/g, " ").split(/\n|;/);
 
-  for (const raw of lines) {
+  if (!psHit) for (const raw of lines) {
     const line = raw.replace(/\s+/g, " ").trim();
     if (!line) continue;
 
