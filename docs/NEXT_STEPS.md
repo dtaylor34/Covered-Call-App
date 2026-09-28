@@ -1,0 +1,39 @@
+# NEXT STEPS — pick up here
+
+> Handoff note so any new session knows the state and what to do next.
+> To resume: `cd` into this repo and run `claude --resume` (or `--continue`),
+> or just say: **"read docs/NEXT_STEPS.md and continue."**
+
+_Last updated: 2026-09-28 · Live version: **v2.0.15** · Branch: `api-integration` (PR #1 merged from `feature/working-lots-sheets`)_
+_Live app: https://covered-calls-prod.web.app_
+
+## ⏳ What we're waiting on
+- The user is **waiting for Charles Schwab Developer app approval** → will receive an **App Key** + **Secret**.
+- Schwab app callback URL to register (exact): `https://covered-calls-prod.web.app/api/schwab/callback`
+- Enable both Schwab API products: **Accounts and Trading – Production** + **Market Data – Production**.
+- Connection only works once the Schwab app status is **Ready for Use**.
+
+## ▶️ When the key arrives — do this
+1. In the app → **APIs tab → Connect Schwab** → paste App Key + Secret → authorize.
+2. Verify: **Working tab** badge shows **"Schwab live"**, positions pull real marks; check `schwabGetPositions` / quotes work against the real account.
+3. If OAuth fails: 99% of the time it's the redirect URI not matching or the Schwab app still "Approved – Pending."
+
+## ✅ Done & deployed (don't redo)
+- **Working covered-calls tracker**: totals, Schwab-style COVERED two-leg rows, health stoplight, expandable detail (Position Summary, GTC fill, 4 exit paths).
+- **Tax lots** ("Shares by lot"): effective cost, Ready/Thin/Hold, delivery order, wash-sale, lot picker.
+- **Dashboard YTD strip** + **Trades** closed history with per-row estimated tax.
+- **Live data**: Yahoo always + Schwab (real-time) when connected. `useLivePortfolio`.
+- **Paste parser** (`positionParser.js`): thinkorswim order strings, quick CSV note, plain-English notes, and the **thinkorswim Position Statement grid** (captures cost basis + live marks). Auto-parses on blur/submit. Lenient numbers. **32 unit tests** (`npm test`).
+- **Security** (all verified live + emulator): AES-256-GCM encrypted Schwab creds in sealed `users/{uid}/private`; per-user isolation (two-user attack test all 403); read-only Schwab scope; shared-device localStorage clear; OAuth `?code=` stripped; 30-min inactivity logout. Docs: `BROKER_CONNECTIONS.md`, `INCIDENT_RESPONSE.md`.
+- **Google Sheet sync**: functions deployed BUT needs the **Google Sheets API enabled** in the GCP project before `connectSheet` works (not done — gcloud isn't installed locally).
+
+## 🔨 Options the user is deciding between (build next)
+1. **Long-term vs short-term tax** — use each lot's purchase date (>1 yr) to classify called-away stock gains LT vs ST, separate rate inputs, show holding period. (User flagged: owns some stocks for years, some bought right away. Recommended first.)
+2. **Schwab auto-import** — wire `schwabGetPositions` into an "Import from Schwab" picker on the Working tab so positions import in one tap (Schwab returns *average* cost, not tax lots — long-held shares still need lot splits). Big convenience win.
+3. **Firebase App Check** — needs a reCAPTCHA v3 site key from the console first (do NOT enable enforcement before the client mints valid tokens, or the app breaks). Adds anti-abuse + blocks non-app callers.
+4. Optional polish: APIs-tab "How to get your Schwab key" help panel (steps + callback URL + copy button); SVG time/price charts in the expanded row.
+
+## Deploy reminders
+- Frontend: `bash scripts/deploy.sh` (reads version from `CHANGELOG.md`, tags, logs).
+- Functions: `firebase deploy --only functions:<name>,...`. Rules: `firebase deploy --only firestore:rules`.
+- Never raw `firebase deploy` for hosting — use the script.
