@@ -1,3 +1,10 @@
+## [2.0.17] — 2026-10-02
+
+### Fixed
+- **Blank screen after a deploy** — replaced the cache-first service worker (which could serve a stale JS bundle, showing nothing on next load) with a non-caching SW that purges all old caches and no longer intercepts requests. The app now always loads fresh; Firebase Hosting handles asset caching. If you were stuck on a blank page, one reload (or clear site data) picks up the fix.
+
+---
+
 ## [2.0.16] — 2026-10-02
 
 ### Added
