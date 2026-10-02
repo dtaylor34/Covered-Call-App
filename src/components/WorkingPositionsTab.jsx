@@ -14,6 +14,7 @@ import { useLivePortfolio } from "../hooks/useLivePortfolio";
 import { positionCalcs, stoplight, gtcFillEstimate } from "../lib/coveredCallMath";
 import { parsePaste, positionId } from "../lib/positionParser";
 import SharesByLot from "./SharesByLot";
+import ImportFromSchwab from "./ImportFromSchwab";
 
 const DOT = { g: "#2F9E55", y: "#E3A91B", r: "#E0552A" };
 const LEGEND = [
@@ -93,6 +94,9 @@ export default function WorkingPositionsTab() {
           fontFamily: T.fontMono, fontSize: 13, fontWeight: 700,
         }}>{showAdd ? "Close" : "+ Add / Paste"}</button>
       </div>
+
+      {/* One-click import of open covered calls from the connected Schwab account */}
+      <ImportFromSchwab onAdd={savePosition} />
 
       {showAdd && <AddForm T={T} lots={lots} positions={positions} onSave={savePosition} onDone={() => setShowAdd(false)} />}
 

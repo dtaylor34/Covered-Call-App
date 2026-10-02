@@ -1,3 +1,10 @@
+## [2.0.16] — 2026-10-02
+
+### Added
+- **Import from Schwab** — once your Schwab account is connected, the Working tab shows an "Import from Schwab" button that pulls your open covered calls (short call matched to the underlying shares) with cost basis + live prices, so you add them in one click instead of pasting. Schwab reports average cost, so imported shares land as one lot at the average price (split into real tax lots afterward if needed). Includes a raw-positions view for calibration.
+
+---
+
 ## [2.0.15] — 2026-09-24
 
 ### Added
