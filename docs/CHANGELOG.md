@@ -1,3 +1,10 @@
+## [2.0.18] — 2026-10-02
+
+### Added
+- **Auto-import GTC buy-to-close orders** — "Import from Schwab" now also reads your working GTC buy-to-close orders and fills each position's GTC price automatically (so e.g. META comes in at $2.00, not the 0.10 default), shown on the import preview. New `schwabGetOrders` function + `parseSchwabOrders`. Note: Schwab limits the orders window to ~60 days, so very old GTC orders may need to be set by hand.
+
+---
+
 ## [2.0.17] — 2026-10-02
 
 ### Fixed

@@ -71,6 +71,10 @@ export function parseSchwabPositions(data) {
     }
   }
 
+  return finishCandidates(calls, equities);
+}
+
+function finishCandidates(calls, equities) {
   const candidates = [], unmatchedCalls = [];
   for (const c of calls) {
     const eq = c.underlying ? equities[c.underlying] : null;
@@ -92,4 +96,34 @@ export function parseSchwabPositions(data) {
     }
   }
   return { candidates, unmatchedCalls, equities };
+}
+
+const ACTIVE_ORDER_STATUS = ["WORKING", "QUEUED", "ACCEPTED", "PENDING_ACTIVATION", "OPEN", "AWAITING_PARENT_ORDER"];
+
+/**
+ * Extract GTC buy-to-close call orders from a Schwab orders response.
+ * @param {Array|object} orders response from schwabGetOrders
+ * @returns {object} map of "SYM|strike|expiry" -> gtc price (buy-to-close limit)
+ */
+export function parseSchwabOrders(orders) {
+  const list = Array.isArray(orders) ? orders : (orders?.orders || []);
+  const gtcByKey = {};
+  for (const o of list) {
+    const status = String(o.status || "").toUpperCase();
+    if (status && !ACTIVE_ORDER_STATUS.includes(status)) continue;
+    const price = Number(o.price);
+    if (!(price >= 0)) continue; // need a limit price (the GTC buy-back level)
+    for (const leg of (o.orderLegCollection || [])) {
+      if (String(leg.instruction || "").toUpperCase() !== "BUY_TO_CLOSE") continue;
+      const inst = leg.instrument || {};
+      const occ = parseOccSymbol(inst.symbol) || {};
+      const putCall = inst.putCall || occ.putCall;
+      if (putCall !== "CALL") continue;
+      const sym = (inst.underlyingSymbol || occ.underlying || "").toUpperCase();
+      if (sym && occ.strike != null && occ.expiry) {
+        gtcByKey[`${sym}|${occ.strike}|${occ.expiry}`] = price;
+      }
+    }
+  }
+  return gtcByKey;
 }

@@ -6,8 +6,8 @@
 import { useState } from "react";
 import { useTheme } from "../contexts/ThemeContext";
 import { useBrokerConnection } from "../hooks/useBrokerConnection";
-import { schwabGetPositions } from "../services/schwabApi";
-import { parseSchwabPositions } from "../lib/schwabPositions";
+import { schwabGetPositions, schwabGetOrders } from "../services/schwabApi";
+import { parseSchwabPositions, parseSchwabOrders } from "../lib/schwabPositions";
 
 const usd = (n) => "$" + (Math.abs(n || 0)).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -31,7 +31,18 @@ export default function ImportFromSchwab({ onAdd }) {
       const acct = activeAccount || accounts[0];
       if (!acct?.hashValue) throw new Error("No linked Schwab account found — reconnect in the APIs tab.");
       const data = await schwabGetPositions({ accountHash: acct.hashValue }).then((r) => r.data);
-      setResult({ ...parseSchwabPositions(data), raw: data });
+      const parsed = parseSchwabPositions(data);
+      // Also pull working GTC buy-to-close orders so each position gets its real GTC.
+      let gtcByKey = {};
+      try {
+        const orders = await schwabGetOrders({ accountHash: acct.hashValue }).then((r) => r.data);
+        gtcByKey = parseSchwabOrders(orders);
+      } catch { /* orders are a bonus — don't fail the import if this errors */ }
+      parsed.candidates.forEach((c) => {
+        const k = `${c.sym}|${c.strike}|${c.expiry}`;
+        if (gtcByKey[k] != null) c.gtc = gtcByKey[k];
+      });
+      setResult({ ...parsed, raw: data });
     } catch (e) {
       setError(e?.message || "Couldn't load positions from Schwab.");
     } finally { setLoading(false); }
@@ -42,6 +53,7 @@ export default function ImportFromSchwab({ onAdd }) {
       sym: c.sym, contracts: String(c.contracts), fillStock: String(c.fillStock), fillCall: String(c.fillCall),
       strike: String(c.strike), expiry: c.expiry,
       liveStock: c.liveStock != null ? String(c.liveStock) : "", liveCall: c.liveCall != null ? String(c.liveCall) : "",
+      gtc: c.gtc != null ? String(c.gtc) : "",
       lotId: "new",
     });
     if (res?.ok) setAdded((a) => ({ ...a, [i]: true }));
@@ -76,6 +88,7 @@ export default function ImportFromSchwab({ onAdd }) {
                     </div>
                     <div style={{ color: T.textDim, fontSize: 12 }}>
                       shares cost {usd(c.fillStock)} · call sold {usd(c.fillCall)} · now {usd(c.liveStock)}/{usd(c.liveCall)}
+                      {c.gtc != null && <span style={{ color: T.accent }}> · GTC buy-back {usd(c.gtc)}</span>}
                       {!c.covered && <span style={{ color: T.warn }}> · ⚠ only {c.shares} shares (not fully covered)</span>}
                     </div>
                   </div>

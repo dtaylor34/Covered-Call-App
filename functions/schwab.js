@@ -351,6 +351,38 @@ exports.schwabGetBuyingPower = onCall(CRYPTO_OPTS, async (request) => {
   };
 });
 
+/**
+ * schwabGetOrders — returns the account's orders over the last ~59 days
+ * (Schwab limits the window to 60 days). Used to pick up working GTC
+ * buy-to-close orders so the app can fill in each position's GTC price.
+ * Input:  { accountHash }
+ */
+exports.schwabGetOrders = onCall(CRYPTO_OPTS, async (request) => {
+  const uid = requireAuth(request);
+  const { accountHash } = request.data;
+  if (!accountHash) throw new HttpsError("invalid-argument", "accountHash required.");
+
+  const secret = await getSecret(uid);
+  const accessToken = await ensureFreshToken(uid, secret);
+
+  const params = new URLSearchParams({
+    fromEnteredTime: new Date(Date.now() - 59 * 24 * 60 * 60 * 1000).toISOString(),
+    toEnteredTime:   new Date().toISOString(),
+    maxResults:      "500",
+  });
+
+  const res = await fetch(`${SCHWAB_TRADER_URL}/accounts/${accountHash}/orders?${params}`, {
+    headers: { "Authorization": `Bearer ${accessToken}` },
+  });
+
+  if (!res.ok) {
+    console.error("schwabGetOrders failed with status", res.status);
+    throw new HttpsError("internal", "Failed to fetch orders from Schwab.");
+  }
+
+  return await res.json();
+});
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // Market Data Functions
 // ═══════════════════════════════════════════════════════════════════════════════

@@ -69,6 +69,13 @@ export const schwabGetPositions   = (data) => call("schwabGetPositions")(data);
  */
 export const schwabGetBuyingPower = (data) => call("schwabGetBuyingPower")(data);
 
+/**
+ * Returns the account's recent orders (last ~59 days) — used to read working
+ * GTC buy-to-close orders so the app can fill in each position's GTC.
+ * Input:  { accountHash }
+ */
+export const schwabGetOrders      = (data) => call("schwabGetOrders")(data);
+
 // ── Market data ───────────────────────────────────────────────────────────────
 
 /**

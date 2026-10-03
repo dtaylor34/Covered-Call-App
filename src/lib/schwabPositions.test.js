@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseSchwabPositions, parseOccSymbol } from "./schwabPositions";
+import { parseSchwabPositions, parseOccSymbol, parseSchwabOrders } from "./schwabPositions";
 
 // Mock Schwab Trader API response: 200 META shares + 2 short $820 calls (the META example).
 const DATA = {
@@ -37,5 +37,21 @@ describe("parseSchwabPositions", () => {
     expect(c.fillStock).toBeCloseTo(34.6799, 3);   // avg cost (held shares)
     expect(c.liveStock).toBeCloseTo(775.75, 2);    // 155150 / 200
     expect(c.covered).toBe(true);                  // 200 shares >= 2*100
+  });
+});
+
+describe("parseSchwabOrders", () => {
+  it("extracts GTC buy-to-close call orders → key→price", () => {
+    const orders = [
+      {
+        status: "WORKING", price: 2.00, duration: "GOOD_TILL_CANCEL",
+        orderLegCollection: [{
+          instruction: "BUY_TO_CLOSE", quantity: 2,
+          instrument: { assetType: "OPTION", symbol: "META  261106C00800000", putCall: "CALL", underlyingSymbol: "META" },
+        }],
+      },
+      { status: "FILLED", price: 9.99, orderLegCollection: [] }, // ignored (not active)
+    ];
+    expect(parseSchwabOrders(orders)).toEqual({ "META|800|2026-11-06": 2 });
   });
 });
