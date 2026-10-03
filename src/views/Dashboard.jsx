@@ -34,6 +34,7 @@ import ProfileTab from "../components/ProfileTab";
 import SelectionTab from "../components/SelectionTab";
 // ── API TAB INJECTION 1/3 — import ──────────────────────────────────────────
 import APITab from "../components/APITab";
+import HistoricalDataTab from "../components/HistoricalDataTab";
 
 // ── Tab definitions ──
 const TABS = [
@@ -49,6 +50,7 @@ const TABS = [
   // feature: "api" — intentionally not gated; canAccess("api") returns true for
   // all tiers because there is no useFeatureAccess rule for this feature key.
   { id: "api",          label: "APIs",      icon: "🔌", feature: "api" },
+  { id: "history",      label: "History",   icon: "🗄", feature: "history" }, // ungated (no rule → unlocked)
 ];
 
 // ── Locked Overlay ──
@@ -468,6 +470,11 @@ export default function Dashboard() {
           <APITab />
         </div>
         {/* ── END API TAB INJECTION ─────────────────────────────────────────── */}
+
+        {/* History (historical-data collection) */}
+        <div role="tabpanel" aria-label="Historical data" style={{ display: activeTab === "history" ? "block" : "none" }}>
+          <HistoricalDataTab />
+        </div>
 
         {/* ── Financial Disclaimer ── */}
         <aside aria-label="Financial disclaimer" style={{

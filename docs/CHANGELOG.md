@@ -1,3 +1,10 @@
+## [2.0.26] — 2026-10-03
+
+### Added
+- **Historical Data (new "History" tab)** — a registry of symbols we collect daily covered-call history for: shows each symbol's start date, data-point count, and last-collected time; add new tickers (collection starts that day forward) and remove them (owner/admin). A daily scheduled function snapshots each symbol's underlying price + ATM ~30-DTE call IV (IV30) + that call's strike/bid/ask into a rolling 2-year series (`history/{symbol}`), feeding future IV-percentile and premium-trend analysis. "Collect now" button (owner/admin) seeds the first point. US-Treasury options intentionally excluded (separate future section).
+
+---
+
 ## [2.0.25] — 2026-10-02
 
 ### Fixed

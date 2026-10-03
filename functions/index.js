@@ -271,6 +271,11 @@ exports.schwabGetOrders      = schwab.schwabGetOrders;
 exports.schwabGetQuotes      = schwab.schwabGetQuotes;
 exports.schwabGetOptionChain = schwab.schwabGetOptionChain;
 
+// ── Historical data collector (covered-call IV / premium trends) ─────────────
+const history = require("./history");
+exports.collectDailyHistory = history.collectDailyHistory;
+exports.collectHistoryNow   = history.collectHistoryNow;
+
 // ── Google Sheet ledger sync (feature/working-lots-sheets) ───────────────────
 // connectSheet / syncSheet / sheetServiceAccount. Requires the Google Sheets API
 // enabled in the project and `googleapis` installed. See handover/HANDOVER.md §Sheet sync.
