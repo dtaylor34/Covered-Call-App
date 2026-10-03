@@ -1,3 +1,10 @@
+## [2.0.25] — 2026-10-02
+
+### Fixed
+- **Inputs only accepted one character (symbol search, Exit Early, etc.)** — the Card/Stat/Badge/InfoTip wrapper components were defined inside the Selection/Dashboard tab's render, so every keystroke remounted their subtrees and dropped focus. Stabilized them with useCallback so inputs keep focus and you can type freely across the whole tab.
+
+---
+
 ## [2.0.24] — 2026-10-02
 
 ### Fixed

@@ -521,7 +521,7 @@ export default function SelectionTab({ onNavigateToGlossary, sharedSymbol, onSym
   };
 
   // ── Sub-Components ────────────────────────────────────────────────────────
-  const Card = ({ children, style = {}, glow = false }) => (
+  const Card = useCallback(({ children, style = {}, glow = false }) => (
     <div style={{
       background: palette.card,
       border: `1px solid ${glow ? palette.accent + "44" : palette.border}`,
@@ -533,9 +533,9 @@ export default function SelectionTab({ onNavigateToGlossary, sharedSymbol, onSym
     }}>
       {children}
     </div>
-  );
+  ), [palette, themeName]);
 
-  const Badge = ({ children, color = palette.accent }) => (
+  const Badge = useCallback(({ children, color = palette.accent }) => (
     <span style={{
       background: color + "22", color,
       padding: "3px 10px", borderRadius: 6,
@@ -544,17 +544,17 @@ export default function SelectionTab({ onNavigateToGlossary, sharedSymbol, onSym
     }}>
       {children}
     </span>
-  );
+  ), [palette, font]);
 
-  const Stat = ({ label, value, sub, color = palette.text, size = "large" }) => (
+  const Stat = useCallback(({ label, value, sub, color = palette.text, size = "large" }) => (
     <div style={{ marginBottom: size === "large" ? 0 : 12 }}>
       <div style={{ color: palette.textDim, fontSize: 11, fontFamily: font, letterSpacing: "1px", textTransform: "uppercase", marginBottom: 4 }}>{label}</div>
       <div style={{ color, fontSize: size === "large" ? 28 : 20, fontWeight: 700, fontFamily: displayFont, lineHeight: 1.1 }}>{value}</div>
       {sub && <div style={{ color: palette.textMuted, fontSize: 11, fontFamily: font, marginTop: 2 }}>{sub}</div>}
     </div>
-  );
+  ), [palette, font, displayFont]);
 
-  const InfoTip = ({ id, tip, glossaryTerm }) => {
+  const InfoTip = useCallback(({ id, tip, glossaryTerm }) => {
     const isOpen = activeInfoTip === id;
     return (
       <div style={{ position: "relative", display: "inline-block" }}>
@@ -606,7 +606,7 @@ export default function SelectionTab({ onNavigateToGlossary, sharedSymbol, onSym
         )}
       </div>
     );
-  };
+  }, [activeInfoTip, palette, font, themeName, onNavigateToGlossary]);
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
