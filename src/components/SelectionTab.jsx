@@ -153,6 +153,8 @@ export default function SelectionTab({ onNavigateToGlossary, sharedSymbol, onSym
     if (exp) setExpirationDate(exp);
     setPremiumOverride({ strike, exp: exp || expirationDate, premium: price });
   }, [expirationDate]);
+  // "Exit early" buy-to-close price (what you'd pay to buy the call back).
+  const [exitEarly, setExitEarly] = useState("0.10");
   const [buybackLimit, setBuybackLimit] = useState(50);
   const [sliderHover, setSliderHover] = useState(false);
   const [transactions, setTransactions] = useState([]);
@@ -363,6 +365,10 @@ export default function SelectionTab({ onNavigateToGlossary, sharedSymbol, onSym
   const returnOnInvestment = (totalPremium / costToEnter) * 100;
   const annualizedReturn = (returnOnInvestment / daysToExpiry) * 365;
   const breakeven = stock.price - premiumPerShare;
+  // Contract Cost extras: expiration month + what you keep if you buy back early.
+  const monthLabel = expirationDate ? new Date(expirationDate + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "2-digit" }) : "—";
+  const exitPrice = parseFloat(String(exitEarly).replace(/[$,\s]/g, "")) || 0;
+  const exitKeeps = Math.max(0, premiumPerShare - exitPrice) * 100 * contracts;
 
   // ── Best Strike Recommendation ────────────────────────────────────────────
   const bestStrike = useMemo(() => {
@@ -896,11 +902,25 @@ export default function SelectionTab({ onNavigateToGlossary, sharedSymbol, onSym
             </div>
             {expandCost && (
               <>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-              <Stat size="small" label={<>Per Share<InfoTip id="cc_pershare" tip="The estimated premium per share calculated by the Black-Scholes model. This is what the option buyer pays you for each share covered." glossaryTerm="Premium" /></>} value={`$${premiumPerShare.toFixed(2)}`} color={palette.profit} />
-              <Stat size="small" label={<>Per Contract<InfoTip id="cc_percontract" tip={`Per share premium ($${premiumPerShare.toFixed(2)}) × 100 shares = $${premiumPerContract.toFixed(2)} per contract.`} glossaryTerm="Contract" /></>} value={`$${premiumPerContract.toFixed(2)}`} color={palette.profit} />
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }}>
+              <Stat size="small" label={<>Call Bid<InfoTip id="cc_pershare" tip="The call's Bid — what you receive per share for selling the call. Comes from the option chain below when you click a Bid; otherwise it's the Black-Scholes estimate." glossaryTerm="Premium" /></>} value={`$${premiumPerShare.toFixed(2)}`} color={palette.profit} />
+              <Stat size="small" label={<>Per Contract<InfoTip id="cc_percontract" tip={`Call bid ($${premiumPerShare.toFixed(2)}) × 100 shares = $${premiumPerContract.toFixed(2)} per contract.`} glossaryTerm="Contract" /></>} value={`$${premiumPerContract.toFixed(2)}`} color={palette.profit} />
+              <Stat size="small" label="Month" value={monthLabel} sub={expirationDate ? `${daysToExpiry}d to expiry` : ""} />
               <Stat size="small" label={<>Total Premium<InfoTip id="cc_total" tip={`Per contract ($${premiumPerContract.toFixed(2)}) × ${contracts} contracts = $${totalPremium.toFixed(2)} total. This is the complete income deposited into your account.`} glossaryTerm="Premium" /></>} value={`$${totalPremium.toFixed(2)}`} color={palette.accentBright} />
               <Stat size="small" label={<>ROI<InfoTip id="cc_roi" tip={`Return on Investment: total premium ($${totalPremium.toFixed(2)}) ÷ cost to enter ($${costToEnter.toLocaleString()}) = ${returnOnInvestment.toFixed(2)}%. Annualized: ${annualizedReturn.toFixed(1)}%.`} glossaryTerm="Return on Investment" /></>} value={`${returnOnInvestment.toFixed(2)}%`} sub={`${annualizedReturn.toFixed(1)}% annualized`} color={palette.accent} />
+              {/* EXIT EARLY — enter a buy-to-close price, see what you keep */}
+              <div style={{ marginBottom: 12 }}>
+                <div style={{ color: palette.textDim, fontSize: 11, fontFamily: font, letterSpacing: "1px", textTransform: "uppercase", marginBottom: 4 }}>
+                  Exit Early<InfoTip id="cc_exit" tip="Enter a buy-to-close price (e.g. 0.10 or 2.00). Shows what you keep if you buy the call back at that price: (Call Bid − exit) × 100 × contracts." glossaryTerm="Premium" />
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <input value={exitEarly} onChange={(e) => setExitEarly(e.target.value)} placeholder="0.10" inputMode="decimal"
+                    style={{ width: 66, minHeight: 34, padding: "0 8px", border: `1px solid ${palette.border}`, borderRadius: 6, background: palette.inputBg, color: palette.text, fontFamily: font, fontSize: 16, fontWeight: 700 }} />
+                  <span style={{ color: palette.profit, fontSize: 18, fontWeight: 700, fontFamily: displayFont, lineHeight: 1.1 }}>
+                    → keeps ${exitKeeps.toLocaleString("en", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </span>
+                </div>
+              </div>
             </div>
 
             {/* Best Return Hint */}

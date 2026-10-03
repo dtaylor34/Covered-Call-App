@@ -1,3 +1,10 @@
+## [2.0.22] — 2026-10-02
+
+### Changed
+- **Contract Cost section** — renamed "Per Share" → **"Call Bid"**, and added a third column: **Month** (selected expiration + days to expiry) and **Exit Early** — a buy-to-close price field (enter e.g. 0.10 or 2.00) showing what you keep if you buy the call back at that price.
+
+---
+
 ## [2.0.21] — 2026-10-02
 
 ### Changed
