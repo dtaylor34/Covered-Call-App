@@ -1,3 +1,10 @@
+## [2.0.20] — 2026-10-02
+
+### Added
+- **Option chain on the Dashboard** — thinkorswim-style chain under Position Setup: pick an expiration (month) and see the strike ladder with Calls | Strike | Puts (Last/Bid/Ask), ATM row highlighted + auto-scrolled to, ITM cells tinted. Driven by the shared symbol; click a call's price to use that strike. (Yahoo data, 15-min delayed.)
+
+---
+
 ## [2.0.19] — 2026-10-02
 
 ### Changed
