@@ -148,9 +148,11 @@ export default function SelectionTab({ onNavigateToGlossary, sharedSymbol, onSym
   const [expirationDate, setExpirationDate] = useState(null);
   // When the user clicks a Bid in the option chain: { strike, exp, premium }.
   const [premiumOverride, setPremiumOverride] = useState(null);
-  const pickFromChain = useCallback((strike, price, exp) => {
+  const [optionType, setOptionType] = useState("call"); // which side was picked from the chain
+  const pickFromChain = useCallback((strike, price, exp, type) => {
     setStrikePrice(strike);
     if (exp) setExpirationDate(exp);
+    setOptionType(type || "call");
     setPremiumOverride({ strike, exp: exp || expirationDate, premium: price });
   }, [expirationDate]);
   // "Exit early" buy-to-close price (what you'd pay to buy the call back).
@@ -358,6 +360,8 @@ export default function SelectionTab({ onNavigateToGlossary, sharedSymbol, onSym
   const modelPremium = blackScholesCall(stock.price, strikePrice || stock.price * 1.03, timeToExpiry, riskFreeRate, stock.iv);
   const usingChainBid = premiumOverride && premiumOverride.strike === strikePrice && premiumOverride.exp === expirationDate;
   const premiumPerShare = usingChainBid ? premiumOverride.premium : modelPremium;
+  // Label reflects which side was selected from the chain (Call by default).
+  const bidLabel = usingChainBid && optionType === "put" ? "Put Bid" : "Call Bid";
   const premiumPerContract = premiumPerShare * 100;
   const totalPremium = premiumPerContract * contracts;
   const costToEnter = stock.price * shares;
@@ -903,7 +907,7 @@ export default function SelectionTab({ onNavigateToGlossary, sharedSymbol, onSym
             {expandCost && (
               <>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }}>
-              <Stat size="small" label={<>Call Bid<InfoTip id="cc_pershare" tip="The call's Bid — what you receive per share for selling the call. Comes from the option chain below when you click a Bid; otherwise it's the Black-Scholes estimate." glossaryTerm="Premium" /></>} value={`$${premiumPerShare.toFixed(2)}`} color={palette.profit} />
+              <Stat size="small" label={<>{bidLabel}<InfoTip id="cc_pershare" tip="The option's Bid — what you receive per share for selling it. Comes from the option chain below when you click a Bid (Call or Put); otherwise it's the Black-Scholes estimate." glossaryTerm="Premium" /></>} value={`$${premiumPerShare.toFixed(2)}`} color={palette.profit} />
               <Stat size="small" label={<>Per Contract<InfoTip id="cc_percontract" tip={`Call bid ($${premiumPerShare.toFixed(2)}) × 100 shares = $${premiumPerContract.toFixed(2)} per contract.`} glossaryTerm="Contract" /></>} value={`$${premiumPerContract.toFixed(2)}`} color={palette.profit} />
               <Stat size="small" label="Month" value={monthLabel} sub={expirationDate ? `${daysToExpiry}d to expiry` : ""} />
               <Stat size="small" label={<>Total Premium<InfoTip id="cc_total" tip={`Per contract ($${premiumPerContract.toFixed(2)}) × ${contracts} contracts = $${totalPremium.toFixed(2)} total. This is the complete income deposited into your account.`} glossaryTerm="Premium" /></>} value={`$${totalPremium.toFixed(2)}`} color={palette.accentBright} />
@@ -951,7 +955,7 @@ export default function SelectionTab({ onNavigateToGlossary, sharedSymbol, onSym
           </Card>
 
           {/* Option chain — click a call's Bid to set the strike + premium in Contract Cost above */}
-          <OptionChain symbol={symbol} highlightStrike={strikePrice} highlightExpiration={expirationDate} onPickStrike={pickFromChain} />
+          <OptionChain symbol={symbol} highlightStrike={strikePrice} highlightExpiration={expirationDate} highlightSide={optionType} onPickStrike={pickFromChain} />
 
             {/* ── Section 2: Strike Price ───────────────────────────── */}
             <Card>

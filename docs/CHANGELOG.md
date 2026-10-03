@@ -1,3 +1,10 @@
+## [2.0.23] — 2026-10-02
+
+### Changed
+- **Call/Put-aware bid label** — the Contract Cost label now reads **"Call Bid"** or **"Put Bid"** depending on which side you pick in the chain. Put Bids are now clickable too (red), and the selected side's Bid highlights.
+
+---
+
 ## [2.0.22] — 2026-10-02
 
 ### Changed

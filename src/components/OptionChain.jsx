@@ -17,7 +17,7 @@ const expMeta = (iso) => {
   return { text: date.toLocaleDateString("en-US", { day: "numeric", month: "short", year: "2-digit" }).toUpperCase(), dte };
 };
 
-export default function OptionChain({ symbol, onPickStrike, highlightStrike, highlightExpiration }) {
+export default function OptionChain({ symbol, onPickStrike, highlightStrike, highlightExpiration, highlightSide = "call" }) {
   const { T } = useTheme();
   const { expirations } = useExpirations(symbol);
   const [exp, setExp] = useState(null);
@@ -110,15 +110,27 @@ export default function OptionChain({ symbol, onPickStrike, highlightStrike, hig
                 const isHi = highlightStrike != null && Number(r.strike) === Number(highlightStrike);
                 const callItm = under > 0 && r.strike < under;
                 const putItm = under > 0 && r.strike > under;
-                // bid=true → the "sell here" price for a covered call; emphasized + highlighted when selected
+                // bid=true → the "sell here" price; emphasized + highlighted when selected on that side
                 const callCell = (price, bid) => {
-                  const hiBid = bid && isHi && price > 0;
+                  const hiBid = bid && isHi && highlightSide === "call" && price > 0;
                   return (
-                    <div onClick={() => r.call && price > 0 && onPickStrike?.(r.strike, price, key)}
+                    <div onClick={() => r.call && price > 0 && onPickStrike?.(r.strike, price, key, "call")}
                       title={r.call && price > 0 ? "Use as your call premium" : undefined}
                       style={{ ...cell, cursor: r.call && price > 0 ? "pointer" : "default",
                         background: hiBid ? T.success : (callItm ? `${T.success}12` : "transparent"),
                         color: hiBid ? "#0A0A0A" : (bid ? T.success : T.text), fontWeight: bid ? 700 : 400 }}>
+                      {px(price)}
+                    </div>
+                  );
+                };
+                const putCell = (price, bid) => {
+                  const hiBid = bid && isHi && highlightSide === "put" && price > 0;
+                  return (
+                    <div onClick={() => r.put && price > 0 && onPickStrike?.(r.strike, price, key, "put")}
+                      title={r.put && price > 0 ? "Use as your put premium" : undefined}
+                      style={{ ...cell, cursor: r.put && price > 0 ? "pointer" : "default",
+                        background: hiBid ? T.danger : (putItm ? `${T.danger}12` : "transparent"),
+                        color: hiBid ? "#0A0A0A" : (bid ? T.danger : T.textDim), fontWeight: bid ? 700 : 400 }}>
                       {px(price)}
                     </div>
                   );
@@ -136,9 +148,9 @@ export default function OptionChain({ symbol, onPickStrike, highlightStrike, hig
                     <div style={{ ...cell, textAlign: "center", fontWeight: 700, color: isHi || isAtm ? T.accent : T.text, borderLeft: `1px solid ${T.border}`, borderRight: `1px solid ${T.border}` }}>
                       {r.strike}
                     </div>
-                    <div style={{ ...cell, background: putItm ? `${T.danger}12` : "transparent", color: T.textDim }}>{px(r.put?.bid)}</div>
-                    <div style={{ ...cell, background: putItm ? `${T.danger}12` : "transparent", color: T.textDim }}>{px(r.put?.ask)}</div>
-                    <div style={{ ...cell, background: putItm ? `${T.danger}12` : "transparent", color: T.text }}>{px(r.put?.lastPrice)}</div>
+                    {putCell(r.put?.bid, true)}
+                    {putCell(r.put?.ask, false)}
+                    {putCell(r.put?.lastPrice, false)}
                   </div>
                 );
               })}
@@ -146,7 +158,7 @@ export default function OptionChain({ symbol, onPickStrike, highlightStrike, hig
           </div>
         </div>
       )}
-      {onPickStrike && <div style={{ color: T.textDim, fontSize: 11, marginTop: 8 }}>Tip: click a call’s <span style={{ color: T.success, fontWeight: 700 }}>Bid</span> (green) to set that strike + premium in the Contract Cost above.</div>}
+      {onPickStrike && <div style={{ color: T.textDim, fontSize: 11, marginTop: 8 }}>Tip: click a <span style={{ color: T.success, fontWeight: 700 }}>call Bid</span> (green) or <span style={{ color: T.danger, fontWeight: 700 }}>put Bid</span> (red) to set that strike + premium in the Contract Cost above.</div>}
     </div>
   );
 }
