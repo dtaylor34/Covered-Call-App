@@ -99,6 +99,25 @@ function todayISO() {
   return new Date().toISOString().split("T")[0];
 }
 
+// Self-contained so typing doesn't re-render (and un-focus) the whole tab.
+// Updates "keeps" live; Enter just blurs. keeps = (premium − exit) × 100 × contracts.
+function ExitEarlyField({ palette, font, displayFont, premiumPerShare, contracts }) {
+  const [val, setVal] = useState("0.10");
+  const exit = parseFloat(String(val).replace(/[$,\s]/g, "")) || 0;
+  const keeps = Math.max(0, premiumPerShare - exit) * 100 * contracts;
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+      <input value={val} onChange={(e) => setVal(e.target.value)}
+        onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
+        placeholder="0.10" inputMode="decimal"
+        style={{ width: 70, minHeight: 34, padding: "0 8px", border: `1px solid ${palette.border}`, borderRadius: 6, background: palette.inputBg, color: palette.text, fontFamily: font, fontSize: 16, fontWeight: 700 }} />
+      <span style={{ color: palette.profit, fontSize: 18, fontWeight: 700, fontFamily: displayFont, lineHeight: 1.1 }}>
+        → keeps ${keeps.toLocaleString("en", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+      </span>
+    </div>
+  );
+}
+
 // ── Component ─────────────────────────────────────────────────────────────────
 export default function SelectionTab({ onNavigateToGlossary, sharedSymbol, onSymbolChange }) {
   const { T, themeName } = useTheme();
@@ -155,8 +174,6 @@ export default function SelectionTab({ onNavigateToGlossary, sharedSymbol, onSym
     setOptionType(type || "call");
     setPremiumOverride({ strike, exp: exp || expirationDate, premium: price });
   }, [expirationDate]);
-  // "Exit early" buy-to-close price (what you'd pay to buy the call back).
-  const [exitEarly, setExitEarly] = useState("0.10");
   const [buybackLimit, setBuybackLimit] = useState(50);
   const [sliderHover, setSliderHover] = useState(false);
   const [transactions, setTransactions] = useState([]);
@@ -371,8 +388,6 @@ export default function SelectionTab({ onNavigateToGlossary, sharedSymbol, onSym
   const breakeven = stock.price - premiumPerShare;
   // Contract Cost extras: expiration month + what you keep if you buy back early.
   const monthLabel = expirationDate ? new Date(expirationDate + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "2-digit" }) : "—";
-  const exitPrice = parseFloat(String(exitEarly).replace(/[$,\s]/g, "")) || 0;
-  const exitKeeps = Math.max(0, premiumPerShare - exitPrice) * 100 * contracts;
 
   // ── Best Strike Recommendation ────────────────────────────────────────────
   const bestStrike = useMemo(() => {
@@ -917,13 +932,7 @@ export default function SelectionTab({ onNavigateToGlossary, sharedSymbol, onSym
                 <div style={{ color: palette.textDim, fontSize: 11, fontFamily: font, letterSpacing: "1px", textTransform: "uppercase", marginBottom: 4 }}>
                   Exit Early<InfoTip id="cc_exit" tip="Enter a buy-to-close price (e.g. 0.10 or 2.00). Shows what you keep if you buy the call back at that price: (Call Bid − exit) × 100 × contracts." glossaryTerm="Premium" />
                 </div>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <input value={exitEarly} onChange={(e) => setExitEarly(e.target.value)} placeholder="0.10" inputMode="decimal"
-                    style={{ width: 66, minHeight: 34, padding: "0 8px", border: `1px solid ${palette.border}`, borderRadius: 6, background: palette.inputBg, color: palette.text, fontFamily: font, fontSize: 16, fontWeight: 700 }} />
-                  <span style={{ color: palette.profit, fontSize: 18, fontWeight: 700, fontFamily: displayFont, lineHeight: 1.1 }}>
-                    → keeps ${exitKeeps.toLocaleString("en", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </span>
-                </div>
+                <ExitEarlyField palette={palette} font={font} displayFont={displayFont} premiumPerShare={premiumPerShare} contracts={contracts} />
               </div>
             </div>
 

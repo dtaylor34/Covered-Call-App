@@ -1,3 +1,10 @@
+## [2.0.24] — 2026-10-02
+
+### Fixed
+- **Exit Early input only accepted one character** — the field was losing focus on every keystroke (re-rendering the whole tab). Extracted it to a self-contained component with its own state: you can now type freely (e.g. 0.10 or 2.00), the "keeps $X" updates live as you type, and Enter commits/blurs.
+
+---
+
 ## [2.0.23] — 2026-10-02
 
 ### Changed
