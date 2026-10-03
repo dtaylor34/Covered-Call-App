@@ -1,3 +1,12 @@
+## [2.0.21] — 2026-10-02
+
+### Changed
+- **Option chain moved under Contract Cost + wired two-way**
+  - Click a call's **Bid** in the chain → sets that strike + expiration and uses the **live bid as the premium**, so Contract Cost / Per Share / Total / ROI / breakeven / max profit all update to the real available premium (overrides the Black-Scholes estimate while that strike+expiry stay selected).
+  - Selecting the **Best Return Hint** (or a strike) now **highlights the matching Bid** in the chain (row + bid cell) and scrolls to it.
+
+---
+
 ## [2.0.20] — 2026-10-02
 
 ### Added

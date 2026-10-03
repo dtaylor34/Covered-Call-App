@@ -20,6 +20,7 @@ import { useTheme } from "../contexts/ThemeContext";
 import { useStockQuote } from "../hooks/useMarketData";
 import { PRELOADED_TICKERS } from "../data/tickers";
 import CoveredCallExitCard from "./CoveredCallExitCard";
+import OptionChain from "./OptionChain";
 
 // ── Stock Data ────────────────────────────────────────────────────────────────
 const STOCK_DATA = {
@@ -145,6 +146,13 @@ export default function SelectionTab({ onNavigateToGlossary, sharedSymbol, onSym
   const [shares, setShares] = useState(200);
   const [strikePrice, setStrikePrice] = useState(null);
   const [expirationDate, setExpirationDate] = useState(null);
+  // When the user clicks a Bid in the option chain: { strike, exp, premium }.
+  const [premiumOverride, setPremiumOverride] = useState(null);
+  const pickFromChain = useCallback((strike, price, exp) => {
+    setStrikePrice(strike);
+    if (exp) setExpirationDate(exp);
+    setPremiumOverride({ strike, exp: exp || expirationDate, premium: price });
+  }, [expirationDate]);
   const [buybackLimit, setBuybackLimit] = useState(50);
   const [sliderHover, setSliderHover] = useState(false);
   const [transactions, setTransactions] = useState([]);
@@ -342,7 +350,12 @@ export default function SelectionTab({ onNavigateToGlossary, sharedSymbol, onSym
   }, []);
 
   // ── Computed Values ───────────────────────────────────────────────────────
-  const premiumPerShare = blackScholesCall(stock.price, strikePrice || stock.price * 1.03, timeToExpiry, riskFreeRate, stock.iv);
+  // Premium = the live bid the user picked from the option chain (when the
+  // selected strike + expiration still match that pick), else the Black-Scholes
+  // model estimate.
+  const modelPremium = blackScholesCall(stock.price, strikePrice || stock.price * 1.03, timeToExpiry, riskFreeRate, stock.iv);
+  const usingChainBid = premiumOverride && premiumOverride.strike === strikePrice && premiumOverride.exp === expirationDate;
+  const premiumPerShare = usingChainBid ? premiumOverride.premium : modelPremium;
   const premiumPerContract = premiumPerShare * 100;
   const totalPremium = premiumPerContract * contracts;
   const costToEnter = stock.price * shares;
@@ -916,6 +929,9 @@ export default function SelectionTab({ onNavigateToGlossary, sharedSymbol, onSym
             </div>
             </>)}
           </Card>
+
+          {/* Option chain — click a call's Bid to set the strike + premium in Contract Cost above */}
+          <OptionChain symbol={symbol} highlightStrike={strikePrice} highlightExpiration={expirationDate} onPickStrike={pickFromChain} />
 
             {/* ── Section 2: Strike Price ───────────────────────────── */}
             <Card>

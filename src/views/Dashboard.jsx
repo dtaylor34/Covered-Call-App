@@ -26,7 +26,6 @@ import WorkingTab from "../components/WorkingTab";
 import WorkingPositionsTab from "../components/WorkingPositionsTab";
 import YearToDateStrip from "../components/YearToDateStrip";
 import ClosedTradesTab from "../components/ClosedTradesTab";
-import OptionChain from "../components/OptionChain";
 import RiskTab from "../components/RiskTab";
 import TransactionsTab from "../components/TransactionsTab";
 import GlossaryTab from "../components/GlossaryTab";
@@ -408,7 +407,6 @@ export default function Dashboard() {
         <div role="tabpanel" aria-label="Position selection and analysis" style={{ display: activeTab === "selection" ? "block" : "none" }}>
           <YearToDateStrip />
           <SelectionTab onNavigateToGlossary={() => setActiveTab("glossary")} sharedSymbol={sharedSymbol} onSymbolChange={setSharedSymbol} />
-          <OptionChain symbol={sharedSymbol} />
         </div>
 
         {/* Working (tier-gated) */}

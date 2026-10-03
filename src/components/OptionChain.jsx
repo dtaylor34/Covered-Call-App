@@ -17,14 +17,19 @@ const expMeta = (iso) => {
   return { text: date.toLocaleDateString("en-US", { day: "numeric", month: "short", year: "2-digit" }).toUpperCase(), dte };
 };
 
-export default function OptionChain({ symbol, onPickStrike }) {
+export default function OptionChain({ symbol, onPickStrike, highlightStrike, highlightExpiration }) {
   const { T } = useTheme();
   const { expirations } = useExpirations(symbol);
   const [exp, setExp] = useState(null);
   const atmRef = useRef(null);
+  const hiRef = useRef(null);
 
   useEffect(() => { setExp(null); }, [symbol]);              // reset on symbol change
   useEffect(() => { if (expirations?.length && !exp) setExp(expirations[0]); }, [expirations, exp]);
+  // Follow the Position Setup's expiration when it's a real chain expiration.
+  useEffect(() => {
+    if (highlightExpiration && (expirations || []).includes(highlightExpiration) && highlightExpiration !== exp) setExp(highlightExpiration);
+  }, [highlightExpiration, expirations]); // eslint-disable-line
 
   const { chain, loading, error } = useOptionsChain(symbol, exp);
   const under = chain?.underlyingPrice || 0;
@@ -44,7 +49,7 @@ export default function OptionChain({ symbol, onPickStrike }) {
     return rows.reduce((best, r) => (Math.abs(r.strike - under) < Math.abs(best.strike - under) ? r : best)).strike;
   }, [rows, under]);
 
-  useEffect(() => { if (atmRef.current) atmRef.current.scrollIntoView({ block: "center" }); }, [atm, exp]);
+  useEffect(() => { (hiRef.current || atmRef.current)?.scrollIntoView({ block: "center", behavior: "smooth" }); }, [atm, exp, highlightStrike]);
 
   if (!symbol) return null;
 
@@ -102,18 +107,33 @@ export default function OptionChain({ symbol, onPickStrike }) {
             <div style={{ maxHeight: 440, overflowY: "auto" }}>
               {rows.map((r) => {
                 const isAtm = r.strike === atm;
+                const isHi = highlightStrike != null && Number(r.strike) === Number(highlightStrike);
                 const callItm = under > 0 && r.strike < under;
                 const putItm = under > 0 && r.strike > under;
+                // bid=true → the "sell here" price for a covered call; emphasized + highlighted when selected
+                const callCell = (price, bid) => {
+                  const hiBid = bid && isHi && price > 0;
+                  return (
+                    <div onClick={() => r.call && price > 0 && onPickStrike?.(r.strike, price, key)}
+                      title={r.call && price > 0 ? "Use as your call premium" : undefined}
+                      style={{ ...cell, cursor: r.call && price > 0 ? "pointer" : "default",
+                        background: hiBid ? T.success : (callItm ? `${T.success}12` : "transparent"),
+                        color: hiBid ? "#0A0A0A" : (bid ? T.success : T.text), fontWeight: bid ? 700 : 400 }}>
+                      {px(price)}
+                    </div>
+                  );
+                };
                 return (
-                  <div key={r.strike} ref={isAtm ? atmRef : null} style={{
+                  <div key={r.strike} ref={isHi ? hiRef : (isAtm ? atmRef : null)} style={{
                     display: "grid", gridTemplateColumns: COLS, alignItems: "center",
-                    background: isAtm ? T.accentDim : "transparent", borderBottom: `1px solid ${T.border}22`,
+                    background: isHi ? `${T.accent}22` : (isAtm ? T.accentDim : "transparent"),
+                    boxShadow: isHi ? `inset 3px 0 0 ${T.accent}` : "none",
+                    borderBottom: `1px solid ${T.border}22`,
                   }}>
-                    <div style={{ ...cell, background: callItm ? `${T.success}12` : "transparent", cursor: r.call ? "pointer" : "default", color: T.text }}
-                      onClick={() => r.call && onPickStrike?.(r.strike, r.call, key)}>{px(r.call?.lastPrice)}</div>
-                    <div style={{ ...cell, background: callItm ? `${T.success}12` : "transparent", color: T.textDim }}>{px(r.call?.bid)}</div>
-                    <div style={{ ...cell, background: callItm ? `${T.success}12` : "transparent", color: T.textDim }}>{px(r.call?.ask)}</div>
-                    <div style={{ ...cell, textAlign: "center", fontWeight: 700, color: isAtm ? T.accent : T.text, borderLeft: `1px solid ${T.border}`, borderRight: `1px solid ${T.border}` }}>
+                    {callCell(r.call?.lastPrice, false)}
+                    {callCell(r.call?.bid, true)}
+                    {callCell(r.call?.ask, false)}
+                    <div style={{ ...cell, textAlign: "center", fontWeight: 700, color: isHi || isAtm ? T.accent : T.text, borderLeft: `1px solid ${T.border}`, borderRight: `1px solid ${T.border}` }}>
                       {r.strike}
                     </div>
                     <div style={{ ...cell, background: putItm ? `${T.danger}12` : "transparent", color: T.textDim }}>{px(r.put?.bid)}</div>
@@ -126,7 +146,7 @@ export default function OptionChain({ symbol, onPickStrike }) {
           </div>
         </div>
       )}
-      {onPickStrike && <div style={{ color: T.textDim, fontSize: 11, marginTop: 8 }}>Tip: click a call’s price to use that strike for a covered call.</div>}
+      {onPickStrike && <div style={{ color: T.textDim, fontSize: 11, marginTop: 8 }}>Tip: click a call’s <span style={{ color: T.success, fontWeight: 700 }}>Bid</span> (green) to set that strike + premium in the Contract Cost above.</div>}
     </div>
   );
 }
