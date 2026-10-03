@@ -1,3 +1,10 @@
+## [2.0.19] — 2026-10-02
+
+### Changed
+- **Buy-back now visible on the row** — each covered call shows a third "working order" line under the two legs: `BUY +N … CALL  <gtc> LMT  GTC  buy-back · keeps $X`. No need to expand to see your GTC buy-to-close.
+
+---
+
 ## [2.0.18] — 2026-10-02
 
 ### Added

@@ -188,6 +188,25 @@ export default function WorkingPositionsTab() {
                       <div style={{ ...cellBase, fontSize: 11, color: c.close >= 0 ? T.success : T.danger }}>if closed {usd(c.close, true)} · {(c.health * 100).toFixed(1)}%</div>
                       <div />
                     </div>
+                    {/* Leg 3 — working GTC buy-to-close order (the buy-back), if set */}
+                    {Number(p.gtc) > 0 && (
+                      <div style={{ ...leg, marginTop: 2 }}>
+                        <div />
+                        <div style={{ ...cellBase, color: T.success, fontWeight: 700 }}>BUY</div>
+                        <div style={cellBase}>+{n}</div>
+                        <div style={dim}>TO CLOSE</div>
+                        <div style={{ ...cellBase, fontWeight: 700 }}>{p.sym}</div>
+                        <div style={cellBase}>{csExp(p.expiry)}</div>
+                        <div style={cellBase}>{p.strike}</div>
+                        <div style={cellBase}>CALL</div>
+                        <div style={cellBase}>{Number(p.gtc).toFixed(2)} <span style={{ color: T.textDim }}>LMT</span></div>
+                        <div style={dim}>LIMIT</div>
+                        <div style={{ ...cellBase, color: T.warn, fontWeight: 700 }}>GTC</div>
+                        <div style={dim}>BEST</div>
+                        <div style={{ ...cellBase, color: T.success, fontSize: 11 }}>buy-back · keeps {usd(fill.gtcKeep)}</div>
+                        <div />
+                      </div>
+                    )}
                   </div>
                   {isOpen && <Detail T={T} p={p} c={c} fill={fill} onUpdateLive={updateLive} onClose={closePosition} />}
                 </div>
