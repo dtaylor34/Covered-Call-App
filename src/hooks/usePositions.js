@@ -80,7 +80,7 @@ export function usePositions() {
     const today = new Date(); today.setHours(0, 0, 0, 0);
     const dte = Math.max(1, Math.round((new Date(expiry) - today) / 86400000));
 
-    const base = existing || { id, sym, strike, expiry, iv: 25, gtc: 0.1 };
+    const base = existing || { id, sym, strike, expiry, iv: 25, gtc: 0.1, openedAt: serverTimestamp(), openedAtMs: Date.now() };
     const next = { ...base, daysToExpiry: dte, updatedAt: serverTimestamp() };
     const setIf = (k, v, ok) => { const x = n(v); if (x != null && ok(x)) next[k] = x; };
     setIf("contracts", form.contracts, (v) => v >= 1);
@@ -91,6 +91,8 @@ export function usePositions() {
     setIf("liveStock", form.liveStock, (v) => v > 0);
     setIf("liveCall", form.liveCall, (v) => v >= 0);
     next.contracts = Math.round(next.contracts || 1);
+    // Entry date (when the call was sold) — e.g. pulled from Schwab's fill history.
+    if (Number.isFinite(Number(form.openedAtMs))) next.openedAtMs = Number(form.openedAtMs);
 
     const batch = writeBatch(getFirestore());
     if (!existing) {
@@ -164,6 +166,9 @@ export function usePositions() {
       sym: p.sym, contracts: p.contracts || 1, strike: p.strike, expiry: p.expiry,
       fillStock: p.fillStock, fillCall: p.fillCall, buyback: how === "bought" ? buyback : 0,
       how, stockGain, delivered, closedOn: todayISO(), closedAt: serverTimestamp(),
+      // Lifecycle: keep entry + exit so we can chart the trade start→finish later.
+      openedAtMs: p.openedAtMs ?? null, exitStock: p.liveStock ?? null,
+      exitCall: how === "bought" ? buyback : 0, closedOnMs: Date.now(),
     };
     batch.set(closedRef(`${id}-${Date.now()}`), rec);
     batch.delete(posRef(id));

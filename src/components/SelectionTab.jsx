@@ -21,6 +21,11 @@ import { useStockQuote } from "../hooks/useMarketData";
 import { PRELOADED_TICKERS } from "../data/tickers";
 import CoveredCallExitCard from "./CoveredCallExitCard";
 import OptionChain from "./OptionChain";
+import BestReturns from "./BestReturns";
+import KeyEvents from "./KeyEvents";
+import PriceTrendChart from "./PriceTrendChart";
+import { useSavedQuotes } from "../hooks/useSavedQuotes";
+import SavedQuotesCard from "./SavedQuotesCard";
 
 // ── Stock Data ────────────────────────────────────────────────────────────────
 const STOCK_DATA = {
@@ -149,6 +154,9 @@ export default function SelectionTab({ onNavigateToGlossary, sharedSymbol, onSym
   const displayFont = T.fontDisplay;
 
   // ── State ─────────────────────────────────────────────────────────────────
+  const { addQuote } = useSavedQuotes();
+  const [queueMsg, setQueueMsg] = useState(null);
+  const savedQuotesRef = useRef(null);
   const [symbol, setSymbol] = useState(sharedSymbol || "AAPL");
   const changeSymbol = useCallback((sym) => {
     setSymbol(sym);
@@ -471,6 +479,25 @@ export default function SelectionTab({ onNavigateToGlossary, sharedSymbol, onSym
     return scenarios;
   }, [premiumPerShare, strikePrice, daysToExpiry, stock, contracts, totalPremium]);
 
+  // ── Save this covered call as a staged Quote (paper — no order sent) ─────────
+  const queueCoveredCall = async () => {
+    if (!(Number(strikePrice) > 0)) { setQueueMsg({ ok: false, text: "Pick a strike price first." }); return; }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(expirationDate || ""))) { setQueueMsg({ ok: false, text: "Pick an expiration date first." }); return; }
+    if (!(premiumPerShare > 0)) { setQueueMsg({ ok: false, text: "No premium/bid for this contract yet — pick a Bid from the chain." }); return; }
+    const res = await addQuote({
+      sym: symbol, contracts, strike: strikePrice, expiry: expirationDate,
+      premium: premiumPerShare, stockPrice: stock.price, iv: stock.iv,
+      gtc: Math.max(0.05, Math.round(premiumPerShare * 0.30 * 100) / 100),
+    });
+    if (res.ok) {
+      setQueueMsg({ ok: true, text: `✓ Saved ${contracts}× ${symbol} $${strikePrice} call exp ${expirationDate} @ $${premiumPerShare.toFixed(2)} — added to Saved Quotes below. No order sent.` });
+      setTimeout(() => savedQuotesRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 120);
+    }
+    else if (res.missing) setQueueMsg({ ok: false, text: `Still need: ${res.missing.join(", ")}.` });
+    else setQueueMsg({ ok: false, text: res.error || "Could not save the quote." });
+    setTimeout(() => setQueueMsg(null), 7000);
+  };
+
   // ── Save Transaction ──────────────────────────────────────────────────────
   const handleSaveTransaction = () => {
     const tx = {
@@ -710,7 +737,7 @@ export default function SelectionTab({ onNavigateToGlossary, sharedSymbol, onSym
                         </button>
                         {isCategoryDropdownOpen && (
                           <div style={{ position: "absolute", top: "100%", left: 0, marginTop: 4, background: palette.card, border: `1px solid ${palette.borderLight}`, borderRadius: 8, padding: 4, zIndex: 110, display: "flex", flexDirection: "column", minWidth: 80, boxShadow: `0 4px 12px rgba(0,0,0,0.3)` }}>
-                            {["All", "Stock", "ETF"].map(cat => (
+                            {["All", "Index", "Stock", "ETF"].map(cat => (
                               <div key={cat} onClick={() => { setSymbolCategory(cat); setIsCategoryDropdownOpen(false); }} style={{ padding: "6px 12px", fontSize: 12, color: symbolCategory === cat ? palette.accent : palette.text, cursor: "pointer", borderRadius: 4, fontFamily: font, fontWeight: 600 }} onMouseEnter={e => e.currentTarget.style.background = palette.inputBg} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
                                 {cat}
                               </div>
@@ -908,7 +935,13 @@ export default function SelectionTab({ onNavigateToGlossary, sharedSymbol, onSym
         {/* ── Configuration Section (1-column layout) ────────────────────── */}
         <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
 
-
+          {/* Price trend chart — hover for value, switch range + covered-call views */}
+          <PriceTrendChart
+            symbol={symbol}
+            strike={strikePrice}
+            breakeven={strikePrice ? (stock.price - premiumPerShare) : null}
+            currentPrice={stock.price}
+          />
 
           {/* ── Section 4: Contract Cost Panel ──────────────────────────────── */}
           <Card>
@@ -921,7 +954,12 @@ export default function SelectionTab({ onNavigateToGlossary, sharedSymbol, onSym
             </div>
             {expandCost && (
               <>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16, alignItems: "start" }}>
+              {/* Current Price + Strike — one grid column, stacked */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                <Stat size="small" label="Current Price" value={`$${(stock.price || 0).toFixed(2)}`} color={palette.text} />
+                <Stat size="small" label="Strike" value={strikePrice ? `$${Number(strikePrice).toFixed(2)}` : "—"} color={palette.accent} />
+              </div>
               <Stat size="small" label={<>{bidLabel}<InfoTip id="cc_pershare" tip="The option's Bid — what you receive per share for selling it. Comes from the option chain below when you click a Bid (Call or Put); otherwise it's the Black-Scholes estimate." glossaryTerm="Premium" /></>} value={`$${premiumPerShare.toFixed(2)}`} color={palette.profit} />
               <Stat size="small" label={<>Per Contract<InfoTip id="cc_percontract" tip={`Call bid ($${premiumPerShare.toFixed(2)}) × 100 shares = $${premiumPerContract.toFixed(2)} per contract.`} glossaryTerm="Contract" /></>} value={`$${premiumPerContract.toFixed(2)}`} color={palette.profit} />
               <Stat size="small" label="Month" value={monthLabel} sub={expirationDate ? `${daysToExpiry}d to expiry` : ""} />
@@ -962,6 +1000,12 @@ export default function SelectionTab({ onNavigateToGlossary, sharedSymbol, onSym
             </div>
             </>)}
           </Card>
+
+          {/* Best Returns — three one-click strategies scored on the live chain */}
+          <BestReturns symbol={symbol} contracts={contracts} onApply={pickFromChain} />
+
+          {/* Key Events — timing notes between now and the selected expiration */}
+          <KeyEvents symbol={symbol} expiration={expirationDate} />
 
           {/* Option chain — click a call's Bid to set the strike + premium in Contract Cost above */}
           <OptionChain symbol={symbol} highlightStrike={strikePrice} highlightExpiration={expirationDate} highlightSide={optionType} onPickStrike={pickFromChain} />
@@ -1201,9 +1245,12 @@ export default function SelectionTab({ onNavigateToGlossary, sharedSymbol, onSym
             </div>
             {expandExit && (
               <div style={{ display: "flex", justifyContent: "center" }}>
-                <CoveredCallExitCard 
+                <CoveredCallExitCard
                   entry={stock.price}
-                  strikes={[Math.round(strikePrice * 0.95), strikePrice, Math.round(strikePrice * 1.05)]}
+                  strikes={(() => {
+                    const base = Number(strikePrice) > 0 ? Number(strikePrice) : (Number(stock.price) > 0 ? Number(stock.price) : 100);
+                    return [Math.round(base * 0.95), Math.round(base), Math.round(base * 1.05)];
+                  })()}
                   totalDays={daysToExpiry || 30}
                   vol={stock.iv}
                   rate={0.045}
@@ -1278,17 +1325,33 @@ export default function SelectionTab({ onNavigateToGlossary, sharedSymbol, onSym
           </div>
         </Card>
 
-        {/* ── Save & Export ───────────────────────────────────────────── */}
-        <div style={{ display: "flex", gap: 12, justifyContent: "flex-end" }}>
-          <button onClick={() => setShowSaveModal(true)} style={{
-            background: `linear-gradient(135deg, ${palette.gradientA}, ${palette.gradientB})`,
-            color: palette.bg, border: "none",
-            padding: "12px 28px", borderRadius: 8, cursor: "pointer",
-            fontFamily: font, fontSize: 13, fontWeight: 700, letterSpacing: "0.5px",
-          }}>
-            💾 Save &amp; Export to Google Docs
-          </button>
+        {/* ── Actions ─────────────────────────────────────────────────── */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {queueMsg && (
+            <div style={{ color: queueMsg.ok ? palette.profit : palette.warning, fontFamily: font, fontSize: 12, textAlign: "right", lineHeight: 1.5 }}>{queueMsg.text}</div>
+          )}
+          <div style={{ display: "flex", gap: 12, justifyContent: "flex-end", flexWrap: "wrap", alignItems: "center" }}>
+            <span style={{ color: palette.textMuted, fontFamily: font, fontSize: 11 }}>Stages a covered-call listing in Saved Quotes — nothing is sent to your broker.</span>
+            <button onClick={queueCoveredCall} title="Save this covered call to Saved Quotes (paper). No order is placed with Schwab." style={{
+              background: palette.profit, color: palette.bg, border: "none",
+              padding: "12px 24px", borderRadius: 8, cursor: "pointer",
+              fontFamily: font, fontSize: 13, fontWeight: 700, letterSpacing: "0.5px",
+            }}>
+              📝 Save Quote
+            </button>
+            <button onClick={() => setShowSaveModal(true)} style={{
+              background: `linear-gradient(135deg, ${palette.gradientA}, ${palette.gradientB})`,
+              color: palette.bg, border: "none",
+              padding: "12px 28px", borderRadius: 8, cursor: "pointer",
+              fontFamily: font, fontSize: 13, fontWeight: 700, letterSpacing: "0.5px",
+            }}>
+              💾 Save &amp; Export to Google Docs
+            </button>
+          </div>
         </div>
+
+        {/* Saved Quotes — appears here the moment you save (also on the Dashboard) */}
+        <div ref={savedQuotesRef}><SavedQuotesCard /></div>
       </div>
 
       {/* ── Save Modal ───────────────────────────────────────────────── */}

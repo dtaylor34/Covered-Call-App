@@ -23,6 +23,7 @@ export default function OptionChain({ symbol, onPickStrike, highlightStrike, hig
   const [exp, setExp] = useState(null);
   const atmRef = useRef(null);
   const hiRef = useRef(null);
+  const boxRef = useRef(null);
 
   useEffect(() => { setExp(null); }, [symbol]);              // reset on symbol change
   useEffect(() => { if (expirations?.length && !exp) setExp(expirations[0]); }, [expirations, exp]);
@@ -49,7 +50,16 @@ export default function OptionChain({ symbol, onPickStrike, highlightStrike, hig
     return rows.reduce((best, r) => (Math.abs(r.strike - under) < Math.abs(best.strike - under) ? r : best)).strike;
   }, [rows, under]);
 
-  useEffect(() => { (hiRef.current || atmRef.current)?.scrollIntoView({ block: "center", behavior: "smooth" }); }, [atm, exp, highlightStrike]);
+  // Center the ATM/highlighted row WITHIN the chain's own scroll box only — never
+  // call scrollIntoView (it scrolls the page too, yanking the view down to the
+  // chain when the strike is set from the Best Returns buttons above).
+  useEffect(() => {
+    const row = hiRef.current || atmRef.current, box = boxRef.current;
+    if (!row || !box) return;
+    const rowRect = row.getBoundingClientRect(), boxRect = box.getBoundingClientRect();
+    const delta = (rowRect.top - boxRect.top) - (box.clientHeight / 2 - rowRect.height / 2);
+    box.scrollTo({ top: box.scrollTop + delta, behavior: "smooth" });
+  }, [atm, exp, highlightStrike]);
 
   if (!symbol) return null;
 
@@ -104,7 +114,7 @@ export default function OptionChain({ symbol, onPickStrike, highlightStrike, hig
               ))}
             </div>
             {/* Rows (scrollable, centered on ATM) */}
-            <div style={{ maxHeight: 440, overflowY: "auto" }}>
+            <div ref={boxRef} style={{ maxHeight: 440, overflowY: "auto" }}>
               {rows.map((r) => {
                 const isAtm = r.strike === atm;
                 const isHi = highlightStrike != null && Number(r.strike) === Number(highlightStrike);

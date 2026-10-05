@@ -1,3 +1,232 @@
+## [2.0.57] — 2026-10-04
+
+### Fixed
+- **Range view showed no data for just-opened trades** — once the entry date was set to a day or two ago, Range windowed the stock history down to ~0–1 daily bars (nothing to draw), so the chart looked empty. Range now always keeps at least ~2 weeks of stock history so the line is visible, with the entry marker and the projection to expiration still shown.
+
+---
+
+## [2.0.56] — 2026-10-04
+
+### Added
+- **Pull entry dates from Schwab** — the app now reads the **SELL_TO_OPEN fill date** (when you sold each call) from your Schwab order history. New Schwab imports auto-stamp the entry date, and there's a **"⬇ Sync entry dates from Schwab"** button on the Working tab that stamps the entry date onto your existing positions by matching each one to its opening fill. (Schwab's orders API only returns ~60 days, so calls opened longer ago still need manual entry.) New `parseSchwabOpenDates` parser; `savePosition` now accepts an `openedAtMs`.
+
+---
+
+## [2.0.55] — 2026-10-04
+
+### Fixed
+- **Set the entry date right on the chart** — when a working covered call has no entry date, the chart now shows an inline date picker ("Set the date you sold this call") so you can set it without hunting for a field below. The moment you pick the date (e.g. Oct 2), the grey "entry" line appears and the Range view spans entry → expiration. (The chart's "No entry date set" is why the grey line and the Oct-2 anchor were missing — the date simply hadn't been saved.)
+
+---
+
+## [2.0.54] — 2026-10-04
+
+### Fixed
+- **Entry date now saves on pick + recent-entry visibility** — the "Entry date (call sold)" field now commits the moment you choose a date (was only saving on blur, which date pickers don't always fire). Added clear prompts: when no entry date is set the position shows a notice to add it, and when the entry is within the last two weeks the chart points you to the **Range** view — on 1m–6m ranges a just-opened trade sits right on top of the "today" line, so its marker looks missing. In Range view the entry anchors the left edge and is clearly visible.
+
+---
+
+## [2.0.53] — 2026-10-04
+
+### Fixed / Added
+- **Editable entry date (fixes missing entry marker)** — the chart's entry line is now the date the **covered call was sold/opened**, not the share-lot purchase date (you may have held the shares for years). Added an **"Entry date (call sold)"** field in the expanded position so you can set it — e.g. set META to Friday and the grey "entry" line appears on the chart. New in-app positions stamp this automatically; older/imported ones can be set here. Removed the incorrect fall-back to the tax-lot bought date.
+- **Trade lifecycle groundwork** — closing a position now records the **entry date, exit date, and exit stock/price** on the closed-trade record, so a start-to-finish view of each completed trade (entry → where you got out) can be charted next.
+
+---
+
+## [2.0.52] — 2026-10-04
+
+### Added
+- **"Range" view + buy-back-cost theta arch** on the working-position chart. The new **Range** button spans the entire trade end-to-end (bought → expiration). In this view a violet **buy-back-cost curve** is overlaid on a secondary right axis showing how expensive it is to close the call over time — the real premium along the stock's path from entry to today, then the theta-decay projection (stock held flat) from today to expiration — with a dashed **GTC target** line so you can see roughly when/where the buy-back gets cheap enough to fill.
+
+---
+
+## [2.0.51] — 2026-10-04
+
+### Added
+- **Short-term chart ranges (1d–3w) + purchase/expiration span** on the working-position chart. Range buttons now run **1d, 2d, 3d, 4d, 1w, 2w, 3w, 1m, 2m, 3m, 4m, 5m, 6m** — sub-week ranges pull 30-minute intraday bars, longer ones use daily. Added **light-grey vertical lines for the purchase date ("bought …") and the expiration date ("exp …")** so you can see the covered call's full time span at a glance (today sits between them in accent). Purchase date comes from the position's open date, falling back to the covering tax lot's bought date for older positions. On daily ranges the axis extends to expiration so the whole span shows; intraday ranges stay zoomed to recent price.
+
+---
+
+## [2.0.50] — 2026-10-04
+
+### Added
+- **Chart range selector (1m–6m) + buy-back level line** on the working-position chart. New **1m/2m/3m/4m/5m/6m** buttons change the viewing window instantly (from the 6 months already loaded). Added a green **"Buy-back" line** showing the stock price at which the call decays to your GTC price (e.g. $0.10 or $2.00) — solved from Black-Scholes at today's time-to-expiry — so you can see how far the stock must drop for the GTC buy-back to fill now. Also called out in the readout: "buy-back fills if stock ≤ $X."
+
+---
+
+## [2.0.49] — 2026-10-04
+
+### Added
+- **Per-position price chart on Working positions** — expanding a working covered call now shows a line chart (right under the green "GTC buy back" banner) plotting the stock's last 6 months with covered-call overlays: **Strike** (red dashed, with the "called-away" zone shaded), **Breakeven** (amber), **Entry** stock price (grey) and **entry date** marker (for positions opened from now on), the **current price** dot + **today** line, the **expiration/exit** marker, and a shaded **possible-exit window** (now → expiry). Hover for price + date. The option-side numbers (entry call, current call, GTC exit, what you keep) show as a readout below, since they're on a different scale than the stock price. Data is Schwab real-time when connected, else Yahoo.
+
+---
+
+## [2.0.48] — 2026-10-04
+
+### Changed
+- **"Copy Order" button** — renamed the Saved Quotes copy button to **"📋 Copy Order"** (from "Send to Schwab / ToS"). It captures the quote's order string to your clipboard so you can paste it straight into the thinkorswim app's order entry, review, and send it yourself.
+
+---
+
+## [2.0.47] — 2026-10-04
+
+### Changed
+- **Saved Quotes "Send to Schwab / ToS" clarity** — renamed the copy button to **"📋 Send to Schwab / ToS"** with a help line explaining the stage-don't-send workflow: paste the order string into thinkorswim (Schwab's platform) and it stages the order ticket for you to review and send yourself. Noted that Schwab's API has no stage/save-order endpoint, so the app never sends a trade — placement is always a manual step you control.
+
+---
+
+## [2.0.46] — 2026-10-04
+
+### Added
+- **Premium shown on the Best Returns buttons** — each of the three strategy buttons (Best Return / No-Sale / Sale) now ends its detail line with the total premium in grey, e.g. "· $6,800 PR" (premium per share × 100 × your contracts). Quick read of the actual dollar income for each pick.
+
+---
+
+## [2.0.45] — 2026-10-04
+
+### Fixed
+- **Couldn't see where a saved quote landed** — after "📝 Save Quote" the only feedback was a green message that auto-cleared, while the Saved Quotes card sat off-screen at the bottom of the page. Now saving **auto-scrolls to the Saved Quotes card** so your new quote jumps into view, and the confirmation text points "below" instead of to another tab. (The quote was always saved — it was purely a visibility issue.)
+
+---
+
+## [2.0.44] — 2026-10-03
+
+### Changed
+- **Saved Quotes shown where you save them** — the Saved Quotes card now also renders at the bottom of the **Selection** tab (right under the "📝 Save Quote" button), so a quote appears immediately where you click instead of only on the Dashboard. The Dashboard card also moved to the **top** of the Dashboard tab so it's not buried under the Position Finder. (Same live data in both places.)
+
+---
+
+## [2.0.43] — 2026-10-03
+
+### Added
+- **Saved Quotes (new Dashboard card) + thinkorswim export** — staged covered-call listings now live in their own **Saved Quotes** collection (paper, never sent to a broker), shown as a card on the Dashboard. The Selection tab's button is now **"📝 Save Quote"** (writes to Saved Quotes instead of straight to Working). Each saved quote shows the contract, premium, GTC, and IV, plus a ready-to-paste **thinkorswim order string** with a **"📋 Copy TOS order"** button so you can place it for real in TOS. Also **"→ Move to Working"** (promote once filled) and **"✕ Remove."** New `savedQuotes` Firestore rules (owner read/write own).
+
+### Changed
+- **"Queue Covered Call" → "Save Quote"** — the Selection-tab action now stages the covered call in Saved Quotes (reviewable on the Dashboard, exportable to TOS) rather than writing directly into Working positions. Promote to Working from the Saved Quotes card when the trade is actually filled.
+
+---
+
+## [2.0.42] — 2026-10-03
+
+### Added
+- **"Queue Covered Call" button (paper trade)** — on the Selection tab you can now add the currently configured covered call (symbol, strike, expiration, premium/bid, contracts) straight into your **Working positions** with one click — like staging an order in thinkorswim, but **nothing is sent to Schwab**. It records the fill at the live price + selected bid, sets a sensible GTC buy-to-close (~30% of premium), and shows an inline confirmation. Validates that a strike, expiration, and premium are selected first.
+
+---
+
+## [2.0.41] — 2026-10-03
+
+### Added
+- **"Get data ↗" — test any ticker on demand** — type a symbol in the History tab's add box and click "Get data" to immediately pull ~2 years of daily OHLC for it and open the View-data popup (Day/Week/Month), **without adding it to daily tracking**. Lets you backtest enter/exit trends on any stock you're considering. (`backfillHistory` gained a `track:false` option so ad-hoc tests don't clutter the tracked registry.)
+
+---
+
+## [2.0.40] — 2026-10-03
+
+### Added
+- **Daily OHLC capture + backfill for enter/exit analysis** — the history collector now stores **open / high / low / close** each day (beginning-of-day and end-of-day prices) instead of just a single close. New **"Backfill 2yr"** button (owner/admin) loads ~2 years of real daily OHLC from Yahoo so you can analyze trends immediately rather than waiting for forward collection (merges by date, keeps any already-collected IV/options data).
+- **Day / Week / Month views in "View data"** — the per-symbol data popup now has a granularity toggle that rolls daily OHLC up into weekly/monthly candles (first open, max high, min low, last close) with a close-to-close **Chg%** column (green/red). Daily view also shows IV30 and the ATM call bid. Built for eyeballing enter/exit prices and period trends.
+
+---
+
+## [2.0.39] — 2026-10-03
+
+### Added
+- **Price trend chart (above Contract Cost)** — an interactive price chart for the selected stock with **hover crosshair + tooltip** (value + date), a full **range selector** (1D, 1W, 1M, 3M, 6M, 1Y, 2Y, 5Y, All), and three **covered-call views** you can switch between: **Price** (close line), **Strike view** (overlays your selected strike as a dashed line with the "called-away" zone shaded red, plus a breakeven line), and **% Change** (normalized return across the range, green/red). Header shows live price and the period change.
+- **Hybrid price data (Schwab → Yahoo)** — a new `getPriceHistory` callable pulls the chart from **Schwab's real-time price history using your own connection** when you're linked (the same data you see in your Schwab app), and falls back to **Yahoo** (15-min delayed) otherwise. The chart labels which source it's showing.
+
+---
+
+## [2.0.38] — 2026-10-03
+
+### Fixed
+- **Current Price/Strike column now scales with the grid** — it was a fixed-width flex item outside the stat grid, so it didn't resize like the other columns. Folded it into the Contract Cost grid as a proper equal-width (`1fr`) column (Current Price stacked over Strike), so all three columns scale and align together.
+
+---
+
+## [2.0.37] — 2026-10-03
+
+### Added
+- **Current Price + Strike column in Contract Cost** — a new left-hand column shows the live **Current Price** stacked above the selected **Strike** (shows "—" until a strike is picked), so the key reference prices sit right alongside the premium/ROI breakdown.
+
+---
+
+## [2.0.36] — 2026-10-03
+
+### Fixed
+- **Page jumped to the Option Chain when applying a Best Returns pick** — selecting a Best Returns button (or any strike) updated the chain's highlighted row, which called `scrollIntoView` and scrolled the whole page down to the chain. The chain now centers the highlighted/ATM row **within its own scroll box only**, so your scroll position stays put when you apply a recommendation.
+
+---
+
+## [2.0.35] — 2026-10-03
+
+### Fixed
+- **"Best Return" recommended absurd deep-ITM strikes** — the `getBestReturns` "Best Return" strategy had no floor on strike selection, so it maximized raw bid and dove to the deepest in-the-money strike (e.g. a $100 call on ~$728 META showing "$624.75/sh · 1204% annualized · -86.3% OTM"). That "premium" was almost entirely intrinsic value — the shares would just be called away at $100 for a net loss, and such strikes are barely tradeable. Now "Best Return" only considers strikes **at or above the current price** (0–25% OTM, where the bid is genuine time-value income) and requires a **liquid bid + sane spread**, bringing it in line with real covered-call practice. The "No-Sale" and "Sale" strategies were already OTM-bounded and unaffected.
+
+---
+
+## [2.0.34] — 2026-10-03
+
+### Changed
+- **Per-symbol row menu (⋮) on the History tab** — replaced the inline "remove" link with a vertical three-dots menu. It opens a dropdown with **📊 View data** — a popup showing that symbol's full collected history (date, price, IV30, ATM call strike/bid/ask, expiry, data source) newest-first — and **🗑 Remove**. The menu is anchored to the clicked row and closes on outside click; the data popup closes on backdrop click or ✕.
+
+---
+
+## [2.0.33] — 2026-10-03
+
+### Fixed
+- **Seeded symbols vanished after a few seconds ("opens then closes")** — root cause: new user docs are created with no `role`, so the operator account was a *viewer*. Seeding wrote 174 symbols to the local Firestore cache (list filled in instantly), then the server rejected the write per security rules and rolled it back (list snapped to 0). Added a secure one-time **owner bootstrap**: a `claimOwnership` callable that promotes ONLY the known operator email (`dtaylor34@gmail.com`) and ONLY if no owner exists yet, plus a **"Claim owner access"** button in the History status strip shown when the current account lacks owner/admin. Once claimed, seeding/add/collect persist normally.
+
+---
+
+## [2.0.32] — 2026-10-03
+
+### Fixed / Added
+- **Search filter made obvious (tracked symbols)** — leftover text in the "Search tracked symbols" box was filtering the list down (e.g. "meta" → "1 of 174 shown"), which looked like the list had disappeared. Added an **✕ clear** button inside the search field and a **"show all"** link next to the count whenever a filter is active, so it's always clear the full list is one click away. (Seeding already auto-clears the search as of v2.0.31.)
+
+---
+
+## [2.0.31] — 2026-10-03
+
+### Added
+- **History tab status strip** — a line at the top of the Historical Data tab now shows the live **tracked count**, your **access level** (owner/admin/viewer), and whether you can add/seed. View-only users get a clear "an owner/admin must seed (your writes are blocked)" note instead of a silent rules rejection — makes it obvious whether an empty list is a permissions issue vs a data issue.
+
+---
+
+## [2.0.30] — 2026-10-03
+
+### Fixed
+- **Console error storm / UI thrash from the Exit Range payoff chart** — before a strike was selected, `strikePrice` was `null`, so the chart received strikes `[0, null, 0]`, collapsing its x/y domain to zero width. Every `px()/py()` then divided by zero and streamed hundreds of `<line>/<circle>/<text> attribute … Expected length "NaN"/"Infinity"` errors into the console on each render (SelectionTab is mounted on every tab, so it ran everywhere — including while on the History tab, where the churn made the symbol list flicker/collapse). Now the chart sanitizes its strikes (drops non-finite/≤0 values, falls back to a spread around the current price), guarantees a non-degenerate domain, and clamps `px()/py()` to finite output so no `NaN`/`Infinity` can ever reach the SVG. SelectionTab also passes a sane strike spread when no strike is chosen yet.
+
+---
+
+## [2.0.29] — 2026-10-03
+
+### Fixed / Changed
+- **Tracked-symbols list is now a collapsible card with a top-right open/close toggle** — the registry on the History tab has a clear "Tracked symbols (N tracked)" header and a −/+ toggle on the right to expand/collapse it on demand. It now stays open as you work, **auto-opens after you seed** (universe, holdings, or a single add) and clears any active search so you immediately see the full seeded list, and the long list scrolls inside a fixed-height box with a sticky header instead of pushing the page.
+
+---
+
+## [2.0.28] — 2026-10-03
+
+### Added
+- **Covered-call universe + one-click seeding (History tab)** — a curated ~180-name universe (broad-market index ETFs + Technology & Healthcare sector ETFs + the most liquid optionable Tech/Health single names) now lives in `src/data/coveredCallUniverse.js`. Two new buttons: **Seed covered-call universe** (batch-adds the whole list to the daily tracked registry) and **Add my holdings** (adds every ticker you currently hold, including Schwab-imported positions). Collection starts the day each symbol is added.
+- **Dashboard dropdown cleanup + real names** — the symbol search dropdown is now built from the same curated universe with real company names and correct **Index / Stock / ETF** categories (new "Index" filter chip). Removed the ~450 placeholder "Mock Stock / Mock ETF" rows that were polluting search.
+
+### Changed
+- **Hybrid history data source (Schwab + Yahoo)** — the daily collector now snapshots from **Schwab real-time market data** when an owner/admin has a live Schwab connection (resolved once per run, reused across symbols), and automatically **falls back to Yahoo** otherwise. This gives real bids/IV (Yahoo is 15-min delayed and zeros out bids after hours) while never breaking if the Schwab token lapses (Schwab refresh tokens expire ~weekly and need a re-login). Schwab's credential/token machinery is reused as-is (one implementation of the decrypt+refresh logic); `collectDailyHistory`/`collectHistoryNow` now bind the `SCHWAB_ENC_KEY` secret. Each stored sample records its `src` ("schwab"/"yahoo").
+
+---
+
+## [2.0.27] — 2026-10-03
+
+### Added
+- **Best Returns (3 one-click strategies)** — a new section under Contract Cost scores the live option chain for three covered-call goals and applies any pick with one click (strike + expiry + premium flow straight into Contract Cost above): **Best Return** (highest annualized premium, 21–60 DTE), **Best No-Sale Return** (7–15% OTM — income while keeping your shares), and **Best Sale Return** (0–4% OTM — premium plus stock gain to the strike if assigned). Each shows a plain-English recommendation note with a suggested buy-to-close GTC. Backed by the new `getBestReturns` callable (auth-required) scoring annualized return, OTM sweet-spot, liquidity, and spread.
+- **Key Events (market notes)** — a collapsible, color-coded panel below Best Returns flagging what happens between now and the selected expiration: weekly-vs-monthly expiration, expiration-week time-decay/assignment risk, and any FOMC decision before expiry. Earnings date, ex-dividend date, and 52-week IV percentile are listed as "pending data" (not silently dropped) until those feeds are wired.
+- **Historical Data search** — the History tab now has a search box over the tracked-symbol registry with a live "X of Y tracked" count, so you can quickly check whether a ticker is already being collected.
+
+---
+
 ## [2.0.26] — 2026-10-03
 
 ### Added

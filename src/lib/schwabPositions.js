@@ -105,6 +105,33 @@ const ACTIVE_ORDER_STATUS = ["WORKING", "QUEUED", "ACCEPTED", "PENDING_ACTIVATIO
  * @param {Array|object} orders response from schwabGetOrders
  * @returns {object} map of "SYM|strike|expiry" -> gtc price (buy-to-close limit)
  */
+// Map "SYM|strike|expiry" → entry timestamp (ms) from FILLED SELL_TO_OPEN call
+// orders — i.e. the date you sold each covered call. Note: Schwab's orders API
+// only returns ~60 days, so calls opened longer ago won't be found here.
+export function parseSchwabOpenDates(orders) {
+  const list = Array.isArray(orders) ? orders : (orders?.orders || []);
+  const byKey = {};
+  for (const o of list) {
+    if (String(o.status || "").toUpperCase() !== "FILLED") continue;
+    const t = o.closeTime || o.enteredTime || o.orderActivityCollection?.[0]?.executionLegs?.[0]?.time;
+    const ms = t ? new Date(t).getTime() : NaN;
+    if (!Number.isFinite(ms)) continue;
+    for (const leg of (o.orderLegCollection || [])) {
+      if (String(leg.instruction || "").toUpperCase() !== "SELL_TO_OPEN") continue;
+      const inst = leg.instrument || {};
+      const occ = parseOccSymbol(inst.symbol) || {};
+      const putCall = inst.putCall || occ.putCall;
+      if (putCall !== "CALL") continue;
+      const sym = (inst.underlyingSymbol || occ.underlying || "").toUpperCase();
+      if (sym && occ.strike != null && occ.expiry) {
+        const key = `${sym}|${occ.strike}|${occ.expiry}`;
+        if (byKey[key] == null || ms < byKey[key]) byKey[key] = ms; // earliest open for this contract
+      }
+    }
+  }
+  return byKey;
+}
+
 export function parseSchwabOrders(orders) {
   const list = Array.isArray(orders) ? orders : (orders?.orders || []);
   const gtcByKey = {};

@@ -54,7 +54,7 @@ const PB = 250;
 
 export default function CoveredCallExitCard({
   entry = 366,
-  strikes = [360, 365, 370],
+  strikes: strikesProp = [360, 365, 370],
   totalDays = 30,
   vol = 0.28,
   rate = 0.045,
@@ -74,9 +74,19 @@ export default function CoveredCallExitCard({
   const accents = [T.success, T.accent, T.warn]; // itm / atm / otm
   const accent = accents[sel];
 
+  // Sanitize strikes: drop non-finite / non-positive values and fall back to a
+  // spread around the current price so the chart's domain is never degenerate
+  // (empty or zero-width → divide-by-zero → NaN/Infinity SVG coordinates).
+  const strikes = useMemo(() => {
+    const v = (strikesProp || []).map(Number).filter((n) => Number.isFinite(n) && n > 0);
+    if (v.length) return v;
+    const base = Number.isFinite(initialPrice) && initialPrice > 0 ? initialPrice : 100;
+    return [base * 0.95, base, base * 1.05].map((x) => Math.round(x));
+  }, [strikesProp, initialPrice]);
+
   const strikeMin = Math.min(...strikes);
   const strikeMax = Math.max(...strikes);
-  const strikePad = (strikeMax - strikeMin) * 0.15 || strikeMax * 0.05;
+  const strikePad = (strikeMax - strikeMin) * 0.15 || strikeMax * 0.05 || 1;
   const xMin = strikeMin - strikePad;
   const xMax = strikeMax + strikePad;
 
@@ -118,8 +128,8 @@ export default function CoveredCallExitCard({
     return { pts: p, yMin: lo - pad, yMax: hi + pad };
   }, [livePnl, maxP, sel, xMin, xMax]);
 
-  const px = (v) => PL + ((v - xMin) / (xMax - xMin)) * (PR - PL);
-  const py = (v) => PB - ((v - yMin) / (yMax - yMin)) * (PB - PT);
+  const px = (v) => { const r = PL + ((v - xMin) / (xMax - xMin)) * (PR - PL); return Number.isFinite(r) ? r : PL; };
+  const py = (v) => { const r = PB - ((v - yMin) / (yMax - yMin)) * (PB - PT); return Number.isFinite(r) ? r : PB; };
 
   const path = useMemo(
     () => pts.map((d, i) => (i ? "L" : "M") + px(d.x).toFixed(1) + " " + py(d.y).toFixed(1)).join(" "),

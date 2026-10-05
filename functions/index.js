@@ -275,6 +275,19 @@ exports.schwabGetOptionChain = schwab.schwabGetOptionChain;
 const history = require("./history");
 exports.collectDailyHistory = history.collectDailyHistory;
 exports.collectHistoryNow   = history.collectHistoryNow;
+exports.backfillHistory     = history.backfillHistory;
+
+// ── Best Returns (3-strategy chain scorer — see best-returns-spec.md) ─────────
+const bestReturns = require("./bestReturns");
+exports.getBestReturns = bestReturns.getBestReturns;
+
+// ── One-time owner bootstrap (promotes the known operator email) ──────────────
+const bootstrap = require("./bootstrap");
+exports.claimOwnership = bootstrap.claimOwnership;
+
+// ── Price history for the trend chart (Schwab real-time → Yahoo fallback) ─────
+const priceHistory = require("./priceHistory");
+exports.getPriceHistory = priceHistory.getPriceHistory;
 
 // ── Google Sheet ledger sync (feature/working-lots-sheets) ───────────────────
 // connectSheet / syncSheet / sheetServiceAccount. Requires the Google Sheets API

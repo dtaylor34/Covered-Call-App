@@ -35,6 +35,7 @@ import SelectionTab from "../components/SelectionTab";
 // ── API TAB INJECTION 1/3 — import ──────────────────────────────────────────
 import APITab from "../components/APITab";
 import HistoricalDataTab from "../components/HistoricalDataTab";
+import SavedQuotesCard from "../components/SavedQuotesCard";
 
 // ── Tab definitions ──
 const TABS = [
@@ -355,6 +356,9 @@ export default function Dashboard() {
 
         {/* Dashboard — with Position Finder / Saved Views sub-tabs */}
         <div role="tabpanel" aria-label="Dashboard" style={{ display: activeTab === "dashboard" ? "block" : "none" }}>
+
+          {/* Saved Quotes — staged covered calls (paper), shown up top */}
+          <SavedQuotesCard />
 
           {/* Sub-tab toggle */}
           <div style={{ display: "flex", gap: 4, background: T.surface, borderRadius: 10, padding: 4, marginBottom: 16, border: `1px solid ${T.border}` }}>

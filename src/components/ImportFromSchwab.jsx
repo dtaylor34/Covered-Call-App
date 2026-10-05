@@ -7,7 +7,7 @@ import { useState } from "react";
 import { useTheme } from "../contexts/ThemeContext";
 import { useBrokerConnection } from "../hooks/useBrokerConnection";
 import { schwabGetPositions, schwabGetOrders } from "../services/schwabApi";
-import { parseSchwabPositions, parseSchwabOrders } from "../lib/schwabPositions";
+import { parseSchwabPositions, parseSchwabOrders, parseSchwabOpenDates } from "../lib/schwabPositions";
 
 const usd = (n) => "$" + (Math.abs(n || 0)).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -33,14 +33,16 @@ export default function ImportFromSchwab({ onAdd }) {
       const data = await schwabGetPositions({ accountHash: acct.hashValue }).then((r) => r.data);
       const parsed = parseSchwabPositions(data);
       // Also pull working GTC buy-to-close orders so each position gets its real GTC.
-      let gtcByKey = {};
+      let gtcByKey = {}, openByKey = {};
       try {
         const orders = await schwabGetOrders({ accountHash: acct.hashValue }).then((r) => r.data);
         gtcByKey = parseSchwabOrders(orders);
+        openByKey = parseSchwabOpenDates(orders);
       } catch { /* orders are a bonus — don't fail the import if this errors */ }
       parsed.candidates.forEach((c) => {
         const k = `${c.sym}|${c.strike}|${c.expiry}`;
         if (gtcByKey[k] != null) c.gtc = gtcByKey[k];
+        if (openByKey[k] != null) c.openedAtMs = openByKey[k];
       });
       setResult({ ...parsed, raw: data });
     } catch (e) {
@@ -54,6 +56,7 @@ export default function ImportFromSchwab({ onAdd }) {
       strike: String(c.strike), expiry: c.expiry,
       liveStock: c.liveStock != null ? String(c.liveStock) : "", liveCall: c.liveCall != null ? String(c.liveCall) : "",
       gtc: c.gtc != null ? String(c.gtc) : "",
+      openedAtMs: c.openedAtMs ?? undefined,
       lotId: "new",
     });
     if (res?.ok) setAdded((a) => ({ ...a, [i]: true }));

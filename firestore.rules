@@ -47,6 +47,10 @@ service cloud.firestore {
       match /closed/{closedId} {
         allow read, write: if request.auth != null && request.auth.uid == userId;
       }
+      // ── Saved Quotes (staged covered-call listings — paper, not sent to broker) ──
+      match /savedQuotes/{quoteId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
       // ── Broker API Connections (NON-SENSITIVE STATUS ONLY) ──
       // This doc holds only { broker, status, appKeyLast4, accountCount, ... }.
       // The owner may READ it to show connection state; NO client may write it.

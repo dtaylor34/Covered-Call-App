@@ -472,3 +472,19 @@ exports.schwabGetOptionChain = onCall({ ...CRYPTO_OPTS, timeoutSeconds: 30 }, as
 
   return await res.json();
 });
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Internal reuse (server-side, no HTTP request context)
+// ═══════════════════════════════════════════════════════════════════════════════
+// The daily history collector (functions/history.js) reuses the exact same
+// credential/token machinery so there's ONE implementation of the security-
+// critical decrypt + refresh logic. This is a plain object, not a Cloud Function,
+// so Firebase ignores it during deploy. Any function that calls getSecret /
+// ensureFreshToken MUST bind the SCHWAB_ENC_KEY secret in its options so decrypt
+// can read process.env.SCHWAB_ENC_KEY at runtime.
+exports._internal = {
+  SCHWAB_ENC_KEY,
+  SCHWAB_MARKET_URL,
+  getSecret,
+  ensureFreshToken,
+};

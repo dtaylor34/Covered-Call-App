@@ -12,7 +12,11 @@ import { useTheme } from "../contexts/ThemeContext";
 import { usePositions } from "../hooks/usePositions";
 import { useLivePortfolio } from "../hooks/useLivePortfolio";
 import { positionCalcs, stoplight, gtcFillEstimate } from "../lib/coveredCallMath";
+import WorkingPositionChart from "./WorkingPositionChart";
 import { parsePaste, positionId } from "../lib/positionParser";
+import { parseSchwabOpenDates } from "../lib/schwabPositions";
+import { useBrokerConnection } from "../hooks/useBrokerConnection";
+import { schwabGetOrders } from "../services/schwabApi";
 import SharesByLot from "./SharesByLot";
 import ImportFromSchwab from "./ImportFromSchwab";
 
@@ -34,6 +38,8 @@ const expShort = (iso) => {
   if (!y) return iso || "—";
   return new Date(y, (m || 1) - 1, d || 1).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 };
+const msToDate = (ms) => (Number.isFinite(ms) ? new Date(ms).toISOString().slice(0, 10) : "");
+const dateToMs = (s) => (/^\d{4}-\d{2}-\d{2}$/.test(s) ? new Date(s + "T00:00:00").getTime() : null);
 // Schwab-style expiration, e.g. "16 OCT 26"
 const MON3 = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
 const csExp = (iso) => {
@@ -49,9 +55,31 @@ export default function WorkingPositionsTab() {
   const { T } = useTheme();
   const { positions, lots, closed, loading, savePosition, updateLive, closePosition, saveLot, deleteLot } = usePositions();
   const { live, status } = useLivePortfolio(positions);
+  const { activeConnection, activeAccount, accounts } = useBrokerConnection();
+  const schwabConnected = activeConnection?.status === "connected";
   const [open, setOpen] = useState({});
   const [hover, setHover] = useState(null);
   const [showAdd, setShowAdd] = useState(false);
+  const [syncMsg, setSyncMsg] = useState(null);
+  const [syncing, setSyncing] = useState(false);
+
+  // Pull the SELL_TO_OPEN fill dates from Schwab and stamp each matching position's entry date.
+  const syncEntryDates = async () => {
+    const acct = activeAccount || accounts?.[0];
+    if (!acct?.hashValue) { setSyncMsg({ ok: false, text: "No linked Schwab account — connect in the APIs tab." }); return; }
+    setSyncing(true); setSyncMsg({ ok: true, text: "Pulling sell-to-open dates from Schwab…" });
+    try {
+      const orders = await schwabGetOrders({ accountHash: acct.hashValue }).then((r) => r.data);
+      const openByKey = parseSchwabOpenDates(orders);
+      let n = 0;
+      for (const p of positions) {
+        const k = `${p.sym}|${p.strike}|${p.expiry}`;
+        if (openByKey[k] != null && openByKey[k] !== p.openedAtMs) { await updateLive(p.id, { openedAtMs: openByKey[k] }); n++; }
+      }
+      setSyncMsg({ ok: true, text: n ? `Set entry dates for ${n} position${n === 1 ? "" : "s"} from Schwab fills.` : "No matching sell-to-open fills in Schwab's last ~60 days." });
+    } catch (e) { setSyncMsg({ ok: false, text: e?.message || "Couldn't sync from Schwab." }); }
+    finally { setSyncing(false); }
+  };
 
   // Overlay live Yahoo/Schwab marks onto the stored positions for all math.
   const livePositions = useMemo(() => positions.map((p) => ({ ...p, ...(live[p.id] || {}) })), [positions, live]);
@@ -61,7 +89,9 @@ export default function WorkingPositionsTab() {
     const iv = (p.iv || 25) / 100;
     const light = stoplight({ liveStock: p.liveStock, strike: p.strike, daysToExpiry: p.daysToExpiry, iv, breakeven: c.breakeven });
     const fill = gtcFillEstimate({ S: p.liveStock, strike: p.strike, daysLeft: Math.max(1, Math.round(p.daysToExpiry || 1)), iv, gtc: p.gtc ?? 0.1, fillCall: p.fillCall, contracts: p.contracts || 1 });
-    return { p, c, light, fill, liveSource: live[p.id]?.source };
+    // Entry = when the covered call was SOLD/opened (not the share-lot purchase).
+    const entryMs = Number.isFinite(p.openedAtMs) ? p.openedAtMs : null;
+    return { p, c, light, fill, liveSource: live[p.id]?.source, entryMs };
   }), [livePositions, live]);
 
   const totals = useMemo(() => rows.reduce((a, { c }) => ({
@@ -98,6 +128,16 @@ export default function WorkingPositionsTab() {
       {/* One-click import of open covered calls from the connected Schwab account */}
       <ImportFromSchwab onAdd={savePosition} />
 
+      {/* Pull entry (sell-to-open) dates from Schwab for existing positions */}
+      {schwabConnected && positions.length > 0 && (
+        <div style={{ margin: "8px 0 4px", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          <button onClick={syncEntryDates} disabled={syncing} style={{ padding: "8px 14px", borderRadius: 8, border: `1px solid ${T.accent}`, cursor: "pointer", background: "transparent", color: T.accent, fontFamily: T.fontMono, fontSize: 12, fontWeight: 700, opacity: syncing ? 0.6 : 1 }}>
+            {syncing ? "Syncing…" : "⬇ Sync entry dates from Schwab"}
+          </button>
+          {syncMsg && <span style={{ color: syncMsg.ok ? T.textDim : T.danger, fontFamily: T.fontMono, fontSize: 12 }}>{syncMsg.text}</span>}
+        </div>
+      )}
+
       {showAdd && <AddForm T={T} lots={lots} positions={positions} onSave={savePosition} onDone={() => setShowAdd(false)} />}
 
       {/* Totals strip */}
@@ -131,7 +171,7 @@ export default function WorkingPositionsTab() {
                 <div key={i} style={{ color: T.textDim, fontSize: 9, fontFamily: T.fontMono, letterSpacing: 0.5, textTransform: "uppercase", fontWeight: 600 }}>{h}</div>
               ))}
             </div>
-            {rows.map(({ p, c, light, fill }) => {
+            {rows.map(({ p, c, light, fill, entryMs }) => {
               const isOpen = !!open[p.id];
               const n = p.contracts || 1;
               const cellBase = { fontFamily: T.fontMono, fontSize: 12.5, color: T.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", paddingRight: 6 };
@@ -208,7 +248,7 @@ export default function WorkingPositionsTab() {
                       </div>
                     )}
                   </div>
-                  {isOpen && <Detail T={T} p={p} c={c} fill={fill} onUpdateLive={updateLive} onClose={closePosition} />}
+                  {isOpen && <Detail T={T} p={p} c={c} fill={fill} entryMs={entryMs} onUpdateLive={updateLive} onClose={closePosition} />}
                 </div>
               );
             })}
@@ -239,7 +279,7 @@ function Tot({ T, label, value, color }) {
 }
 
 // ── Expanded detail ───────────────────────────────────────────────────────────
-function Detail({ T, p, c, fill, onUpdateLive, onClose }) {
+function Detail({ T, p, c, fill, entryMs, onUpdateLive, onClose }) {
   const [bb, setBb] = useState(String(p.gtc ?? 0.1));
   const box = { textAlign: "center", padding: "10px 8px", borderRadius: 8, background: T.card, border: `1px solid ${T.border}` };
   const lbl = { color: T.textDim, fontSize: 9, fontFamily: T.fontMono, letterSpacing: 1, textTransform: "uppercase" };
@@ -268,6 +308,24 @@ function Detail({ T, p, c, fill, onUpdateLive, onClose }) {
         <div style={{ color: T.textDim, fontSize: 12, marginTop: 3 }}>{fillMsg}</div>
       </div>
 
+      {/* Price chart — stock vs strike / breakeven / entry / exit */}
+      <WorkingPositionChart
+        symbol={p.sym}
+        strike={p.strike}
+        breakeven={c.breakeven}
+        currentPrice={p.liveStock}
+        entryStock={p.fillStock}
+        expiry={p.expiry}
+        openedAtMs={entryMs ?? p.openedAtMs}
+        gtc={p.gtc ?? 0.1}
+        keeps={fill.gtcKeep}
+        entryCall={p.fillCall}
+        currentCall={p.liveCall}
+        iv={(p.iv || 25) / 100}
+        daysToExpiry={p.daysToExpiry}
+        onSetEntry={(ms) => onUpdateLive(p.id, { openedAtMs: ms })}
+      />
+
       {/* Live marks — editable */}
       <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 14 }}>
         <label style={{ fontSize: 11, color: T.textDim }}>Live stock<br />
@@ -276,7 +334,16 @@ function Detail({ T, p, c, fill, onUpdateLive, onClose }) {
           <input defaultValue={p.liveCall} onBlur={(e) => onUpdateLive(p.id, { liveCall: Number(e.target.value) || 0 })} style={editStyle} /></label>
         <label style={{ fontSize: 11, color: T.textDim }}>GTC<br />
           <input defaultValue={p.gtc ?? 0.1} onBlur={(e) => onUpdateLive(p.id, { gtc: Number(e.target.value) || 0 })} style={editStyle} /></label>
+        <label style={{ fontSize: 11, color: T.textDim }}>Entry date (call sold)<br />
+          <input type="date" defaultValue={msToDate(entryMs)}
+            onChange={(e) => { const ms = dateToMs(e.target.value); if (ms) onUpdateLive(p.id, { openedAtMs: ms }); }}
+            style={{ ...editStyle, width: 160 }} /></label>
       </div>
+      {!Number.isFinite(entryMs) && (
+        <div style={{ color: T.warn || T.warning, fontSize: 11, fontFamily: T.fontMono, marginTop: -6, marginBottom: 12 }}>
+          ⬆ Set the entry date (e.g. Oct 2) to mark where you sold this call — then tap <b>Range</b> on the chart to see it from entry to expiration.
+        </div>
+      )}
 
       {/* Four exit paths */}
       <div style={{ color: T.textDim, fontSize: 10, fontFamily: T.fontMono, letterSpacing: 1, textTransform: "uppercase", marginBottom: 8 }}>Exit paths</div>
