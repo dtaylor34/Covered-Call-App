@@ -15,6 +15,7 @@ export default function ImportFromSchwab({ onAdd }) {
   const { T } = useTheme();
   const { activeConnection, activeAccount, accounts } = useBrokerConnection();
   const connected = activeConnection?.status === "connected";
+  const acctName = (c) => { const a = (accounts || []).find((x) => x.accountId === c.acctId); return a?.label ? `${a.label} ··${c.acct}` : `··${c.acct}`; };
 
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -28,23 +29,32 @@ export default function ImportFromSchwab({ onAdd }) {
   const load = async () => {
     setOpen(true); setLoading(true); setError(null); setResult(null); setAdded({});
     try {
-      const acct = activeAccount || accounts[0];
-      if (!acct?.hashValue) throw new Error("No linked Schwab account found — reconnect in the APIs tab.");
-      const data = await schwabGetPositions({ accountHash: acct.hashValue }).then((r) => r.data);
-      const parsed = parseSchwabPositions(data);
-      // Also pull working GTC buy-to-close orders so each position gets its real GTC.
-      let gtcByKey = {}, openByKey = {};
-      try {
-        const orders = await schwabGetOrders({ accountHash: acct.hashValue }).then((r) => r.data);
-        gtcByKey = parseSchwabOrders(orders);
-        openByKey = parseSchwabOpenDates(orders);
-      } catch { /* orders are a bonus — don't fail the import if this errors */ }
-      parsed.candidates.forEach((c) => {
-        const k = `${c.sym}|${c.strike}|${c.expiry}`;
-        if (gtcByKey[k] != null) c.gtc = gtcByKey[k];
-        if (openByKey[k] != null) c.openedAtMs = openByKey[k];
-      });
-      setResult({ ...parsed, raw: data });
+      const accts = (accounts && accounts.length) ? accounts : (activeAccount ? [activeAccount] : []);
+      if (!accts.length || !accts.some((a) => a?.hashValue)) throw new Error("No linked Schwab account found — reconnect in the APIs tab.");
+      const all = [];
+      let rawFirst = null;
+      for (const acct of accts) {
+        if (!acct?.hashValue) continue;
+        const acctTag = String(acct.accountId || "").slice(-4);
+        const data = await schwabGetPositions({ accountHash: acct.hashValue }).then((r) => r.data).catch(() => null);
+        if (!data) continue;
+        if (!rawFirst) rawFirst = data;
+        const parsed = parseSchwabPositions(data);
+        let gtcByKey = {}, openByKey = {};
+        try {
+          const orders = await schwabGetOrders({ accountHash: acct.hashValue }).then((r) => r.data);
+          gtcByKey = parseSchwabOrders(orders);
+          openByKey = parseSchwabOpenDates(orders);
+        } catch { /* orders are a bonus */ }
+        parsed.candidates.forEach((c) => {
+          const k = `${c.sym}|${c.strike}|${c.expiry}`;
+          if (gtcByKey[k] != null) c.gtc = gtcByKey[k];
+          if (openByKey[k] != null) c.openedAtMs = openByKey[k];
+          c.acct = acctTag; c.acctId = acct.accountId;
+          all.push(c);
+        });
+      }
+      setResult({ candidates: all, raw: rawFirst, accountCount: accts.filter((a) => a?.hashValue).length });
     } catch (e) {
       setError(e?.message || "Couldn't load positions from Schwab.");
     } finally { setLoading(false); }
@@ -57,6 +67,7 @@ export default function ImportFromSchwab({ onAdd }) {
       liveStock: c.liveStock != null ? String(c.liveStock) : "", liveCall: c.liveCall != null ? String(c.liveCall) : "",
       gtc: c.gtc != null ? String(c.gtc) : "",
       openedAtMs: c.openedAtMs ?? undefined,
+      acct: c.acct || undefined, acctId: c.acctId || undefined,
       lotId: "new",
     });
     if (res?.ok) setAdded((a) => ({ ...a, [i]: true }));
@@ -88,6 +99,7 @@ export default function ImportFromSchwab({ onAdd }) {
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ color: T.text, fontWeight: 700, fontFamily: T.fontMono }}>
                       {c.sym} · {c.contracts}× ${c.strike} CALL · {c.expiry}
+                      {c.acct && <span style={{ marginLeft: 8, fontSize: 10, fontWeight: 700, color: T.accent, background: T.accentDim, padding: "1px 6px", borderRadius: 4 }}>{acctName(c)}</span>}
                     </div>
                     <div style={{ color: T.textDim, fontSize: 12 }}>
                       shares cost {usd(c.fillStock)} · call sold {usd(c.fillCall)} · now {usd(c.liveStock)}/{usd(c.liveCall)}

@@ -35,6 +35,7 @@ import SelectionTab from "../components/SelectionTab";
 // ── API TAB INJECTION 1/3 — import ──────────────────────────────────────────
 import APITab from "../components/APITab";
 import HistoricalDataTab from "../components/HistoricalDataTab";
+import OptionsManager from "../components/OptionsManager";
 import SavedQuotesCard from "../components/SavedQuotesCard";
 
 // ── Tab definitions ──
@@ -120,6 +121,10 @@ export default function Dashboard() {
 
   // Persisted active tab
   const [activeTab, setActiveTab] = usePersistedState("cc:tab", "dashboard");
+  // Which product the user is in: Covered Calls Manager vs Options Manager.
+  // The tab bar is shared (same ids); only the rendered content differs by mode.
+  const [appMode, setAppMode] = usePersistedState("cc:appMode", "coveredCalls");
+  const isOptions = appMode === "options";
   const [sharedSymbol, setSharedSymbol] = usePersistedState("cc:symbol", "AAPL");
 
   // Dashboard sub-tabs: "finder" | "saved"
@@ -226,18 +231,29 @@ export default function Dashboard() {
           padding: isMobile ? "10px 14px" : "12px 20px",
           flexWrap: "wrap", gap: 8,
         }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
             <div style={{
               width: 32, height: 32, borderRadius: 8,
               background: `linear-gradient(135deg, ${T.accent}, #00b894)`,
               display: "flex", alignItems: "center", justifyContent: "center",
               fontSize: 12, fontWeight: 900, color: T.bg, fontFamily: T.fontDisplay,
-            }}>CC</div>
+            }}>{isOptions ? "OM" : "CC"}</div>
             <div>
               <div style={{ fontSize: isMobile ? 12 : 14, fontWeight: 700, color: T.text, fontFamily: T.fontDisplay }}>
-                Covered Calls Manager
+                {isOptions ? "Options Manager" : "Covered Calls Manager"}
               </div>
               <div style={{ fontSize: 10, color: T.textDim, fontFamily: T.fontMono }}>{email}</div>
+            </div>
+            {/* Site switch — toggle between the two products */}
+            <div role="group" aria-label="Switch product" style={{ display: "flex", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, padding: 3, gap: 2, marginLeft: isMobile ? 0 : 6 }}>
+              {[{ m: "coveredCalls", label: "Covered Calls" }, { m: "options", label: "Options" }].map(({ m, label }) => (
+                <button key={m} onClick={() => setAppMode(m)} aria-pressed={appMode === m} style={{
+                  padding: "5px 11px", borderRadius: 6, border: "none", cursor: "pointer",
+                  background: appMode === m ? T.accent : "transparent",
+                  color: appMode === m ? "#0A0A0A" : T.textDim,
+                  fontFamily: T.fontMono, fontSize: 10, fontWeight: 700, whiteSpace: "nowrap",
+                }}>{label}</button>
+              ))}
             </div>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
@@ -354,6 +370,11 @@ export default function Dashboard() {
 
         {/* ── Tab Content (display toggle — all stay mounted) ── */}
 
+        {/* Options Manager product — blank analysis tabs + shared global tabs */}
+        {isOptions && <OptionsManager activeTab={activeTab} activePosition={activePosition} />}
+
+        {/* Covered Calls Manager product (hidden while in Options mode) */}
+        {!isOptions && (<>
         {/* Dashboard — with Position Finder / Saved Views sub-tabs */}
         <div role="tabpanel" aria-label="Dashboard" style={{ display: activeTab === "dashboard" ? "block" : "none" }}>
 
@@ -479,6 +500,7 @@ export default function Dashboard() {
         <div role="tabpanel" aria-label="Historical data" style={{ display: activeTab === "history" ? "block" : "none" }}>
           <HistoricalDataTab />
         </div>
+        </>)}
 
         {/* ── Financial Disclaimer ── */}
         <aside aria-label="Financial disclaimer" style={{
@@ -489,7 +511,7 @@ export default function Dashboard() {
             fontSize: 10, color: T.textDim, lineHeight: 1.5, textAlign: "center",
             fontFamily: T.fontBody, margin: 0,
           }}>
-            <strong style={{ color: T.textMuted }}>Disclaimer:</strong> Covered Calls Manager provides informational data and analytical tools only.
+            <strong style={{ color: T.textMuted }}>Disclaimer:</strong> This platform provides informational data and analytical tools only.
             Nothing on this platform constitutes investment advice, a recommendation, or an offer to buy or sell securities.
             Options trading involves significant risk and is not appropriate for all investors. Past performance does not guarantee future results.
             Always consult a qualified financial advisor before making investment decisions. Market data may be delayed.

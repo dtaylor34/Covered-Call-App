@@ -132,6 +132,31 @@ export function parseSchwabOpenDates(orders) {
   return byKey;
 }
 
+// Map "SYM|strike|expiry" → { ms, date, price } from FILLED BUY_TO_CLOSE call
+// orders — i.e. covered calls you bought back (closed early / GTC filled). Used
+// to auto-record closes that happened at the broker. ~60-day Schwab window.
+export function parseSchwabCloses(orders) {
+  const list = Array.isArray(orders) ? orders : (orders?.orders || []);
+  const byKey = {};
+  for (const o of list) {
+    if (String(o.status || "").toUpperCase() !== "FILLED") continue;
+    const t = o.closeTime || o.enteredTime || o.orderActivityCollection?.[0]?.executionLegs?.[0]?.time;
+    const ms = t ? new Date(t).getTime() : null;
+    for (const leg of (o.orderLegCollection || [])) {
+      if (String(leg.instruction || "").toUpperCase() !== "BUY_TO_CLOSE") continue;
+      const inst = leg.instrument || {};
+      const occ = parseOccSymbol(inst.symbol) || {};
+      if ((inst.putCall || occ.putCall) !== "CALL") continue;
+      const sym = (inst.underlyingSymbol || occ.underlying || "").toUpperCase();
+      if (!sym || occ.strike == null || !occ.expiry) continue;
+      const key = `${sym}|${occ.strike}|${occ.expiry}`;
+      const price = Number(o.price) || Number(o.orderActivityCollection?.[0]?.executionLegs?.[0]?.price) || 0;
+      if (!byKey[key] || (ms && ms > byKey[key].ms)) byKey[key] = { ms, date: ms ? new Date(ms).toISOString().slice(0, 10) : null, price };
+    }
+  }
+  return byKey;
+}
+
 export function parseSchwabOrders(orders) {
   const list = Array.isArray(orders) ? orders : (orders?.orders || []);
   const gtcByKey = {};

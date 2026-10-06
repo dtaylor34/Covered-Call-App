@@ -165,7 +165,10 @@ export function parsePaste(text, now = new Date()) {
   return { out, found: found.filter((v, i) => found.indexOf(v) === i) };
 }
 
-/** Canonical position id: `sym-strike-expiry`, lowercased, non-alphanumerics → "-". */
-export function positionId(sym, strike, expiry) {
-  return `${sym}-${strike}-${expiry}`.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+/** Canonical position id: `sym-strike-expiry`, optionally suffixed by an account
+ *  tag (last 4 of the account number) so the same contract can be held in more
+ *  than one Schwab account without colliding. Lowercased, non-alphanumerics → "-". */
+export function positionId(sym, strike, expiry, acct) {
+  const base = `${sym}-${strike}-${expiry}`;
+  return `${base}${acct ? `-${acct}` : ""}`.toLowerCase().replace(/[^a-z0-9]+/g, "-");
 }

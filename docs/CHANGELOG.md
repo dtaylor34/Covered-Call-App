@@ -1,3 +1,94 @@
+## [2.0.68] — 2026-10-06
+
+### Added
+- **Tell positions apart + see when they close** on the Working tab:
+  - **Account badge on each row** — the account nickname (Stock / Roth, or ··NNNN) now shows right next to the symbol, so two of the same contract in different accounts are instantly distinguishable at a glance (no need to expand).
+  - **GTC fill status per row** — under the stoplight, each position shows its buy-back status: "↓GTC ~5d" / "↓GTC fills ~now" (highlighted green when imminent) so you can see when a call is about to sell/close.
+  - **"Recently closed" strip** — a line at the top listing the latest closed calls (e.g. "PFE $28 bought back @ $0.10 · 2026-10-05"), so you immediately know when an action has closed/sold, with a pointer to Trades → Closed for the full history + lifecycle charts.
+
+---
+
+## [2.0.67] — 2026-10-06
+
+### Added
+- **Account nicknames (Stock / Roth)** — in the APIs tab you can now **name each linked Schwab account** (e.g. "Stock", "Roth") with an inline nickname field. Those names show everywhere the account is referenced — on import candidates and in the expanded working-position view ("Schwab account Roth · ··NNNN") — so you can tell which covered call lives in which account instead of staring at raw numbers. New `setAccountLabel` on the broker hook; labels stored on `brokerAccounts`.
+
+---
+
+## [2.0.66] — 2026-10-06
+
+### Added
+- **Multi-account Schwab support** — "Import from Schwab" and "Sync from Schwab" now pull covered calls, orders, and buy-backs from **all** your linked Schwab accounts (e.g. your brokerage + Roth), not just one. Each covered call is tagged with its account (last 4 of the account number) so the **same contract held in two accounts no longer collides** — position ids are now account-aware (`positionId` gains an account suffix; positions store `acct`/`acctId`). Import rows and the expanded working-position view show a **"Schwab account ··NNNN"** tag, and sync matches each position within its own account (closes are de-duped across accounts).
+
+### Note
+- If you imported a covered call *before* this update (untagged) and re-import it now, the new per-account copy is tagged — you may see the old untagged one as a duplicate to remove once.
+
+---
+
+## [2.0.65] — 2026-10-06
+
+### Added
+- **Auto-capture covered-call closes from Schwab** — the Working tab's **"⬇ Sync from Schwab (entry dates + buy-backs)"** now also detects **FILLED buy-to-close** orders and records them as closed trades at the actual fill date & price. So a GTC buy-back you did in Schwab (e.g. PFE $28 call bought back at $0.10) lands in **Closed Trades** automatically instead of being stuck as a working position. New `parseSchwabCloses` parser; `closePosition` accepts the real close date.
+- **Closed-trade lifecycle chart + exit marker** — rows in **Closed Trades** (Trades tab) are now **expandable** to show a per-trade chart: the stock from before entry through exit, with strike + breakeven lines, an "entry" marker, and the **trigger/sale marked by a circle inside a white square**, colored by outcome (bought back / expired / called away). Review what happened and when you sold early vs let it expire.
+
+---
+
+## [2.0.64] — 2026-10-05
+
+### Fixed
+- **Console 400 errors from the Strikes browser on futures/index symbols** — selecting ZB=F, ^TYX, etc. was calling the equity option-chain endpoints, which rejected them ("Invalid ticker symbol") and spammed the console. The Strikes & Expirations browser now detects futures (`=`) / index (`^`) symbols and skips the chain calls entirely, showing the "no listed chain — use TLT" note without firing (or erroring on) the request.
+
+---
+
+## [2.0.63.1] — 2026-10-05
+
+### Fixed
+- **"Could not load intraday history" on Data Trend (and Intraday without Schwab)** — `getIntradayCompare` and `getMinuteTrend` referenced an undefined Yahoo client (`yfChart` instead of `yf`), so the Yahoo path threw. Data Trend (which has no Schwab path) failed outright; Intraday only worked for Schwab-connected users. Fixed the client reference — both now load from Yahoo as intended.
+
+---
+
+## [2.0.63] — 2026-10-05
+
+### Added
+- **Data Trend switch on the Minute Compare chart** — an **Intraday / Data Trend** toggle. Data Trend plots, for each of the last ~N trading days, the price captured at your selected **minute N** (dot per day, narrow vertical line from that day's prior close), marked with a green **B** (buy — below prior close) or red **S** (sell — above), plus a faint dot for each day's **end-of-day close** so you can scan for a pattern. Range buttons 1W / 2W / 1M / 2M, and a stats line (B/S counts + "signal→EOD favorable %"). Backed by a new `getMinuteTrend` callable (5-minute bars). **Honest limit:** minute-level history only reaches ~60 days in the data feed, so this is a recent-pattern view — true months/years would require capturing minute N daily going forward (offered as a follow-up).
+
+---
+
+## [2.0.62] — 2026-10-05
+
+### Added
+- **Minute Compare chart (Options Dashboard)** — a focused intraday tool: the previous session's **close** shown as a dot + dashed baseline, vs the latest session **minute-by-minute** (vertical sticks, green above / red below the prior close). Enter a **minute number** (e.g. 15 = 9:45 ET) and it compares that minute's price to the prior close and shows a **🔴 SELL MARKET** alert when price is above it or a **🟢 BUY MARKET** alert when below, with the exact prices and difference. Backed by a new `getIntradayCompare` callable (1-minute bars, regular hours indexed from the 9:30 ET open; Schwab real-time → Yahoo fallback; shows the last full session on weekends/holidays).
+
+---
+
+## [2.0.61] — 2026-10-05
+
+### Fixed
+- **Strikes not showing on the Options Dashboard** — the strike/bid ladder looked up the chain by an exact expiration-key match, but the returned chain key can differ slightly from the selected date, so it found nothing and rendered empty. Now it falls back to the chain's actual key (matching the main option-chain component), so all strikes with their call/put bids & asks render. Also defaulted the Dashboard symbol to **TLT** (optionable) so the chart *and* the strike chain both populate on first load; ZB=F and other futures remain one pick away in the dropdown.
+
+---
+
+## [2.0.60] — 2026-10-05
+
+### Added
+- **Categorized symbol dropdown on the Options Dashboard** — replaced the quick-pick chips with a grouped dropdown covering **all US Treasuries** (futures ZB/UB/ZN/ZF/ZT, ETFs TLT/IEF/SHY/GOVT/…, yields ^TYX/^TNX/^FVX/^IRX), **Grains & Agriculture** (Corn ZC, Soybeans ZS, Wheat, etc. + CORN/SOYB/WEAT/DBA ETFs), **Indexes** (^GSPC/^NDX/^DJI/^RUT/^VIX, ES/NQ/YM/RTY futures, SPY/QQQ/DIA/IWM ETFs), and a set of **optionable Stocks** (so you can analyze an option against a stock). The free-text box remains for anything not listed. New `src/data/optionsSymbols.js` catalog.
+
+---
+
+## [2.0.59] — 2026-10-05
+
+### Added
+- **Options Manager → Dashboard tab (first built-out Options view)** — pick a symbol (including US Treasuries: **ZB=F** 30-yr futures, **TLT** ETF, **^TYX** 30-yr yield, quick-picks included), see its **price trend chart** with **Day / Week / Month** views (is it going up or down), and browse a **collapsible Strikes & Expirations** section: select a **year**, switch between all **expiration months** for that year, and a **strike-count limiter** (10 / 20 / 40 / All, centered at-the-money) to tune spacing. Charting works for futures/yield indices; listed option chains populate for optionable symbols (TLT etc.) with a one-click "Use TLT" fallback when a symbol (e.g. ZB futures) has no chain from this data source. `getPriceHistory` now accepts futures/index symbols (`ZB=F`, `^TYX`).
+
+---
+
+## [2.0.58] — 2026-10-05
+
+### Added
+- **Dual-product site switch — Covered Calls Manager ↔ Options Manager** — a toggle in the top header switches between two products under one account/login/Schwab connection (logo + title change with it; choice persisted). **Covered Calls Manager** is unchanged. **Options Manager** is a new scaffold that mirrors the same tab bar: the analysis tabs (Selection, Dashboard, Working, Risk, Trades, History) are **blank "coming soon" placeholders** to be filled in, while the global tabs — **APIs (Schwab), Profile, Setup, Glossary** — are **reused live**, so the Schwab connection and account settings work identically in both. New `src/components/OptionsManager.jsx`. Design documented in **docs/OPTIONS_MANAGER.md** + a new §0 in **docs/PRD.md**.
+
+---
+
 ## [2.0.57] — 2026-10-04
 
 ### Fixed

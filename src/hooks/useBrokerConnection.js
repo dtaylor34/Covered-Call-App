@@ -92,6 +92,16 @@ export function useBrokerConnection() {
     setActiveAccountId(accountId);
   }, [currentUser?.uid, accounts]);
 
+  // ── Set a friendly nickname for an account (e.g. "Stock", "Roth") ────────────
+  const setAccountLabel = useCallback(async (accountId, label) => {
+    if (!currentUser?.uid) return;
+    await setDoc(
+      doc(getFirestore(), "users", currentUser.uid, "brokerAccounts", accountId),
+      { label: String(label || "").slice(0, 24), updatedAt: serverTimestamp() },
+      { merge: true }
+    );
+  }, [currentUser?.uid]);
+
   // ── Derived state ──────────────────────────────────────────────────────────
   const activeAccount    = accounts.find((a) => a.id === activeAccountId)
                         || accounts.find((a) => a.isDefault)
@@ -108,6 +118,7 @@ export function useBrokerConnection() {
     loading,
     deleteConnection,
     setDefaultAccount,
+    setAccountLabel,
     setActiveAccountId,
   };
 }

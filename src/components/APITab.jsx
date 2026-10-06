@@ -440,7 +440,7 @@ function SchwabSetupFlow({ broker, onClose }) {
 
 // ── Connected state — account switcher ────────────────────────────────────────
 
-function ConnectedPanel({ broker, connection, accounts, activeAccount, onSetDefault, onDisconnect }) {
+function ConnectedPanel({ broker, connection, accounts, activeAccount, onSetDefault, onSetLabel, onDisconnect }) {
   const { T } = useTheme();
   const [confirmDisconnect, setConfirmDisconnect] = useState(false);
 
@@ -487,33 +487,42 @@ function ConnectedPanel({ broker, connection, accounts, activeAccount, onSetDefa
       {accounts.length > 0 && (
         <Card>
           <div style={{ color: T.accent, fontSize: 10, fontFamily: T.fontMono, fontWeight: 700, letterSpacing: 1, marginBottom: 14 }}>
-            LINKED ACCOUNTS — select your default
+            LINKED ACCOUNTS — name each (e.g. Stock, Roth), click to set default
           </div>
           {accounts.map((account) => {
             const isActive = activeAccount?.id === account.id;
+            const last4 = account.accountId?.slice(-4) || account.id?.slice(-4);
             return (
               <div
                 key={account.id}
-                onClick={() => onSetDefault(account.id)}
                 style={{
-                  display: "flex", alignItems: "center", justifyContent: "space-between",
-                  padding: "12px 14px", borderRadius: 8, cursor: "pointer",
+                  display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10,
+                  padding: "12px 14px", borderRadius: 8,
                   background: isActive ? T.accentDim : T.card,
                   border: `1px solid ${isActive ? T.accent + "44" : T.border}`,
-                  marginBottom: 8, transition: "all 0.15s",
+                  marginBottom: 8, transition: "all 0.15s", flexWrap: "wrap",
                 }}
-                onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.borderColor = T.borderActive; }}
-                onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.borderColor = T.border; }}
               >
-                <div>
+                <div onClick={() => onSetDefault(account.id)} style={{ cursor: "pointer", flex: 1, minWidth: 140 }}>
                   <div style={{ color: T.text, fontSize: 13, fontWeight: 600, fontFamily: T.fontMono }}>
-                    ····{account.accountId?.slice(-4) || account.id?.slice(-4)}
+                    {account.label ? `${account.label} ` : ""}····{last4}
                   </div>
                   <div style={{ color: T.textDim, fontSize: 11, marginTop: 2 }}>
                     {account.accountType || "Brokerage Account"} · {broker.name}
                   </div>
                 </div>
-                {isActive && <Badge color={T.accent}>DEFAULT</Badge>}
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  {onSetLabel && (
+                    <input
+                      defaultValue={account.label || ""}
+                      placeholder="Nickname (e.g. Roth)"
+                      onClick={(e) => e.stopPropagation()}
+                      onBlur={(e) => { const v = e.target.value.trim(); if (v !== (account.label || "")) onSetLabel(account.id, v); }}
+                      style={{ width: 150, minHeight: 34, padding: "0 10px", border: `1px solid ${T.border}`, borderRadius: 7, background: T.inputBg || T.card, color: T.text, fontFamily: T.fontMono, fontSize: 12 }}
+                    />
+                  )}
+                  {isActive && <Badge color={T.accent}>DEFAULT</Badge>}
+                </div>
               </div>
             );
           })}
@@ -684,7 +693,7 @@ export default function APITab() {
   const { T } = useTheme();
   const {
     connections, accounts, activeConnection, activeAccount,
-    deleteConnection, setDefaultAccount,
+    deleteConnection, setDefaultAccount, setAccountLabel,
   } = useBrokerConnection();
 
   const [selectedBroker, setSelectedBroker] = useState(null);
@@ -824,6 +833,7 @@ export default function APITab() {
               accounts={accounts.filter((a) => a.broker === selectedBroker)}
               activeAccount={activeAccount}
               onSetDefault={setDefaultAccount}
+              onSetLabel={setAccountLabel}
               onDisconnect={handleDisconnect}
             />
           ) : (

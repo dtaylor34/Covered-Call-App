@@ -288,6 +288,8 @@ exports.claimOwnership = bootstrap.claimOwnership;
 // ── Price history for the trend chart (Schwab real-time → Yahoo fallback) ─────
 const priceHistory = require("./priceHistory");
 exports.getPriceHistory = priceHistory.getPriceHistory;
+exports.getIntradayCompare = priceHistory.getIntradayCompare;
+exports.getMinuteTrend = priceHistory.getMinuteTrend;
 
 // ── Google Sheet ledger sync (feature/working-lots-sheets) ───────────────────
 // connectSheet / syncSheet / sheetServiceAccount. Requires the Google Sheets API

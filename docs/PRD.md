@@ -7,6 +7,26 @@
 
 ---
 
+## 0. Product Direction — Dual Product (added 2026-10-05)
+
+The platform is expanding from a single product into **two sibling products under
+one account, one login, and one Schwab connection**, reached via a **site switch**
+in the top header:
+
+1. **Covered Calls Manager** — the original product (this PRD).
+2. **Options Manager** — broader options strategies (calls/puts/spreads).
+   Scaffolded in v2.0.58 (blank analysis tabs + shared global tabs); context
+   filled in iteratively.
+
+See **[OPTIONS_MANAGER.md](OPTIONS_MANAGER.md)** for the full design blueprint
+(architecture, tab plan, shared Schwab connection, open questions).
+
+> Note: §1.2 below ("No brokerage connections") predates the Schwab **read-only**
+> integration added later — see [BROKER_CONNECTIONS.md](BROKER_CONNECTIONS.md).
+> Both products share that single, read-only connection.
+
+---
+
 ## 1. Product Overview
 
 ### 1.1 What It Is

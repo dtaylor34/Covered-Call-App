@@ -2,11 +2,12 @@
 // Closed covered-call history with estimated tax per row and tax-rate inputs.
 // Estimate only — not tax advice. Tier-gating is handled by the Dashboard panel.
 
-import { useMemo } from "react";
+import { useMemo, useState, Fragment } from "react";
 import { useTheme } from "../contexts/ThemeContext";
 import { usePositions } from "../hooks/usePositions";
 import { usePersistedState } from "../hooks/usePersistedState";
 import { ytdSummary } from "../lib/ytd";
+import ClosedTradeChart from "./ClosedTradeChart";
 
 const usd = (n, signed) => {
   const a = Math.abs(n || 0);
@@ -25,12 +26,18 @@ export default function ClosedTradesTab() {
   const { T } = useTheme();
   const { positions, closed } = usePositions();
   const [rates, setRates] = usePersistedState("cc:taxRates", { fed: "24", state: "9.3", niit: false });
+  const [openRow, setOpenRow] = useState(null);
   const year = new Date().getFullYear();
   const set = (k) => (e) => setRates({ ...rates, [k]: k === "niit" ? e.target.checked : e.target.value });
 
   const y = useMemo(
     () => ytdSummary(closed, positions, { fed: Number(rates.fed) || 0, state: Number(rates.state) || 0, niit: !!rates.niit }, year),
     [closed, positions, rates, year]
+  );
+  // Raw closed records for this year (same order as y.rows) — for the lifecycle chart.
+  const rawThisYear = useMemo(
+    () => (closed || []).filter((c) => String(c.closedOn || "").slice(0, 4) === String(year)),
+    [closed, year]
   );
 
   const card = { background: T.surface, border: `1px solid ${T.border}`, borderRadius: T.r || 10, padding: "18px 20px", marginBottom: 16 };
@@ -71,19 +78,41 @@ export default function ClosedTradesTab() {
                 ))}
               </tr></thead>
               <tbody>
-                {y.rows.map((r, i) => (
-                  <tr key={i}>
-                    <td style={{ ...td, textAlign: "left", fontWeight: 700 }}>{r.sym}</td>
-                    <td style={{ ...td, textAlign: "left" }}>{expShort(r.expiry)} ${r.strike} ×{r.contracts || 1}</td>
-                    <td style={{ ...td, textAlign: "left", color: T.textDim }}>{expShort(r.closedOn)}</td>
-                    <td style={{ ...td, textAlign: "left", color: T.textDim }}>{HOW[r.how] || r.how}{r.how === "bought" ? ` at ${usd(r.buyback / ((r.contracts || 1) * 100))}` : r.how === "called" ? ` at ${usd(r.strike)}` : ""}</td>
-                    <td style={td}>{usd(r.premium)}</td>
-                    <td style={td}>{usd(r.buyback)}</td>
-                    <td style={{ ...td, color: r.opt >= 0 ? T.success : T.danger }}>{usd(r.opt, true)}</td>
-                    <td style={{ ...td, color: r.stock >= 0 ? T.success : T.danger }}>{usd(r.stock, true)}</td>
-                    <td style={{ ...td, color: T.warn }}>{usd(r.tax)}</td>
-                  </tr>
-                ))}
+                {y.rows.map((r, i) => {
+                  const raw = rawThisYear[i] || {};
+                  const isOpen = openRow === i;
+                  return (
+                    <Fragment key={i}>
+                      <tr onClick={() => setOpenRow(isOpen ? null : i)} style={{ cursor: "pointer", background: isOpen ? T.accentDim : "transparent" }}>
+                        <td style={{ ...td, textAlign: "left", fontWeight: 700 }}>{isOpen ? "▾ " : "▸ "}{r.sym}</td>
+                        <td style={{ ...td, textAlign: "left" }}>{expShort(r.expiry)} ${r.strike} ×{r.contracts || 1}</td>
+                        <td style={{ ...td, textAlign: "left", color: T.textDim }}>{expShort(r.closedOn)}</td>
+                        <td style={{ ...td, textAlign: "left", color: T.textDim }}>{HOW[r.how] || r.how}{r.how === "bought" ? ` at ${usd(r.buyback / ((r.contracts || 1) * 100))}` : r.how === "called" ? ` at ${usd(r.strike)}` : ""}</td>
+                        <td style={td}>{usd(r.premium)}</td>
+                        <td style={td}>{usd(r.buyback)}</td>
+                        <td style={{ ...td, color: r.opt >= 0 ? T.success : T.danger }}>{usd(r.opt, true)}</td>
+                        <td style={{ ...td, color: r.stock >= 0 ? T.success : T.danger }}>{usd(r.stock, true)}</td>
+                        <td style={{ ...td, color: T.warn }}>{usd(r.tax)}</td>
+                      </tr>
+                      {isOpen && (
+                        <tr>
+                          <td colSpan={9} style={{ padding: "4px 8px 14px", background: `${T.accentDim}55` }}>
+                            <ClosedTradeChart
+                              symbol={r.sym}
+                              strike={r.strike}
+                              breakeven={Number(raw.fillStock) > 0 ? raw.fillStock - (raw.fillCall || 0) : null}
+                              entryStock={raw.fillStock}
+                              entryMs={raw.openedAtMs}
+                              exitMs={raw.closedOnMs}
+                              exitStock={raw.exitStock}
+                              exitReason={r.how}
+                            />
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
+                  );
+                })}
               </tbody>
             </table>
           </div>

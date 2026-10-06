@@ -65,7 +65,8 @@ export function usePositions() {
     const sym = String(form.sym || "").trim().toUpperCase();
     const strike = n(form.strike) || 0;
     const expiry = form.expiry;
-    const id = positionId(sym, strike, expiry);
+    const acct = form.acct ? String(form.acct) : null;
+    const id = positionId(sym, strike, expiry, acct);
     const existing = positions.find((p) => p.id === id);
     const chosenLot = !existing && form.lotId && form.lotId !== "new" ? lots.find((l) => l.id === form.lotId) : null;
 
@@ -93,6 +94,9 @@ export function usePositions() {
     next.contracts = Math.round(next.contracts || 1);
     // Entry date (when the call was sold) — e.g. pulled from Schwab's fill history.
     if (Number.isFinite(Number(form.openedAtMs))) next.openedAtMs = Number(form.openedAtMs);
+    // Which Schwab account this covered call lives in (for multi-account support).
+    if (acct) next.acct = acct;
+    if (form.acctId) next.acctId = String(form.acctId);
 
     const batch = writeBatch(getFirestore());
     if (!existing) {
@@ -133,7 +137,7 @@ export function usePositions() {
 
   // ── Close a position ────────────────────────────────────────────────────────
   // how: 'bought' (buyback price) | 'expired' | 'called' (assigns lots by delivery order)
-  const closePosition = useCallback(async (id, how, { buyback = 0 } = {}) => {
+  const closePosition = useCallback(async (id, how, { buyback = 0, closedOnMs = null } = {}) => {
     if (!uid) return;
     const p = positions.find((x) => x.id === id);
     if (!p) return;
@@ -165,10 +169,11 @@ export function usePositions() {
     const rec = {
       sym: p.sym, contracts: p.contracts || 1, strike: p.strike, expiry: p.expiry,
       fillStock: p.fillStock, fillCall: p.fillCall, buyback: how === "bought" ? buyback : 0,
-      how, stockGain, delivered, closedOn: todayISO(), closedAt: serverTimestamp(),
+      how, stockGain, delivered,
+      closedOn: closedOnMs ? new Date(closedOnMs).toISOString().slice(0, 10) : todayISO(), closedAt: serverTimestamp(),
       // Lifecycle: keep entry + exit so we can chart the trade start→finish later.
       openedAtMs: p.openedAtMs ?? null, exitStock: p.liveStock ?? null,
-      exitCall: how === "bought" ? buyback : 0, closedOnMs: Date.now(),
+      exitCall: how === "bought" ? buyback : 0, closedOnMs: closedOnMs || Date.now(),
     };
     batch.set(closedRef(`${id}-${Date.now()}`), rec);
     batch.delete(posRef(id));

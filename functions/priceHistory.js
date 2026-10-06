@@ -41,7 +41,8 @@ const SCHWAB_RANGES = {
 };
 
 function requireAuth(req) { if (!req.auth) throw new HttpsError("unauthenticated", "Sign in first."); return req.auth.uid; }
-function cleanSymbol(s) { const v = String(s || "").trim().toUpperCase(); if (!/^[A-Z.]{1,6}$/.test(v)) throw new HttpsError("invalid-argument", "Invalid symbol."); return v; }
+// Allow equities/ETFs plus futures (ZB=F) and index symbols (^TYX) for charting.
+function cleanSymbol(s) { const v = String(s || "").trim().toUpperCase(); if (!/^[A-Z0-9.^=]{1,10}$/.test(v)) throw new HttpsError("invalid-argument", "Invalid symbol."); return v; }
 
 // Pull from Schwab using the caller's own access token. Throws on any problem so
 // the caller falls back to Yahoo.
@@ -94,4 +95,101 @@ exports.getPriceHistory = onCall({ cors: true, timeoutSeconds: 30, secrets: [sch
     console.error(`getPriceHistory ${symbol}/${key}:`, e.message);
     throw new HttpsError("unavailable", `Could not load price history for ${symbol}.`);
   }
+});
+
+// ── Intraday minute compare ───────────────────────────────────────────────────
+// Returns the most recent regular-hours session minute-by-minute (indexed from
+// the 9:30 ET open), plus the PRIOR session's close — for the "price at minute N
+// vs last close" buy/sell tool.
+const OPEN_MIN = 9 * 60 + 30, CLOSE_MIN = 16 * 60; // 570, 960 (ET minutes)
+function etParts(ms) {
+  const d = new Date(new Date(ms).toLocaleString("en-US", { timeZone: "America/New_York" }));
+  const date = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  return { date, mins: d.getHours() * 60 + d.getMinutes() };
+}
+
+exports.getIntradayCompare = onCall({ cors: true, timeoutSeconds: 30, secrets: [schwab.SCHWAB_ENC_KEY] }, async (request) => {
+  const uid = requireAuth(request);
+  const symbol = cleanSymbol(request.data.symbol);
+
+  // 1-minute bars, ~7 days. Schwab first (caller's token), else Yahoo.
+  let bars = null;
+  try {
+    const sec = await schwab.getSecret(uid);
+    if (sec?.refreshToken) {
+      const token = await schwab.ensureFreshToken(uid, sec);
+      const params = new URLSearchParams({ symbol, periodType: "day", period: "10", frequencyType: "minute", frequency: "1", needExtendedHoursData: "true" });
+      const r = await fetch(`${schwab.SCHWAB_MARKET_URL}/pricehistory?${params}`, { headers: { Authorization: `Bearer ${token}` } });
+      if (r.ok) { const d = await r.json(); const c = (d.candles || []).filter((x) => x.close != null && x.datetime); if (c.length) bars = c.map((x) => ({ t: x.datetime, c: x.close })); }
+    }
+  } catch (e) { /* fall back to Yahoo */ }
+
+  if (!bars) {
+    try {
+      const r = await yf.chart(symbol, { period1: new Date(Date.now() - 7 * 86400000), interval: "1m" }, YF);
+      bars = (r.quotes || []).filter((x) => x.date && x.close != null).map((x) => ({ t: new Date(x.date).getTime(), c: x.close }));
+    } catch (e) {
+      throw new HttpsError("unavailable", `Could not load intraday data for ${symbol}.`);
+    }
+  }
+  if (!bars || !bars.length) throw new HttpsError("unavailable", `No intraday data for ${symbol}.`);
+
+  // Group by ET session date, regular hours only (9:30–16:00 ET).
+  const sessions = new Map();
+  for (const b of bars) {
+    const { date, mins } = etParts(b.t);
+    if (mins < OPEN_MIN || mins > CLOSE_MIN) continue;
+    if (!sessions.has(date)) sessions.set(date, []);
+    sessions.get(date).push({ t: b.t, c: b.c, mins });
+  }
+  const dates = [...sessions.keys()].sort();
+  if (!dates.length) throw new HttpsError("unavailable", `No regular-hours data for ${symbol}.`);
+
+  const lastDate = dates[dates.length - 1];
+  const lastBars = sessions.get(lastDate);
+  const prevDate = dates[dates.length - 2];
+  const prevClose = prevDate ? sessions.get(prevDate)[sessions.get(prevDate).length - 1].c : null;
+
+  const minutes = lastBars.map((b) => ({ m: b.mins - OPEN_MIN, t: b.t, c: b.c }));
+  return { symbol, session: lastDate, prevClose, last: minutes.length ? minutes[minutes.length - 1].c : null, minutes };
+});
+
+// ── Minute-N pattern over recent history (Data Trend) ─────────────────────────
+// For each of the last ~days trading days, the price at minute N (nearest 5-min
+// bar) vs that day's PRIOR close (buy/sell signal) and the day's END-OF-DAY close.
+// 5-minute bars only reach ~60 days back, so this is a recent-pattern view.
+exports.getMinuteTrend = onCall({ cors: true, timeoutSeconds: 30 }, async (request) => {
+  requireAuth(request);
+  const symbol = cleanSymbol(request.data.symbol);
+  const minute = Math.max(0, Math.round(Number(request.data.minute) || 15));
+  const days = Math.min(58, Math.max(5, Math.round(Number(request.data.days) || 30)));
+
+  let bars = null;
+  try {
+    const r = await yf.chart(symbol, { period1: new Date(Date.now() - days * 86400000), interval: "5m" }, YF);
+    bars = (r.quotes || []).filter((x) => x.date && x.close != null).map((x) => ({ t: new Date(x.date).getTime(), c: x.close }));
+  } catch (e) {
+    throw new HttpsError("unavailable", `Could not load intraday history for ${symbol}.`);
+  }
+  if (!bars.length) throw new HttpsError("unavailable", `No intraday history for ${symbol}.`);
+
+  const sessions = new Map();
+  for (const b of bars) {
+    const { date, mins } = etParts(b.t);
+    if (mins < OPEN_MIN || mins > CLOSE_MIN) continue;
+    if (!sessions.has(date)) sessions.set(date, []);
+    sessions.get(date).push({ t: b.t, c: b.c, mins });
+  }
+  const dates = [...sessions.keys()].sort();
+  const target = OPEN_MIN + minute;
+  const trend = [];
+  for (let i = 0; i < dates.length; i++) {
+    const dayBars = sessions.get(dates[i]);
+    const cap = dayBars.reduce((best, x) => (Math.abs(x.mins - target) < Math.abs(best.mins - target) ? x : best), dayBars[0]);
+    const eod = dayBars[dayBars.length - 1].c;
+    const priorClose = i > 0 ? sessions.get(dates[i - 1])[sessions.get(dates[i - 1]).length - 1].c : null;
+    const signal = priorClose == null ? null : (cap.c < priorClose ? "B" : cap.c > priorClose ? "S" : null);
+    trend.push({ date: dates[i], captured: cap.c, capturedMin: cap.mins - OPEN_MIN, eod, priorClose, signal });
+  }
+  return { symbol, minute, days, trend };
 });
