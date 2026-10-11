@@ -58,6 +58,16 @@ const fmtWhen = (ts) => {
 const money = (n) => (Number.isFinite(n) && n !== null ? `$${Number(n).toFixed(2)}` : "—");
 const pct = (n) => (Number.isFinite(n) && n ? `${(Number(n) * 100).toFixed(1)}%` : "—");
 
+// US Treasury futures (price) + CBOE yield indexes — one-click tracking set.
+const TREASURY_SET = [
+  { symbol: "ZB=F", type: "future", sector: "US Treasury 30y" },
+  { symbol: "ZN=F", type: "future", sector: "US Treasury 10y" },
+  { symbol: "ZF=F", type: "future", sector: "US Treasury 5y" },
+  { symbol: "^TYX", type: "index", sector: "30y yield" },
+  { symbol: "^TNX", type: "index", sector: "10y yield" },
+  { symbol: "^FVX", type: "index", sector: "5y yield" },
+];
+
 export default function HistoricalDataTab() {
   const { T } = useTheme();
   const { role } = useAuth();
@@ -99,7 +109,7 @@ export default function HistoricalDataTab() {
   // adding it to daily tracking — for quickly testing a stock you're eyeing.
   const getData = async () => {
     const sym = input.trim().toUpperCase();
-    if (!/^[A-Z.]{1,6}$/.test(sym)) { setMsg({ ok: false, text: "Enter a valid ticker to test (e.g. AAPL)." }); return; }
+    if (!/^[A-Z0-9.^=]{1,12}$/.test(sym)) { setMsg({ ok: false, text: "Enter a valid ticker to test (e.g. AAPL, ZB=F, ^TYX)." }); return; }
     setTesting(true); setMsg({ ok: true, text: `Pulling 2 years of history for ${sym}…` });
     try {
       const r = await backfillHistory({ symbol: sym, years: 2, track: false });
@@ -144,6 +154,13 @@ export default function HistoricalDataTab() {
     } catch (e) {
       setDataModal({ sym, loading: false, samples: [], error: e?.message || "Could not load data." });
     }
+  };
+  const trackTreasuries = async () => {
+    setSeeding(true); setMsg(null);
+    const res = await addMany(TREASURY_SET);
+    if (res.ok) { setExpandList(true); setSearch(""); setMsg({ ok: true, text: `Tracking ${res.added} treasury instrument${res.added === 1 ? "" : "s"} (${res.skipped} already). Use Backfill to load their history now.` }); }
+    else setMsg({ ok: false, text: res.error });
+    setSeeding(false);
   };
   const seedHoldings = async () => {
     const held = [...new Set([...(positions || []), ...(lots || [])].map((p) => p?.sym).filter(Boolean))];
@@ -198,6 +215,7 @@ export default function HistoricalDataTab() {
         </span>
         <button onClick={seedUniverse} disabled={seeding} style={{ ...btn(true), opacity: seeding ? 0.6 : 1 }}>{seeding ? "Seeding…" : `+ Seed covered-call universe (${COVERED_CALL_UNIVERSE.length})`}</button>
         <button onClick={seedHoldings} disabled={seeding} style={{ ...btn(false), opacity: seeding ? 0.6 : 1 }}>+ Add my holdings</button>
+        <button onClick={trackTreasuries} disabled={seeding} style={{ ...btn(false), opacity: seeding ? 0.6 : 1 }}>+ Track US Treasuries (30y/10y/5y)</button>
       </div>
       {msg && <div style={{ ...card, color: msg.ok ? T.success : T.danger, fontSize: 13, marginTop: -8 }}>{msg.text}</div>}
 

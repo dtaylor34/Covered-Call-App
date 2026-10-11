@@ -126,7 +126,20 @@ export default function WorkingPositionChart({ symbol, strike, breakeven, curren
   const premTicks = showPrem ? [0, 1, 2, 3].map((i) => (premMax * i) / 3) : [];
   const hv = hoverI != null ? pts[hoverI] : null;
   const amber = T.warn || T.warning || "#E6A23C";
+  const entryColor = T.pro || "#6366f1"; // entry marker — distinct from accent (today) and amber (breakeven)
   const hasOpened = Number.isFinite(openedAtMs) && openedAtMs >= tMin && openedAtMs <= tMax;
+  // Stock price where the trade was entered: the actual price on the entry date
+  // from history (falls back to the recorded share price paid). Marked with a dot.
+  const entryAtPrice = (() => {
+    if (!Number.isFinite(openedAtMs)) return null;
+    const series = daily.length ? daily : source;
+    if (series.length) {
+      let best = series[0], bd = Infinity;
+      for (const p of series) { const d = Math.abs(p.t - openedAtMs); if (d < bd) { bd = d; best = p; } }
+      if (bd <= 5 * DAY) return best.c;
+    }
+    return Number(entryStock) > 0 ? Number(entryStock) : null;
+  })();
   const fmtHover = sel.intraday ? fmtDateTime : fmtDate;
   const pill = (active) => ({ padding: "3px 8px", borderRadius: 6, cursor: "pointer", fontFamily: font, fontSize: 11, fontWeight: 700, border: `1px solid ${active ? T.accent : T.border}`, background: active ? T.accent : "transparent", color: active ? "#0A0A0A" : T.textDim });
   const legendDot = (color) => ({ display: "inline-block", width: 9, height: 9, borderRadius: 2, background: color, marginRight: 5, verticalAlign: "middle" });
@@ -140,6 +153,7 @@ export default function WorkingPositionChart({ symbol, strike, breakeven, curren
         </div>
         <div style={{ fontSize: 11, fontFamily: font, display: "flex", gap: 12, flexWrap: "wrap" }}>
           <span style={{ color: T.textDim }}><span style={legendDot(T.accent)} />Price {money(currentPrice)}</span>
+          {hasOpened && Number.isFinite(entryAtPrice) && <span style={{ color: T.textDim }}><span style={legendDot(entryColor)} />Entry {money(entryAtPrice)}</span>}
           <span style={{ color: T.textDim }}><span style={legendDot(T.danger)} />Strike {money(strike)}</span>
           <span style={{ color: T.textDim }}><span style={legendDot(amber)} />Breakeven {money(breakeven)}</span>
           {gtcLevel != null && <span style={{ color: T.textDim }}><span style={legendDot(T.success)} />Buy-back ≤ {money(gtcLevel)}</span>}
@@ -239,6 +253,14 @@ export default function WorkingPositionChart({ symbol, strike, breakeven, curren
               </>
             )}
 
+            {/* entry dot — where the trade started, on the price line at entry */}
+            {hasOpened && Number.isFinite(entryAtPrice) && (
+              <>
+                <circle cx={xT(openedAtMs)} cy={yP(entryAtPrice)} r="4.5" fill={entryColor} stroke={T.surface} strokeWidth="2" />
+                <text x={xT(openedAtMs)} y={yP(entryAtPrice) - 9} textAnchor="middle" fontSize="9" fontFamily={font} fill={entryColor} fontWeight="700">entry {money(entryAtPrice)}</text>
+              </>
+            )}
+            {/* today dot */}
             {Number(currentPrice) > 0 && <circle cx={xT(nowMs)} cy={yP(currentPrice)} r="4" fill={T.accent} stroke={T.surface} strokeWidth="2" />}
 
             {hv && (

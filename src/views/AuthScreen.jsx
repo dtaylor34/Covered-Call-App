@@ -91,7 +91,7 @@ export default function AuthScreen() {
 
   const inputStyle = {
     width: "100%", padding: "12px 16px", borderRadius: T.r,
-    background: "rgba(255,255,255,0.03)",
+    background: T.inputBg,
     border: `1px solid ${T.border}`,
     color: T.text, fontSize: 15, fontFamily: T.fontBody,
     outline: "none", transition: "all 0.2s",
@@ -100,7 +100,7 @@ export default function AuthScreen() {
 
   const oauthBtnStyle = (isLoading) => ({
     width: "100%", padding: "12px 16px", borderRadius: T.r,
-    background: "rgba(255,255,255,0.04)",
+    background: T.card,
     border: `1px solid ${T.border}`,
     color: T.text, fontSize: 14, fontWeight: 600, fontFamily: T.fontBody,
     cursor: isLoading ? "wait" : "pointer",
@@ -211,13 +211,13 @@ export default function AuthScreen() {
         position: "relative", zIndex: 1,
         borderLeft: isMobile ? "none" : `1px solid ${T.border}`,
         borderTop: isMobile ? `1px solid ${T.border}` : "none",
-        background: "rgba(10,14,22,0.85)", backdropFilter: "blur(20px)",
+        background: T.overlay, backdropFilter: "blur(20px)",
       }}>
         <div style={{ width: "100%", maxWidth: isMobile ? 400 : "100%" }}>
           {/* Tab switcher */}
           <div style={{
             display: "flex", marginBottom: 24,
-            background: "rgba(255,255,255,0.03)", borderRadius: 10, padding: 4,
+            background: T.inputBg, borderRadius: 10, padding: 4,
           }}>
             {["login", "signup"].map(m => (
               <button key={m} type="button" onClick={() => { setMode(m); setError(null); }}

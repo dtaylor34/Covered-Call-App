@@ -82,7 +82,7 @@ export default function MinuteCompareChart({ symbol }) {
         </div>
       </div>
 
-      {mode === "trend" && <DataTrendChart symbol={symbol} minute={N} />}
+      {mode === "trend" && <DataTrendChart symbol={symbol} minute={N} onMinuteChange={(v) => setMinuteInput(String(v))} />}
 
       {/* Intraday view */}
       {mode === "intraday" && (<>

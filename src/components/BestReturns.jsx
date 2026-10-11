@@ -32,7 +32,7 @@ const STRATEGIES = [
   },
 ];
 
-export default function BestReturns({ symbol, contracts, onApply }) {
+export default function BestReturns({ symbol, contracts, onApply, onData }) {
   const { T } = useTheme();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -45,10 +45,12 @@ export default function BestReturns({ symbol, contracts, onApply }) {
     try {
       const res = await getBestReturns(symbol, contracts || 1);
       setData(res);
+      onData?.(res); // surface earnings / ex-div / dividendRate / ivPct to Key Events
     } catch (e) {
       setError(e?.message || "Could not score returns. Try again shortly.");
+      onData?.(null);
     } finally { setLoading(false); }
-  }, [symbol, contracts]);
+  }, [symbol, contracts, onData]);
 
   // Fetch automatically whenever the symbol changes.
   useEffect(() => { load(); }, [symbol]); // eslint-disable-line react-hooks/exhaustive-deps

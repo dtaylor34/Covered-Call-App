@@ -1,3 +1,316 @@
+## [2.1.4] — 2026-10-10
+
+### Added
+- **Covered Calls → Projections tab (new)** — back-test a covered call against price history, mirroring the Options Projections:
+  - **Pick a working covered call** (pre-fills symbol, cost basis, strike, premium, IV, DTE, entry) or go **Custom**.
+  - Every day the short call is **marked with Black-Scholes** (time decay + price move), showing the **covered-call P&L over time** (violet, right axis) = stock move + premium kept, with the **strike** (assignment) and **breakeven** lines on the price chart.
+  - Stat cards: **premium collected, P&L now, best buy-back (most premium captured), best total exit, and the if-held-to-expiry outcome** (called away vs expired).
+  - **Ask Claude** — a covered-call-specific prompt ("buy back / hold / roll"): **Copy for Pro chat** (free) or **Run via API**. The `optionsExitAdvice` function now accepts a custom prompt so both products share it.
+  - Appears in the Covered Calls nav right after Working.
+
+---
+
+## [2.1.3] — 2026-10-10
+
+### Changed / Fixed
+- **Breakeven warning no longer false-flags low-cost-basis covered calls** — the ⚠ now compares the call premium to the stock's **market price** (a real per-contract ×100 import error makes the premium ≈ the stock price), instead of to the cost basis. So a legitimately low-cost-basis position (e.g. long-held META with a ~$35 basis) stops showing a false warning.
+- **Editable "Share price paid"** in the working-position detail — correct a share cost basis directly if it's ever off (previously only the call price was editable there).
+
+---
+
+## [2.1.2] — 2026-10-10
+
+### Added
+- **Capture historical data for treasuries & futures** — the tracked-symbol registry (History tab) now accepts **futures (ZB=F), yields/indexes (^TYX), and ETFs** — previously the input rejected anything that wasn't a plain equity ticker, so treasuries couldn't be logged. New **"+ Track US Treasuries (30y/10y/5y)"** one-click button adds ZB=F / ZN=F / ZF=F plus the ^TYX / ^TNX / ^FVX yield indexes; use **Backfill** to load ~2 years immediately, and daily snapshots accrue going forward to test strategies against real trends.
+- **Daily collector hardened for futures/indexes** — the scheduled snapshot now falls back to a daily chart close when a symbol can't be quoted the equity way (so ZB=F / ^TYX get captured forward, price even when no options chain exists).
+
+### Note
+- The optional "Run via API" AI function (`optionsExitAdvice`) is temporarily unexported so deploys don't require the Anthropic key — it'll be re-enabled the moment the `ANTHROPIC_API_KEY` secret is set. The Copy-for-Pro-chat path and heuristic are unaffected.
+
+---
+
+## [2.1.1] — 2026-10-10
+
+### Added
+- **Options Manager → Backtest tab (new)** — run a **saved strategy** against price history. Pick the strategy + an entry date (click the chart or type it), and every leg is **marked day-by-day with Black-Scholes** (price move + time decay) through the strategy's DTE. The chart shows the underlying (left axis) and the **strategy P&L** (right axis, violet) over the holding window, marks the **best historical exit**, and the cards summarize net-at-entry, best-exit date + P&L, days-to-best, and P&L at end — so you can see when getting in/out would have paid. Appears in the Options nav after Strategies.
+
+---
+
+## [2.1.0] — 2026-10-10
+
+### Added
+- **Options Manager → Strategies tab (new) — custom multi-leg builder** — a fully editable, free-form strategy designer:
+  - **Add / edit / remove any legs** — each leg is buy/sell · call/put · strike · premium · qty, all editable.
+  - **Optional presets** to start from (long/short strangle, straddle, iron condor, call/put debit spread) that drop in legs you can then change freely.
+  - **Premium estimates** — one click fills premiums from Black-Scholes using an IV + DTE you set, or type your own; **"↻"** fetches the current underlying price.
+  - **Live payoff diagram** — combined P/L at expiry vs price (green profit / red loss), with **breakeven(s)**, **max profit/loss**, the **current price** and its P/L, and net credit/debit.
+  - **Save named strategies** and switch between them from a dropdown (each its own setup) — e.g. build your "iron claw" above and below the market and see exactly what it'd look like. Stored per-user in Firestore (new `optionStrategies` collection + rules).
+
+---
+
+## [2.0.99] — 2026-10-10
+
+### Added
+- **Breakeven sanity warning (Covered Calls)** — any position whose call premium is over 25% of the share price (the sign of a per-contract ×100 import error, like the META $20.43 breakeven) now shows a **⚠** on the breakeven in the row and a warning in the detail — with a one-click **"Fix: ÷100"** button and a new editable **"Call sold at (entry)"** field so you can correct it instantly. Non-destructive; nothing auto-changes.
+- **Combined straddle P&L line (Projections)** — on top of the two breakeven lines, the chart now overlays the **net call+put P&L** over the holding window on a right axis (violet), marks the **best combined exit**, and adds a **Combined (call + put)** card showing P&L now, best exit date, and best P&L.
+
+---
+
+## [2.0.98] — 2026-10-10
+
+### Added
+- **Year filter on Monthly P&L** — both the Covered Calls and Options monthly P&L pages now have **All / 2026 / 2025 …** year pills (shown once there's more than one year of history). Filtering recomputes the bar chart, summary cards, table, and the running cumulative for just that year.
+
+---
+
+## [2.0.97] — 2026-10-10
+
+### Added
+- **Options Manager → Trades tab (new)** — a flat chronological transaction log: every open and close as its own line item with per-row cash flow (premium paid negative, received positive), status, and running totals (transactions, realized P&L, net cash flow). **Export CSV** included. All five Options tabs are now built (Selection · Working · Risk · Projections · Trades · History).
+- **Long/Short toggle per leg in Projections** — the call and the put each have a **long / short** switch. P&L, breakeven profit-direction, zone shading, leg cards, and the Claude prompt all flip accordingly — so you can model buying *or* selling either side (long straddle, short straddle, etc.).
+- **Reconnect button on the Covered Calls Working tab** — when Schwab has lapsed, a "↻ Reconnect (saved key)" banner appears up top and re-authorizes with your stored key (no re-typing), right where you'd notice it instead of hunting in the APIs tab.
+
+---
+
+## [2.0.96] — 2026-10-10
+
+### Added
+- **Projections now has both AI paths, side by side** — so you can compare answer quality:
+  - **📋 Copy for Pro chat** — copies the prompt to paste into claude.ai (your Pro account, free).
+  - **⚡ Run via API** — gets Claude's exit advice inline on the page (Anthropic API, small per-click cost). Restored the `optionsExitAdvice` Cloud Function; it needs the one-time `ANTHROPIC_API_KEY` secret and shows a clear message until that's set.
+  - The free rules-based heuristic stays above both.
+
+---
+
+## [2.0.95] — 2026-10-10
+
+### Changed
+- **Projections AI is now Pro-friendly (no API key, no cost)** — replaced the paid-API "Ask AI" button with **"📋 Copy prompt for Claude"**. It copies the full scenario (strike, premiums, both breakevens, and the price path since entry) as a ready-to-paste question; paste it into **claude.ai** to get exit advice using your **Claude Pro** account — no Anthropic API, no key, no per-click charge. A **View** toggle shows the prompt text (with a manual-copy fallback if the clipboard is blocked). The free rules-based heuristic stays on-page for an instant read. Removed the `optionsExitAdvice` function and `ANTHROPIC_API_KEY` requirement.
+
+---
+
+## [2.0.94] — 2026-10-10
+
+### Added
+- **AI exit advisor (Claude) in Projections** — an **"Ask AI: when to exit"** button sends the post-entry price path plus your call/put strike, premiums, and breakevens to Claude, which returns concise, per-leg exit guidance (CALL / PUT / OVERALL) reading momentum and the move into/out of each breakeven. Backed by a new `optionsExitAdvice` Cloud Function (Anthropic). Requires a one-time `ANTHROPIC_API_KEY` secret; until it's set, the button shows a clear "AI isn't configured" message and the rules-based heuristic still works.
+
+---
+
+## [2.0.93] — 2026-10-10
+
+### Added
+- **Options Manager → Projections tab (new)** — back-test a CALL and a PUT at a chosen strike against US-Treasury futures history (30y ZB, 10y ZN, 5y ZF):
+  - **Two breakeven lines cross the price chart** — the **call breakeven** (green; price must rise above to profit) and the **put breakeven** (blue; price must fall below to profit), with the strike marked and the profit zones shaded. Exactly "where price has to get for the call vs. the put to make money."
+  - **Set your entry** (click the chart or a date), then each leg's **P&L is tracked day-by-day** — the chart marks the **best historical exit** for the call and for the put, and leg cards show breakeven, P&L now, and best exit + best P&L.
+  - **Exit suggestion (heuristic)** reads the historical path for when to get out; **AI-written exit timing (Claude) is the next step.**
+  - The Projections tab appears in the Options Manager nav only (after Risk).
+
+---
+
+## [2.0.92] — 2026-10-10
+
+### Added
+- **Options Manager → Risk tab (new) — payoff diagram** with a **Position / Portfolio switch**:
+  - **Position** — pick one option; see its profit/loss-at-expiry curve.
+  - **Portfolio** — pick a symbol; all your legs on that underlying stack into one combined payoff.
+  - Green/red payoff line (profit vs loss), the **zero line**, **breakeven(s)**, the **current underlying** with its P/L marked, and stat cards for P/L-at-current, max profit/loss across the plotted range, and breakeven(s). Direction-aware and multiplier-aware (equity ×100, futures ×1000).
+
+---
+
+## [2.0.91] — 2026-10-10
+
+### Added
+- **Options Manager → History tab (new)** — closed options (sold/bought to close, expired, or exercised/assigned) in their own dedicated tab, mirroring the Covered Calls history:
+  - **Rows** show the contract, side, strike, close date, entry→exit prices, and **direction-aware realized P&L** (+ outcome and days held). Click to expand the **lifecycle chart** (underlying from entry → exit with strike/breakeven/exit marker) and a realized summary.
+  - **Inline edits** — fix entry/exit dates, outcome, entry price, and exit price, or delete a record.
+  - **📅 Monthly P&L** — a full-page track record of realized options P&L by month (green/red bar chart, best/worst month, win rate, and a table with running cumulative), with a Back arrow.
+  - Entry prices unknown on an imported close are flagged ("add entry") and excluded from totals until filled in.
+
+---
+
+## [2.0.90] — 2026-10-10
+
+### Added
+- **Options Manager → Working tab (new)** — a live position tracker for your options plays, mirroring the Covered Calls Working tab but for general single-leg options:
+  - **Long & short calls and puts**, on stocks/ETFs **and futures/treasury options** (ZB, /ZB) — the instruments we keep out of the covered-call history live here.
+  - **Direction-aware P&L** — long options gain as they rise, short options gain as they decay; totals strip shows debit paid, credit received, current value, and open P&L.
+  - **Per-position chart** — underlying price with strike, breakeven, entry dot + date, expiration, current price, ITM shading, ranges (1d→6m + entry→expiration), and hover readout. Works for calls and puts.
+  - **Import from Schwab** — one click pulls all your open option positions (long/short, calls/puts, equity + futures options) with live marks; plus a manual **Add** form.
+  - **Exit actions** — sell/buy to close (at a price), expired worthless, or exercised/assigned — each moves the position into the options history (the History tab for these lands next).
+
+---
+
+## [2.0.89] — 2026-10-10
+
+### Changed
+- **Trade History is covered-calls only** — history now captures *only* covered-call bundles (shares + the call sold against them) on **stocks/ETFs**. Excluded, by design:
+  - **Futures & treasury/futures options** (e.g. /ZB, ZB=F, ^TYX) — the Schwab import skips any leg whose asset type isn't a plain equity option, and any non-equity underlying.
+  - **Plain stock buys & sells** — these never were options legs, so they don't enter (confirmed/kept out).
+  The filter is applied on import, on expiry auto-settlement (only equity covered calls settle into history), and defensively on display (any stray non-equity record is hidden from Trade History and Monthly P&L).
+
+---
+
+## [2.0.88] — 2026-10-10
+
+### Added
+- **Auto-settle expirations & assignments on sync** — "Sync from Schwab" now tracks all three ways a covered call closes, not just buy-backs:
+  - **Bought back** — from Schwab buy-to-close orders (incl. early GTC fills). *(already did this)*
+  - **Called away** — when the call is **in-the-money at expiry**, the position is closed as assigned: the shares are sold at the strike (lots delivered, stock gain recorded).
+  - **Expired worthless** — when the call is **out-of-the-money at expiry**, the position closes keeping 100% of the premium.
+  The sync settles any working position whose expiry has passed (and wasn't bought back) by comparing the stock's close on the expiry date to the strike — how options actually settle — and reports e.g. "bought back 2, 1 called away (shares sold), 1 expired worthless." All of it lands in Trade History (and the Monthly P&L), and every outcome stays editable there if a settlement needs correcting.
+
+---
+
+## [2.0.87] — 2026-10-10
+
+### Added
+- **Monthly P&L track record** — a new **"📅 Monthly P&L"** button in Trade History opens a full page showing your realized premium profit/loss **by month**: a green/red bar chart (profit above the line, loss below), summary cards (total realized, total premiums, best/worst month, win rate), and a table with each month's trades, premiums, realized P&L, win rate, and a **running cumulative** total. A **← Back** arrow (or Esc) returns to Trade History. Buy-backs still missing their opening premium are flagged and excluded until you fill it in.
+
+---
+
+## [2.0.86] — 2026-10-10
+
+### Added
+- **One-click Schwab reconnect (no re-typing your key)** — Schwab expires the connection every 7 days, which previously meant re-entering your App Key + Secret each time. Now the APIs tab has a **"↻ Reconnect with saved key"** button that reuses the credentials already stored (encrypted) server-side — you just log into Schwab again. New `schwabReauthorize` function builds the OAuth URL from your stored key; the existing callback/exchange flow finishes it. (The ~weekly re-login is still required — that's Schwab's refresh-token limit — but you no longer re-enter the key.)
+
+---
+
+## [2.0.85] — 2026-10-10
+
+### Changed
+- **Import button is always visible in Trade History** — previously it was hidden and replaced by a small hint when Schwab wasn't connected, which read as "no button." Now the **"⬇ Import closed trades from Schwab"** button always shows; if Schwab isn't connected it displays a clear **"Schwab not connected — reconnect in the APIs tab first"** note next to it (Schwab refresh tokens expire every ~7 days, so periodic reconnection is required).
+
+---
+
+## [2.0.84] — 2026-10-10
+
+### Fixed
+- **Buy-backs weren't importing** — a buy-back for a call that was still an open position in the app could fall through a gap (skipped by the standalone importer, dropped by a fragile date-guard in the position-closer), so nothing happened. The sync now handles **every buy-to-close in one pass**: if it matches an open position it closes it; otherwise it's imported into Trade History. The date-guard is gone.
+- **More robust option parsing** — the order parsers now fall back to the human description (e.g. "META … 10/23/2026 $820 Call") when Schwab's OCC option symbol doesn't parse, so legs aren't silently dropped.
+- **Diagnostic sync message** — when nothing imports, the sync now reports what it saw ("Checked 2 accounts · 143 orders · 0 buy-backs found …") so it's clear whether Schwab returned the trades at all vs. they were already recorded. Details also logged to the browser console under `[Schwab sync]`.
+
+---
+
+## [2.0.83] — 2026-10-10
+
+### Changed
+- **Trade History rows now show both the covered call and the buy-back** — each closed trade lists its legs like the working view: the **SELL to open** (the covered call, at its fill), the **BUY to close** (the buy-back, at its fill + date), and the backing **shares**. So you see exactly what happened to open and to close the position.
+- **Schwab import now brings in every buy-back** — the importer previously only captured calls both opened *and* bought back inside Schwab's ~60-day window. It now imports **every buy-to-close** (buy-back), even when the original sale is older than 60 days. For those, the opening premium is marked unknown ("add premium") and you can enter it inline to compute P&L; realized totals and win rate exclude unknown-premium trades until you fill them in.
+
+---
+
+## [2.0.82] — 2026-10-10
+
+### Changed
+- **Sync is now discoverable in Trade History** — the Trade History section always shows when Schwab is connected (even with zero closed trades) and carries its own **"⬇ Import closed trades from Schwab"** button plus an empty state. If Schwab isn't connected it says so ("Connect Schwab in the APIs tab…"), so it's clear why nothing imports. The top-of-tab sync button remains too.
+
+---
+
+## [2.0.81] — 2026-10-10
+
+### Added
+- **Trade History on the Working tab** — a new section at the bottom lists every **closed** covered call in the same Schwab-style order rows as the working list. Each row shows the outcome (bought back / expired / called) and realized P&L; click to expand the full **lifecycle chart** (entry dot → strike/breakeven → exit marker) plus a realized summary (premium, buy-back, option P&L, stock P&L, net, days held). A realized-totals strip (closed trades, total premiums, realized P&L, win rate) sits on top.
+- **Edit history inline** — in each expanded Trade History row you can correct the entry date, exit date, outcome, buy-back price, share price paid, and stock-at-exit, or delete the record — so the chart and P&L stay accurate.
+- **Import closed trades from Schwab** — "⬇ Sync from Schwab" now also reconstructs **fully-closed covered calls** (a sell-to-open paired with a later buy-to-close in Schwab's ~60-day order history) that were never app positions, and drops them into Trade History. De-duplicated so re-syncing won't create copies. (Expirations/assignments aren't in Schwab's orders API, so those still need to be marked by hand; and the sync button now shows whenever Schwab is connected, even with no open positions.)
+
+---
+
+## [2.0.80] — 2026-10-09
+
+### Changed
+- **Stacked View is now a show/hide toggle on the View All page** — the flat per-day charts are no longer replaced. Open **⊞ View All** (the flat charts) and use the **▦ Stacked overlay** toggle to show or hide the layered overlay chart above them; toggle it off to go back to just the flat charts. Esc closes the overlay first, then the page.
+- **Stacked overlay uses green/red only** — a hovered day now highlights **green for BUY** and **red for SELL** (matching the Data Trend dots), instead of blue/red.
+
+---
+
+## [2.0.79] — 2026-10-09
+
+### Added
+- **Editable minute on the Data Trend view** — the captured minute is now an input (header + the View All / Stacked top bars), so you can change it right on the page instead of only from the Intraday tool. Press Enter or tab out to apply.
+- **Editable range — look much farther back** — the range is now an editable "days back" field (plus presets out to 1Y / 2Y) in addition to the 1W–2M presets. Up to ~60 days uses 5-minute bars; beyond that it automatically switches to hourly bars so you can go back as far as ~2 years (the active bar size is shown next to the field; the minute is approximate on hourly). New bulk `getIntradayRange` function powers it.
+- **Stacked View** — a new "▦ Stacked View" button layers every day in the range on one chart, each day normalized to its own prior close (0% baseline) so the shapes overlay. Earlier days are faint grey, the most recent day is drawn in color on top. Hover any line to highlight it and color it by that day's signal — **blue for a BUY day** (price at your minute was below the prior close) or **red for a SELL day** (above) — with a readout of the date and the minute-N move. Back arrow / Esc returns to the Data Trend view.
+
+---
+
+## [2.0.78] — 2026-10-09
+
+### Added
+- **Hover tooltips across the Working Covered Calls table** — every result now explains itself and the truncated ("…") cells can be read in full on hover:
+  - **Totals strip** — Money in trade, Premium, Kept so far, If closed now, and Best case each have a plain-English tooltip (and a small ⓘ) describing exactly how they're calculated.
+  - **Per-row results** — the stoplight status (e.g. "Good · 11%") explains the health + odds of being called and when your GTC buy-back is likely to fill; the **"if closed …"** cell spells out your net-if-closed and what the % means; the **"buy-back · keeps …"** cell explains the GTC and how much premium you keep. These were the cells getting cut off — the tooltip shows the full number + context.
+  - **Column headers** — each Schwab-style column (Strategy, Pos Effect, Strike Type, TIF, Exch, …) has a tooltip explaining the term.
+  - **Account tag** — the truncated "··NNNN" chip shows the full Schwab account name on hover.
+  - **Recently closed** — each closed-call chip explains how and when it closed.
+
+---
+
+## [2.0.77] — 2026-10-09
+
+### Added
+- **Entry dot on the position charts** — the covered-call chart now marks **where you entered the market** with an indigo dot on the price line at the entry date (labeled "entry $X" + shown in the legend), mirroring the "today" dot at the current price. It uses the actual stock price on your entry date from history, falling back to the recorded share price paid.
+- **Entry captured in history** — the same entry dot now appears on the **closed-trade lifecycle charts** (Trades → Closed), so for every past trade you can see where you got in relative to the strike, breakeven, and the exit marker. Entry date and share price paid were already stored on each position/closed record; this surfaces them visually.
+
+---
+
+## [2.0.76] — 2026-10-08
+
+### Fixed
+- **Data Trend now captures the exact selected minute (root cause)** — `getMinuteTrend` was snapping each day's capture to the nearest 5-minute bar, so selecting minute 8 actually captured minute 10 (9:40) at the data level — which then drove the dot, the B/S signal, and every downstream label. It now **interpolates the price at the exact requested minute** between the two surrounding bars and reports `capturedMin` as the minute you asked for. Combined with the v2.0.75 marker fix, minute 8 is now minute 8 everywhere (dot, signal, snapshot, and the intraday charts). Note: across the full ~60-day window the finest feed is 5-minute bars, so the captured price is an interpolation of the 9:38 value; open an intraday day at **1m** resolution to see the true 9:38 print for days within the last ~7 days.
+
+---
+
+## [2.0.75] — 2026-10-08
+
+### Fixed
+- **Intraday marker now sits at the exact selected minute** — the Buy/Sell circle on the intraday day charts was snapping to the nearest 5-minute bar, so a selection of minute 8 (9:38) showed at minute 10 (9:40). The marker is now placed at the true selected minute by interpolating between the two surrounding bars (dead-on at 1m resolution, and positioned correctly between bars at coarser ones), with a small time label (e.g. "9:38 AM") above it.
+
+---
+
+## [2.0.74] — 2026-10-08
+
+### Added
+- **"⊞ View All" on the Data Trend chart** — opens a full-page flat grid of every day's intraday chart for the selected range (newest first), so you can scan all the sessions' intraday shapes at once instead of opening them one at a time. Each tile is a full intraday chart (hover readout + drag-to-zoom). A global **resolution toggle** (1m / 5m / 30m / 1h) in the top bar sets the bar size for all tiles at once. A **← Back** arrow (or Esc) returns you to the focused Data Trend view exactly as you left it.
+
+---
+
+## [2.0.73] — 2026-10-08
+
+### Added
+- **Resolution toggle on the intraday day chart** — switch the bar size between **1m / 5m / 30m / 1h** to go from a fine minute-by-minute view to a coarse "full day at a glance." `getIntradayDay` now takes an `interval`; the minute-N Buy/Sell marker snaps to the nearest bar so it still shows at coarse resolutions. (1-minute bars are only available ~7 days back — if a day's too old for 1m, the chart says so and you can drop back to 5m; the toggle stays visible so you can switch without reopening.)
+
+---
+
+## [2.0.72] — 2026-10-08
+
+### Added
+- **Full intraday chart for a selected Data Trend day** — click any B/S circle and a detailed intraday panel opens below the trend: the day's regular-hours price path (5-min bars), the prior-close reference (dashed), and the minute-N capture point with its Buy/Sell marker. Data is lazy-loaded per day via a new `getIntradayDay` function (kept off the main payload).
+- **Focus / zoom** — drag across the intraday chart to zoom into any window (both axes rescale to the selection); "⤢ Reset zoom" or double-click restores the full day.
+- **Hover price readout** — moving across the intraday chart shows a crosshair, a dot on the line, and a price + time tag at the cursor (plus the move vs prior close), so you can read the exact value at any point of the day.
+
+---
+
+## [2.0.71] — 2026-10-08
+
+### Added
+- **Per-day snapshot popup on the Data Trend chart** — hover (or tap to pin) any B/S circle to see that trading day's snapshot: a mini chart showing prior close → the minute-N dot (with its Buy/Sell marker) → the day's close, plus the numbers (prior close, minute-N price, day close) and how it resolved ("✓ favorable / ✗ unfavorable · closed +X (+Y%) vs the minute-N dot"). The hovered day gets a highlight ring. No extra data fetch — it uses the per-day capture already loaded.
+
+---
+
+## [2.0.70] — 2026-10-08
+
+### Fixed
+- **Light mode on the sign-in screen** — the right-hand auth panel (panel background, Google/Apple buttons, email/password fields, and the Sign In / Create Account tab switcher) was hardcoded to dark values, so in light mode it rendered as a dark slab against the light branding panel. All four now use theme tokens (`T.overlay`, `T.card`, `T.inputBg`) so the panel matches the selected theme in light, dark, and high-contrast modes.
+
+---
+
+## [2.0.69] — 2026-10-08
+
+### Added
+- **Earnings & dividend awareness in Best Returns** (best-returns-spec2.md §1) — the three strategy buttons now factor in real market events. "Best No-Sale" penalizes strikes whose cushion can't absorb an earnings report inside the expiry window (heavier the closer the strike), adds a bonus when an ex-dividend falls in the cycle, and a bonus when implied vol sits in a high percentile of the collected history. "Best Sale" adds a dividend-capture bonus. Earnings/ex-div dates come from a new `getFundamentals` function; IV percentile is computed from the daily IV history this app collects (null until ~20 samples, so it degrades cleanly).
+- **Key Events, fully wired** (best-returns-spec2.md §2) — the Key Events section now generates real, color-coded events for the selected strike/expiry: **Dividend Capture** (green/gray/yellow depending on whether the ex-date lands before expiry and how close the strike is), **Earnings** (red/yellow/green by OTM cushion), **IV Percentile**, **FOMC meeting**, **Expiration week** (gamma), and **Weekly vs Monthly** expiry. Each carries a detailed ⓘ InfoTip (the same component used elsewhere) and events are sorted red → yellow → green → gray. Collapsed by default showing the top event + "· N more events".
+
+---
+
 ## [2.0.68] — 2026-10-06
 
 ### Added

@@ -30,6 +30,12 @@ function call(name) {
 export const schwabInitiateOAuth  = (data) => call("schwabInitiateOAuth")(data);
 
 /**
+ * Reconnect using the already-stored App Key (no re-entry) — for the weekly
+ * refresh-token renewal. Input: { redirectUri }  Output: { authUrl }
+ */
+export const schwabReauthorize    = (data) => call("schwabReauthorize")(data);
+
+/**
  * Disconnects Schwab: server-side wipe of the encrypted credentials, tokens,
  * status, and linked accounts for the current user.
  * Input:  {}

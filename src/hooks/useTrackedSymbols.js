@@ -9,6 +9,9 @@ import {
 } from "firebase/firestore";
 import { useAuth } from "../contexts/AuthContext";
 
+// Classify a ticker so the registry knows what it is (= futures, ^ index/yield).
+const symType = (sym) => (sym.includes("=") ? "future" : sym.startsWith("^") ? "index" : "equity");
+
 export function useTrackedSymbols() {
   const { currentUser } = useAuth();
   const [symbols, setSymbols] = useState([]);
@@ -24,10 +27,11 @@ export function useTrackedSymbols() {
 
   const addSymbol = useCallback(async (raw) => {
     const sym = String(raw || "").trim().toUpperCase();
-    if (!/^[A-Z.]{1,6}$/.test(sym)) return { ok: false, error: "Enter a valid ticker (e.g. AAPL)." };
+    // Equities/ETFs (AAPL, BRK.B), futures (ZB=F), and index/yields (^TYX).
+    if (!/^[A-Z0-9.^=]{1,12}$/.test(sym)) return { ok: false, error: "Enter a valid ticker (e.g. AAPL, ZB=F, ^TYX)." };
     try {
       await setDoc(doc(getFirestore(), "trackedSymbols", sym), {
-        symbol: sym, type: "equity", startedAt: serverTimestamp(), addedBy: currentUser?.uid || null, points: 0,
+        symbol: sym, type: symType(sym), startedAt: serverTimestamp(), addedBy: currentUser?.uid || null, points: 0,
       }, { merge: true });
       return { ok: true, sym };
     } catch (e) {
@@ -50,9 +54,9 @@ export function useTrackedSymbols() {
     const seen = new Set();
     for (const item of (list || [])) {
       const sym = String(item?.symbol ?? item ?? "").trim().toUpperCase();
-      if (!/^[A-Z.]{1,6}$/.test(sym) || seen.has(sym)) continue;
+      if (!/^[A-Z0-9.^=]{1,12}$/.test(sym) || seen.has(sym)) continue;
       seen.add(sym);
-      clean.push({ sym, type: item?.type || "equity", sector: item?.sector || null });
+      clean.push({ sym, type: item?.type || symType(sym), sector: item?.sector || null });
     }
     const fresh = clean.filter((c) => !existing.has(c.sym));
     if (fresh.length === 0) return { ok: true, added: 0, skipped: clean.length };

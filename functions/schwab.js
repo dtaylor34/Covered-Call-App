@@ -174,6 +174,30 @@ exports.schwabInitiateOAuth = onCall(CRYPTO_OPTS, async (request) => {
 });
 
 /**
+ * schwabReauthorize
+ * Rebuilds the Schwab OAuth URL from the user's ALREADY-STORED app key — so a
+ * weekly reconnect (Schwab expires the refresh token every 7 days) doesn't
+ * require re-entering the App Key + Secret. The existing callback → exchange
+ * flow completes it using the stored credentials. Errors if nothing is stored
+ * yet (the first connection must go through schwabInitiateOAuth).
+ */
+exports.schwabReauthorize = onCall(CRYPTO_OPTS, async (request) => {
+  const uid = requireAuth(request);
+  const { redirectUri } = request.data;
+  if (!redirectUri) throw new HttpsError("invalid-argument", "Redirect URI is required.");
+
+  let secret;
+  try { secret = await getSecret(uid); } catch { secret = null; }
+  if (!secret?.appKey) {
+    throw new HttpsError("failed-precondition", "No stored Schwab credentials. Connect once with your App Key + Secret first.");
+  }
+
+  await writeStatus(uid, { status: "pending", updatedAt: FieldValue.serverTimestamp() });
+  const authUrl = `${SCHWAB_AUTH_URL}?client_id=${encodeURIComponent(secret.appKey)}&redirect_uri=${encodeURIComponent(redirectUri)}`;
+  return { authUrl };
+});
+
+/**
  * schwabExchangeToken
  * Exchanges the OAuth auth code for access + refresh tokens (encrypted at rest),
  * then fetches and stores the user's linked account numbers.

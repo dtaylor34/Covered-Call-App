@@ -44,6 +44,18 @@ export default function ClosedTradeChart({ symbol, strike, breakeven, entryStock
     return best.c;
   })();
 
+  // Entry stock price: the actual price on the entry date (falls back to the
+  // recorded share price paid) — marked with a dot where the trade started.
+  const entryAtPrice = (() => {
+    if (!Number.isFinite(entryMs)) return Number(entryStock) || null;
+    if (n) {
+      let best = view[0], bd = Infinity;
+      for (const p of view) { const d = Math.abs(p.t - entry); if (d < bd) { bd = d; best = p; } }
+      if (bd <= 5 * DAY) return best.c;
+    }
+    return Number(entryStock) > 0 ? Number(entryStock) : null;
+  })();
+
   const overlays = [strike, breakeven, entryStock, exitAtPrice].map(Number).filter((v) => Number.isFinite(v) && v > 0);
   const vals = view.map((p) => p.c).concat(overlays);
   let lo = Math.min(...vals), hi = Math.max(...vals);
@@ -68,6 +80,7 @@ export default function ClosedTradeChart({ symbol, strike, breakeven, entryStock
   const yTicks = [0, 1, 2, 3, 4].map((i) => lo + ((hi - lo) * i) / 4);
   const hv = hoverI != null ? view[hoverI] : null;
   const exitColor = exitReason === "called" ? amber : exitReason === "expired" ? T.textDim : T.success;
+  const entryColor = T.pro || "#6366f1"; // entry marker — distinct from exit + overlays
 
   return (
     <div style={{ position: "relative", width: "100%" }}>
@@ -98,10 +111,14 @@ export default function ClosedTradeChart({ symbol, strike, breakeven, entryStock
           <path d={area} fill="url(#ctArea)" />
           <path d={line} fill="none" stroke={T.accent} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
 
-          {/* entry vertical */}
+          {/* entry vertical + entry dot (where the trade started) */}
           {Number.isFinite(entryMs) && entryMs >= tMin && entryMs <= tMax && (<>
             <line x1={xT(entryMs)} y1={PT} x2={xT(entryMs)} y2={PB} stroke={T.textDim} strokeWidth="1" strokeDasharray="4 3" opacity="0.55" />
             <text x={xT(entryMs)} y={VBH - 6} textAnchor="middle" fontSize="9" fontFamily={font} fill={T.textDim}>entry {fmtDate(entryMs)}</text>
+            {Number.isFinite(entryAtPrice) && (<>
+              <circle cx={xT(entryMs)} cy={yP(entryAtPrice)} r="4.5" fill={entryColor} stroke={T.surface} strokeWidth="2" />
+              <text x={xT(entryMs)} y={yP(entryAtPrice) - 9} textAnchor="middle" fontSize="9" fontFamily={font} fill={entryColor} fontWeight="700">entry {money(entryAtPrice)}</text>
+            </>)}
           </>)}
 
           {/* exit marker: circle inside a white square */}

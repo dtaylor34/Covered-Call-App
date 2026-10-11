@@ -116,8 +116,21 @@ async function collectForSymbol(symbol, schwabToken) {
   let data = schwabToken ? await schwabResolve(schwabToken, symbol).catch(() => null) : null;
 
   if (!data) {
-    const quote = await getQuote(symbol);
-    const price = quote.price || 0;
+    // Equity quote first; futures/index (ZB=F, ^TYX) often can't be quoted that
+    // way, so fall back to a daily chart close so forward capture still works.
+    let quote = null;
+    try { quote = await getQuote(symbol); } catch (e) { /* fall back to chart */ }
+    let price = quote?.price || 0;
+    let o = quote?.open ?? null, h = quote?.high ?? null, l = quote?.low ?? null;
+    if (!(price > 0)) {
+      try {
+        const r = await yfChart.chart(symbol, { period1: new Date(Date.now() - 10 * 86400000), interval: "1d" }, { validateResult: false });
+        const qs = (r.quotes || []).filter((q) => q && q.close != null && Number.isFinite(q.close));
+        const lq = qs[qs.length - 1];
+        if (lq) { price = lq.close; o = lq.open ?? null; h = lq.high ?? null; l = lq.low ?? null; }
+      } catch (e) { /* give up — recorded as failed below */ }
+    }
+    if (!(price > 0)) throw new Error("no price (quote + chart both failed)");
     let iv = 0, callStrike = null, callBid = null, callAsk = null, expiry = null;
     try {
       expiry = nearest30(await getExpirations(symbol));
@@ -133,7 +146,7 @@ async function collectForSymbol(symbol, schwabToken) {
     } catch (e) {
       console.error(`history: chain fetch failed for ${symbol}:`, e.message); // price still recorded
     }
-    data = { price, o: quote.open ?? null, h: quote.high ?? null, l: quote.low ?? null, c: price, iv, callStrike, callBid, callAsk, expiry, src: "yahoo" };
+    data = { price, o, h, l, c: price, iv, callStrike, callBid, callAsk, expiry, src: "yahoo" };
   }
 
   const sample = { d: todayISO(), price: data.price, o: data.o ?? null, h: data.h ?? null, l: data.l ?? null, c: data.c ?? data.price, iv: data.iv, callStrike: data.callStrike, callBid: data.callBid, callAsk: data.callAsk, expiry: data.expiry, src: data.src };

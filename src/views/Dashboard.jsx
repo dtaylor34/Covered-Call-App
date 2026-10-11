@@ -36,6 +36,7 @@ import SelectionTab from "../components/SelectionTab";
 import APITab from "../components/APITab";
 import HistoricalDataTab from "../components/HistoricalDataTab";
 import OptionsManager from "../components/OptionsManager";
+import CoveredCallsProjectionsTab from "../components/CoveredCallsProjectionsTab";
 import SavedQuotesCard from "../components/SavedQuotesCard";
 
 // ── Tab definitions ──
@@ -247,7 +248,7 @@ export default function Dashboard() {
             {/* Site switch — toggle between the two products */}
             <div role="group" aria-label="Switch product" style={{ display: "flex", background: T.bg, border: `1px solid ${T.border}`, borderRadius: 8, padding: 3, gap: 2, marginLeft: isMobile ? 0 : 6 }}>
               {[{ m: "coveredCalls", label: "Covered Calls" }, { m: "options", label: "Options" }].map(({ m, label }) => (
-                <button key={m} onClick={() => setAppMode(m)} aria-pressed={appMode === m} style={{
+                <button key={m} onClick={() => { setAppMode(m); if (m !== "options" && ["strategies", "backtest"].includes(activeTab)) setActiveTab("dashboard"); }} aria-pressed={appMode === m} style={{
                   padding: "5px 11px", borderRadius: 6, border: "none", cursor: "pointer",
                   background: appMode === m ? T.accent : "transparent",
                   color: appMode === m ? "#0A0A0A" : T.textDim,
@@ -303,7 +304,7 @@ export default function Dashboard() {
           scrollbarWidth: "none",
           msOverflowStyle: "none",
         }}>
-          {TABS.map((tab) => {
+          {(isOptions ? TABS.flatMap((t) => (t.id === "risk" ? [t, { id: "projections", label: "Projections", icon: "📈", feature: "projections" }, { id: "strategies", label: "Strategies", icon: "🧩", feature: "strategies" }, { id: "backtest", label: "Backtest", icon: "📉", feature: "backtest" }] : [t])) : TABS.flatMap((t) => (t.id === "working" ? [t, { id: "projections", label: "Projections", icon: "📈", feature: "projections" }] : [t]))).map((tab) => {
             const isTabActive = activeTab === tab.id;
             const isLocked = !canAccess(tab.feature);
             return (
@@ -450,6 +451,11 @@ export default function Dashboard() {
               </details>
             )}
           </div>
+        </div>
+
+        {/* Projections — covered-call back-test over history */}
+        <div role="tabpanel" aria-label="Covered-call projections" style={{ display: activeTab === "projections" ? "block" : "none" }}>
+          <CoveredCallsProjectionsTab />
         </div>
 
         {/* Risk (tier-gated) */}

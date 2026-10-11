@@ -16,15 +16,18 @@ import SetupTab from "./SetupTab";
 import ProfileTab from "./ProfileTab";
 import APITab from "./APITab";
 import OptionsDashboard from "./OptionsDashboard";
+import OptionsWorkingTab from "./OptionsWorkingTab";
+import OptionsHistoryTab from "./OptionsHistoryTab";
+import OptionsRiskTab from "./OptionsRiskTab";
+import OptionsProjectionsTab from "./OptionsProjectionsTab";
+import OptionsTradesTab from "./OptionsTradesTab";
+import OptionsStrategiesTab from "./OptionsStrategiesTab";
+import OptionsBacktestTab from "./OptionsBacktestTab";
 
 // Analysis tabs to scaffold (id → label + blurb). Labels mirror the CC tab bar.
 // The "Dashboard" tab (id "selection") is built out — the rest are placeholders.
 const BLANK_TABS = [
   { id: "dashboard", label: "Selection", blurb: "Find and screen option plays (calls, puts, spreads) by return, risk, and expiry." },
-  { id: "working", label: "Working", blurb: "Track your open option positions with live P&L, exits, and per-position charts." },
-  { id: "risk", label: "Risk", blurb: "Scenario and payoff-curve analysis across price, time, and volatility." },
-  { id: "transactions", label: "Trades", blurb: "Your options transaction log and realized results." },
-  { id: "history", label: "History", blurb: "Historical options data — IV, premiums, and price trends over time." },
 ];
 
 function Placeholder({ T, title, blurb }) {
@@ -58,6 +61,27 @@ export default function OptionsManager({ activeTab, activePosition }) {
 
       {/* Dashboard tab (id "selection") — built out */}
       {panel("selection", <OptionsDashboard />)}
+
+      {/* Working (options positions) — built out */}
+      {panel("working", <OptionsWorkingTab />)}
+
+      {/* History (closed options + monthly P&L) — built out */}
+      {panel("history", <OptionsHistoryTab />)}
+
+      {/* Risk (payoff diagram — position / portfolio) — built out */}
+      {panel("risk", <OptionsRiskTab />)}
+
+      {/* Projections (treasury call/put strike back-test) — built out */}
+      {panel("projections", <OptionsProjectionsTab />)}
+
+      {/* Strategies (custom multi-leg builder + payoff) — built out */}
+      {panel("strategies", <OptionsStrategiesTab />)}
+
+      {/* Backtest (run a saved strategy over price history) — built out */}
+      {panel("backtest", <OptionsBacktestTab />)}
+
+      {/* Trades (transaction log) — built out */}
+      {panel("transactions", <OptionsTradesTab />)}
 
       {/* Remaining options-specific analysis tabs — blank placeholders for now */}
       {BLANK_TABS.map(({ id, label, blurb }) => panel(id, <Placeholder T={T} title={label} blurb={blurb} />))}

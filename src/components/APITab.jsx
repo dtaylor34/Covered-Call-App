@@ -13,7 +13,7 @@
 import { useState, useCallback } from "react";
 import { useTheme } from "../contexts/ThemeContext";
 import { useBrokerConnection } from "../hooks/useBrokerConnection";
-import { schwabInitiateOAuth, schwabExchangeToken } from "../services/schwabApi";
+import { schwabInitiateOAuth, schwabReauthorize, schwabExchangeToken } from "../services/schwabApi";
 import SheetSettings from "./SheetSettings";
 
 // ── Local shared components ───────────────────────────────────────────────────
@@ -251,9 +251,25 @@ function SchwabSetupFlow({ broker, onClose }) {
   const [showSecret, setShowSecret] = useState(false);
   const [step, setStep]             = useState(0);
   const [connecting, setConnecting] = useState(false);
+  const [reconnecting, setReconnecting] = useState(false);
+  const [reconnectErr, setReconnectErr] = useState(null);
   const [error, setError]           = useState(null);
 
   const REDIRECT_URI = `${window.location.origin}/api/schwab/callback`;
+
+  // One-click reconnect using the key already stored server-side (for the
+  // weekly refresh-token renewal) — no re-typing the App Key + Secret.
+  const handleReconnect = useCallback(async () => {
+    setReconnecting(true); setReconnectErr(null);
+    try {
+      const result = await schwabReauthorize({ redirectUri: REDIRECT_URI });
+      window.open(result.data.authUrl, "_blank", "width=600,height=700,noopener");
+    } catch (err) {
+      setReconnectErr(err?.message || "Couldn't reconnect with your saved key — enter it below instead.");
+    } finally {
+      setReconnecting(false);
+    }
+  }, [REDIRECT_URI]);
 
   const handleConnect = useCallback(async () => {
     if (!appKey.trim() || !appSecret.trim()) {
@@ -298,6 +314,21 @@ function SchwabSetupFlow({ broker, onClose }) {
         }}>
           {REDIRECT_URI}
         </div>
+      </Card>
+
+      {/* Returning user — reconnect without re-typing the key. Schwab expires the
+          refresh token every 7 days, so this is the weekly renewal path. */}
+      <Card>
+        <div style={{ color: T.text, fontSize: 13, fontWeight: 700, marginBottom: 4 }}>Already connected before?</div>
+        <div style={{ color: T.textDim, fontSize: 12, marginBottom: 10, lineHeight: 1.5 }}>
+          Schwab expires the connection every 7 days. Reconnect with the App Key you already saved — no need to re-enter it. You'll just log into Schwab again.
+        </div>
+        <button onClick={handleReconnect} disabled={reconnecting} style={{
+          padding: "10px 16px", borderRadius: 8, border: `1px solid ${T.accent}`,
+          background: T.accent, color: "#0A0A0A", fontSize: 13, fontWeight: 700,
+          cursor: reconnecting ? "default" : "pointer", fontFamily: T.fontBody, opacity: reconnecting ? 0.6 : 1,
+        }}>{reconnecting ? "Opening Schwab…" : "↻ Reconnect with saved key"}</button>
+        {reconnectErr && <div style={{ color: T.danger, fontSize: 12, marginTop: 8, fontFamily: T.fontMono }}>{reconnectErr}</div>}
       </Card>
 
       {/* ── PII & Security callout — inserted after callback URL box ── */}

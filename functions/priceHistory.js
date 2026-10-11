@@ -154,25 +154,80 @@ exports.getIntradayCompare = onCall({ cors: true, timeoutSeconds: 30, secrets: [
   return { symbol, session: lastDate, prevClose, last: minutes.length ? minutes[minutes.length - 1].c : null, minutes };
 });
 
-// ── Minute-N pattern over recent history (Data Trend) ─────────────────────────
-// For each of the last ~days trading days, the price at minute N (nearest 5-min
-// bar) vs that day's PRIOR close (buy/sell signal) and the day's END-OF-DAY close.
-// 5-minute bars only reach ~60 days back, so this is a recent-pattern view.
-exports.getMinuteTrend = onCall({ cors: true, timeoutSeconds: 30 }, async (request) => {
+// ── Single-day intraday series (Data Trend → day snapshot) ────────────────────
+// Regular-hours bars for ONE past session, fetched on demand when the user opens
+// a day from the Data Trend chart. The caller picks the bar size (interval):
+//   1m  → finest detail, but Yahoo only serves 1-minute bars for the last ~7 days
+//   5m  → default; reaches ~60 days back (matches the Data Trend window)
+//   30m / 1h → coarse "full day at a glance", available further back
+// Returns [{ m, t, c }] (m = minutes since the 9:30 ET open).
+const DAY_INTERVALS = { "1m": "1m", "5m": "5m", "30m": "30m", "1h": "60m" };
+exports.getIntradayDay = onCall({ cors: true, timeoutSeconds: 30 }, async (request) => {
   requireAuth(request);
   const symbol = cleanSymbol(request.data.symbol);
-  const minute = Math.max(0, Math.round(Number(request.data.minute) || 15));
-  const days = Math.min(58, Math.max(5, Math.round(Number(request.data.days) || 30)));
+  const date = String(request.data.date || "");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new HttpsError("invalid-argument", "Invalid date.");
+  const intervalKey = DAY_INTERVALS[String(request.data.interval || "5m")] ? String(request.data.interval) : "5m";
+  const interval = DAY_INTERVALS[intervalKey];
+  const [y, m, d] = date.split("-").map(Number);
+  // Pad ±1 day so the ET session is fully covered regardless of UTC offset.
+  const start = new Date(Date.UTC(y, m - 1, d - 1));
+  const end = new Date(Date.UTC(y, m - 1, d + 2));
 
   let bars = null;
   try {
-    const r = await yf.chart(symbol, { period1: new Date(Date.now() - days * 86400000), interval: "5m" }, YF);
+    const r = await yf.chart(symbol, { period1: start, period2: end, interval }, YF);
+    bars = (r.quotes || []).filter((x) => x.date && x.close != null).map((x) => ({ t: new Date(x.date).getTime(), c: x.close }));
+  } catch (e) {
+    throw new HttpsError("unavailable", `Could not load ${intervalKey} data for ${symbol}.`);
+  }
+
+  const minutes = [];
+  for (const b of bars) {
+    const p = etParts(b.t);
+    if (p.date !== date) continue;
+    if (p.mins < OPEN_MIN || p.mins > CLOSE_MIN) continue;
+    minutes.push({ m: p.mins - OPEN_MIN, t: b.t, c: b.c });
+  }
+  if (!minutes.length) {
+    const hint = intervalKey === "1m" ? " 1-minute bars are only available for about the last 7 days." : "";
+    throw new HttpsError("unavailable", `No ${intervalKey} data for ${symbol} on ${date}.${hint}`);
+  }
+  minutes.sort((a, b) => a.m - b.m);
+  return { symbol, date, interval: intervalKey, minutes };
+});
+
+// Close price at an EXACT session minute, interpolated between the two 5-min
+// bars that bracket it (so "minute 8" is 9:38, not snapped to the 9:40 bar).
+// bars must be sorted ascending by `mins`.
+function closeAtMinute(bars, targetMins) {
+  if (!bars.length) return null;
+  if (targetMins <= bars[0].mins) return bars[0].c;
+  if (targetMins >= bars[bars.length - 1].mins) return bars[bars.length - 1].c;
+  for (let i = 0; i < bars.length - 1; i++) {
+    const a = bars[i], b = bars[i + 1];
+    if (targetMins >= a.mins && targetMins <= b.mins) {
+      const f = b.mins > a.mins ? (targetMins - a.mins) / (b.mins - a.mins) : 0;
+      return a.c + f * (b.c - a.c);
+    }
+  }
+  return bars[bars.length - 1].c;
+}
+
+// Fetch regular-hours bars for the last `days` sessions, choosing the finest
+// interval that covers the window: Yahoo serves 5-min bars ~60 days back and
+// 60-min bars ~730 days back. Beyond 60 days the minute is approximated from
+// hourly bars. Returns { interval, sessions (Map date→[{t,c,mins}]), dates }.
+async function fetchSessionsMap(symbol, days) {
+  const interval = days <= 58 ? "5m" : "60m";
+  let bars = null;
+  try {
+    const r = await yf.chart(symbol, { period1: new Date(Date.now() - days * 86400000), interval }, YF);
     bars = (r.quotes || []).filter((x) => x.date && x.close != null).map((x) => ({ t: new Date(x.date).getTime(), c: x.close }));
   } catch (e) {
     throw new HttpsError("unavailable", `Could not load intraday history for ${symbol}.`);
   }
   if (!bars.length) throw new HttpsError("unavailable", `No intraday history for ${symbol}.`);
-
   const sessions = new Map();
   for (const b of bars) {
     const { date, mins } = etParts(b.t);
@@ -180,16 +235,56 @@ exports.getMinuteTrend = onCall({ cors: true, timeoutSeconds: 30 }, async (reque
     if (!sessions.has(date)) sessions.set(date, []);
     sessions.get(date).push({ t: b.t, c: b.c, mins });
   }
-  const dates = [...sessions.keys()].sort();
+  return { interval, sessions, dates: [...sessions.keys()].sort() };
+}
+
+// ── Minute-N pattern over recent history (Data Trend) ─────────────────────────
+// For each of the last ~days trading days, the price at the EXACT minute N
+// (interpolated from the bars) vs that day's PRIOR close (buy/sell signal) and
+// the day's END-OF-DAY close. Range up to ~2 years (hourly beyond ~60 days).
+exports.getMinuteTrend = onCall({ cors: true, timeoutSeconds: 30 }, async (request) => {
+  requireAuth(request);
+  const symbol = cleanSymbol(request.data.symbol);
+  const minute = Math.max(0, Math.round(Number(request.data.minute) || 15));
+  const days = Math.min(730, Math.max(5, Math.round(Number(request.data.days) || 30)));
+
+  const { interval, sessions, dates } = await fetchSessionsMap(symbol, days);
   const target = OPEN_MIN + minute;
   const trend = [];
   for (let i = 0; i < dates.length; i++) {
-    const dayBars = sessions.get(dates[i]);
-    const cap = dayBars.reduce((best, x) => (Math.abs(x.mins - target) < Math.abs(best.mins - target) ? x : best), dayBars[0]);
+    const dayBars = sessions.get(dates[i]).slice().sort((a, b) => a.mins - b.mins);
+    const capC = closeAtMinute(dayBars, target); // interpolated price at the exact minute
     const eod = dayBars[dayBars.length - 1].c;
     const priorClose = i > 0 ? sessions.get(dates[i - 1])[sessions.get(dates[i - 1]).length - 1].c : null;
-    const signal = priorClose == null ? null : (cap.c < priorClose ? "B" : cap.c > priorClose ? "S" : null);
-    trend.push({ date: dates[i], captured: cap.c, capturedMin: cap.mins - OPEN_MIN, eod, priorClose, signal });
+    const signal = priorClose == null ? null : (capC < priorClose ? "B" : capC > priorClose ? "S" : null);
+    // capturedMin is the EXACT requested minute (not the snapped bar minute).
+    trend.push({ date: dates[i], captured: capC, capturedMin: minute, eod, priorClose, signal });
   }
-  return { symbol, minute, days, trend };
+  return { symbol, minute, days, interval, trend };
+});
+
+// ── Bulk intraday for the Stacked View ────────────────────────────────────────
+// Every session's intraday path (normalized client-side), plus each day's prior
+// close, minute-N capture, and buy/sell signal — one call, for layering all days
+// on a single chart.
+exports.getIntradayRange = onCall({ cors: true, timeoutSeconds: 45 }, async (request) => {
+  requireAuth(request);
+  const symbol = cleanSymbol(request.data.symbol);
+  const minute = Math.max(0, Math.round(Number(request.data.minute) || 15));
+  const days = Math.min(730, Math.max(5, Math.round(Number(request.data.days) || 30)));
+
+  const { interval, sessions, dates } = await fetchSessionsMap(symbol, days);
+  const target = OPEN_MIN + minute;
+  const out = [];
+  for (let i = 0; i < dates.length; i++) {
+    const dayBars = sessions.get(dates[i]).slice().sort((a, b) => a.mins - b.mins);
+    const priorClose = i > 0 ? sessions.get(dates[i - 1])[sessions.get(dates[i - 1]).length - 1].c : null;
+    const capC = closeAtMinute(dayBars, target);
+    const signal = priorClose == null ? null : (capC < priorClose ? "B" : capC > priorClose ? "S" : null);
+    out.push({
+      date: dates[i], priorClose, captured: capC, capturedMin: minute, signal,
+      minutes: dayBars.map((b) => ({ m: b.mins - OPEN_MIN, c: b.c })),
+    });
+  }
+  return { symbol, minute, days, interval, sessions: out };
 });

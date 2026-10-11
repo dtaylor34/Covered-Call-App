@@ -199,9 +199,26 @@ export function usePositions() {
   const deletePosition = useCallback(async (id) => { if (uid) await deleteDoc(posRef(id)); }, [uid]);
   const deleteLot = useCallback(async (id) => { if (uid) await deleteDoc(lotRef(id)); }, [uid]);
 
+  // ── Closed-record maintenance (Trade History edits + Schwab imports) ──────────
+  // Add a closed record directly (e.g. a fully-closed covered call imported from
+  // Schwab that was never an app position). `id` is deterministic so re-imports
+  // overwrite rather than duplicate.
+  const addClosedRecord = useCallback(async (rec, id) => {
+    if (!uid) return { ok: false };
+    const docId = id || `closed-${Date.now().toString(36)}`;
+    await setDoc(closedRef(docId), { ...rec, closedAt: rec.closedAt || serverTimestamp() }, { merge: true });
+    return { ok: true, id: docId };
+  }, [uid]);
+  const updateClosed = useCallback(async (id, patch) => {
+    if (!uid) return;
+    await setDoc(closedRef(id), { ...patch, updatedAt: serverTimestamp() }, { merge: true });
+  }, [uid]);
+  const deleteClosed = useCallback(async (id) => { if (uid) await deleteDoc(closedRef(id)); }, [uid]);
+
   return {
     positions, lots, closed,
     loading: posLoading || lotsLoading || closedLoading,
     savePosition, updateLive, closePosition, saveLot, deletePosition, deleteLot,
+    addClosedRecord, updateClosed, deleteClosed,
   };
 }

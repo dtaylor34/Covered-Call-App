@@ -14,11 +14,13 @@ import { useLivePortfolio } from "../hooks/useLivePortfolio";
 import { positionCalcs, stoplight, gtcFillEstimate } from "../lib/coveredCallMath";
 import WorkingPositionChart from "./WorkingPositionChart";
 import { parsePaste, positionId } from "../lib/positionParser";
-import { parseSchwabOpenDates, parseSchwabCloses } from "../lib/schwabPositions";
+import { parseSchwabOpenDates, parseSchwabClosedCycles, isCoveredCallUnderlying } from "../lib/schwabPositions";
 import { useBrokerConnection } from "../hooks/useBrokerConnection";
-import { schwabGetOrders } from "../services/schwabApi";
+import { schwabGetOrders, schwabReauthorize } from "../services/schwabApi";
+import { getPriceHistory } from "../services/priceHistory";
 import SharesByLot from "./SharesByLot";
 import ImportFromSchwab from "./ImportFromSchwab";
+import TradeHistory from "./TradeHistory";
 
 const DOT = { g: "#2F9E55", y: "#E3A91B", r: "#E0552A" };
 const LEGEND = [
@@ -39,6 +41,29 @@ const expShort = (iso) => {
   return new Date(y, (m || 1) - 1, d || 1).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 };
 const CLOSE_HOW = { bought: "bought back", expired: "expired", called: "called away" };
+// A scaling error (option price stored per-contract ×100 instead of per-share)
+// shows up as a call premium that's a large fraction of the STOCK's market price
+// — not the cost basis (a legit low-cost-basis call can have a big premium vs its
+// old basis, which is fine). Compare to the live/market price to avoid false flags.
+const beSuspect = (p) => { const mkt = Math.max(Number(p?.liveStock) || 0, Number(p?.fillStock) || 0); return mkt > 0 && Number(p?.fillCall) > 0.5 * mkt; };
+const BE_WARN = "The call premium is more than half the stock's price — that usually means the option price was imported per-contract (×100) instead of per-share. Open the row and edit \"Call sold at\" (often ÷100) to correct it.";
+// Plain-English explanation of each Schwab-style column (hover the header).
+const HEADER_TIPS = [
+  "Order strategy. COVERED = covered call: sell one call against 100 shares you own.",
+  "SELL = sell the call to open. BUY = buy the shares, or buy the call back to close.",
+  "Quantity — contracts for the call (shown −), shares for the stock leg (+100 per contract).",
+  "Position effect — whether the leg opens or closes (AUTO / TO CLOSE / DEBIT).",
+  "Underlying ticker. The colored tag is the Schwab account (Stock / Roth).",
+  "Option expiration date.",
+  "Strike price of the call.",
+  "Instrument type: CALL for the option, STOCK for the shares leg.",
+  "Order price. The call leg shows your breakeven as a limit; the GTC leg shows the buy-back limit.",
+  "Order type (LIMIT).",
+  "Time in force. DAY = expires end of day; GTC = good-till-canceled (your standing buy-back).",
+  "Routing / destination. BEST = best execution.",
+  "Health stoplight + how soon your GTC buy-back is likely to fill.",
+  "Click the row to expand full details and actions.",
+];
 const msToDate = (ms) => (Number.isFinite(ms) ? new Date(ms).toISOString().slice(0, 10) : "");
 const dateToMs = (s) => (/^\d{4}-\d{2}-\d{2}$/.test(s) ? new Date(s + "T00:00:00").getTime() : null);
 // Schwab-style expiration, e.g. "16 OCT 26"
@@ -54,7 +79,7 @@ const CS_COLS = "104px 56px 56px 74px 62px 96px 58px 88px 108px 70px 50px 56px 1
 
 export default function WorkingPositionsTab() {
   const { T } = useTheme();
-  const { positions, lots, closed, loading, savePosition, updateLive, closePosition, saveLot, deleteLot } = usePositions();
+  const { positions, lots, closed, loading, savePosition, updateLive, closePosition, saveLot, deleteLot, addClosedRecord, updateClosed, deleteClosed } = usePositions();
   const { live, status } = useLivePortfolio(positions);
   const { activeConnection, activeAccount, accounts } = useBrokerConnection();
   const schwabConnected = activeConnection?.status === "connected";
@@ -72,6 +97,17 @@ export default function WorkingPositionsTab() {
   const [showAdd, setShowAdd] = useState(false);
   const [syncMsg, setSyncMsg] = useState(null);
   const [syncing, setSyncing] = useState(false);
+  const [reconnecting, setReconnecting] = useState(false);
+
+  // One-click Schwab reconnect using the saved key (weekly refresh-token renewal).
+  const reconnect = async () => {
+    setReconnecting(true);
+    try {
+      const r = await schwabReauthorize({ redirectUri: `${window.location.origin}/api/schwab/callback` });
+      window.open(r.data.authUrl, "_blank", "width=600,height=700,noopener");
+    } catch (e) { setSyncMsg({ ok: false, text: e?.message || "Couldn't start reconnect — try the APIs tab." }); }
+    finally { setReconnecting(false); }
+  };
 
   // Pull entry dates + buy-backs from EVERY linked Schwab account and apply them
   // to the matching positions (each position is matched within its own account).
@@ -80,31 +116,81 @@ export default function WorkingPositionsTab() {
     if (!accts.some((a) => a?.hashValue)) { setSyncMsg({ ok: false, text: "No linked Schwab account — connect in the APIs tab." }); return; }
     setSyncing(true); setSyncMsg({ ok: true, text: "Pulling from Schwab…" });
     try {
-      let dated = 0, closedN = 0, acctsHit = 0;
+      let dated = 0, closedN = 0, importedN = 0, acctsHit = 0, ordersN = 0, buybacksSeen = 0, skipped = 0, expiredN = 0, calledN = 0;
       const closedIds = new Set();
+      const DAY = 86400000;
+      // Existing closed records, so we don't re-import the same buy-back.
+      const haveClosed = new Set((closed || []).map((c) => `${c.sym}|${c.strike}|${c.expiry}`));
       for (const acct of accts) {
         if (!acct?.hashValue) continue;
         const acctTag = String(acct.accountId || "").slice(-4);
         const orders = await schwabGetOrders({ accountHash: acct.hashValue }).then((r) => r.data).catch(() => null);
         if (!orders) continue;
         acctsHit++;
+        ordersN += (Array.isArray(orders) ? orders : (orders?.orders || [])).length;
         const openByKey = parseSchwabOpenDates(orders);
-        const closeByKey = parseSchwabCloses(orders);
+        // Entry (sell-to-open) dates for existing positions.
         for (const p of positions) {
-          if (p.acct && p.acct !== acctTag) continue; // only this account's positions (legacy untagged match any)
+          if (p.acct && p.acct !== acctTag) continue;
           const k = `${p.sym}|${p.strike}|${p.expiry}`;
           if (openByKey[k] != null && openByKey[k] !== p.openedAtMs) { await updateLive(p.id, { openedAtMs: openByKey[k] }); dated++; }
-          const cl = closeByKey[k];
-          if (cl && !closedIds.has(p.id) && (p.openedAtMs == null || cl.ms == null || cl.ms >= p.openedAtMs)) {
-            await closePosition(p.id, "bought", { buyback: Number(cl.price) || 0, closedOnMs: cl.ms || undefined });
-            closedIds.add(p.id); closedN++;
+        }
+        // Every buy-back (buy-to-close) in the window → close the matching open
+        // position if we have one, otherwise import it as a closed trade.
+        for (const cyc of parseSchwabClosedCycles(orders)) {
+          buybacksSeen++;
+          const k = `${cyc.sym}|${cyc.strike}|${cyc.expiry}`;
+          const match = positions.find((p) => `${p.sym}|${p.strike}|${p.expiry}` === k && (!p.acct || p.acct === acctTag) && !closedIds.has(p.id));
+          if (match) {
+            await closePosition(match.id, "bought", { buyback: Number(cyc.buyback) || 0, closedOnMs: cyc.closeMs || undefined });
+            closedIds.add(match.id); closedN++; haveClosed.add(k);
+            continue;
           }
+          if (haveClosed.has(k)) { skipped++; continue; } // already recorded
+          const rec = {
+            sym: cyc.sym, contracts: cyc.contracts, strike: cyc.strike, expiry: cyc.expiry,
+            fillStock: null, fillCall: cyc.fillCall, buyback: cyc.buyback, how: "bought",
+            stockGain: 0, delivered: [],
+            openedAtMs: cyc.openMs ?? null, closedOnMs: cyc.closeMs ?? null,
+            closedOn: cyc.closeMs ? new Date(cyc.closeMs).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10),
+            exitStock: null, exitCall: cyc.buyback,
+            acct: acctTag, source: "schwab-import",
+          };
+          await addClosedRecord(rec, `cs-${cyc.sym}-${cyc.strike}-${cyc.expiry}-${cyc.closeMs || 0}`);
+          haveClosed.add(k); importedN++;
         }
       }
+      // Settle any working position whose expiry has PASSED and that wasn't
+      // bought back: ITM at expiry → called away (shares sold at the strike),
+      // OTM → expired worthless (premium kept). Uses the stock's close on the
+      // expiry date vs the strike — how options actually settle.
+      const today0 = new Date(); today0.setHours(0, 0, 0, 0);
+      const toSettle = positions.filter((p) => !closedIds.has(p.id) && isCoveredCallUnderlying(p.sym) && (dateToMs(p.expiry) ?? Infinity) < today0.getTime());
+      const histBySym = {};
+      for (const p of toSettle) {
+        const expMs = dateToMs(p.expiry);
+        let closeAtExp = Number(p.liveStock) || null;
+        try {
+          if (!histBySym[p.sym]) histBySym[p.sym] = (await getPriceHistory(p.sym, "3M").then((r) => r.points).catch(() => [])) || [];
+          const pts = histBySym[p.sym].filter((x) => x.t <= expMs + 2 * DAY);
+          if (pts.length) closeAtExp = pts[pts.length - 1].c;
+        } catch { /* fall back to liveStock */ }
+        const itm = Number.isFinite(closeAtExp) && closeAtExp >= Number(p.strike);
+        await closePosition(p.id, itm ? "called" : "expired", { closedOnMs: expMs || undefined });
+        closedIds.add(p.id);
+        if (itm) calledN++; else expiredN++;
+      }
+
+      console.log("[Schwab sync]", { acctsHit, ordersN, buybacksSeen, dated, closedN, importedN, skipped, expiredN, calledN });
       const parts = [];
       if (dated) parts.push(`set ${dated} entry date${dated === 1 ? "" : "s"}`);
-      if (closedN) parts.push(`recorded ${closedN} buy-back${closedN === 1 ? "" : "s"} → Closed Trades`);
-      setSyncMsg({ ok: true, text: parts.length ? `Synced ${acctsHit} account${acctsHit === 1 ? "" : "s"}: ${parts.join(", ")}.` : `Checked ${acctsHit} account${acctsHit === 1 ? "" : "s"} — no new entry dates or buy-backs in Schwab's last ~60 days.` });
+      if (closedN) parts.push(`bought back ${closedN} position${closedN === 1 ? "" : "s"}`);
+      if (calledN) parts.push(`${calledN} called away (shares sold)`);
+      if (expiredN) parts.push(`${expiredN} expired worthless`);
+      if (importedN) parts.push(`imported ${importedN} buy-back${importedN === 1 ? "" : "s"} → Trade History`);
+      setSyncMsg({ ok: true, text: parts.length
+        ? `Synced ${acctsHit} account${acctsHit === 1 ? "" : "s"}: ${parts.join(", ")}.`
+        : `Checked ${acctsHit} account${acctsHit === 1 ? "" : "s"} · ${ordersN} orders · ${buybacksSeen} buy-back${buybacksSeen === 1 ? "" : "s"} found — ${buybacksSeen ? `all already recorded${skipped ? ` (${skipped})` : ""}` : "none in Schwab's last ~60 days"}.` });
     } catch (e) { setSyncMsg({ ok: false, text: e?.message || "Couldn't sync from Schwab." }); }
     finally { setSyncing(false); }
   };
@@ -153,14 +239,23 @@ export default function WorkingPositionsTab() {
         }}>{showAdd ? "Close" : "+ Add / Paste"}</button>
       </div>
 
+      {/* Schwab lapsed? One-click reconnect with the saved key (no re-typing). */}
+      {!schwabConnected && (
+        <div style={{ ...card, display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", padding: "12px 16px", borderColor: `${T.warn || T.warning}55`, background: `${T.warn || T.warning}10` }}>
+          <span style={{ color: T.warn || T.warning, fontFamily: T.fontMono, fontSize: 12, fontWeight: 700 }}>Schwab not connected</span>
+          <span style={{ color: T.textDim, fontFamily: T.fontMono, fontSize: 12 }}>Schwab expires the link every ~7 days.</span>
+          <button onClick={reconnect} disabled={reconnecting} style={{ padding: "7px 13px", borderRadius: 8, border: `1px solid ${T.accent}`, cursor: "pointer", background: T.accent, color: "#0A0A0A", fontFamily: T.fontMono, fontSize: 12, fontWeight: 700, opacity: reconnecting ? 0.6 : 1, marginLeft: "auto" }}>{reconnecting ? "Opening Schwab…" : "↻ Reconnect (saved key)"}</button>
+        </div>
+      )}
+
       {/* One-click import of open covered calls from the connected Schwab account */}
       <ImportFromSchwab onAdd={savePosition} />
 
-      {/* Pull entry (sell-to-open) dates from Schwab for existing positions */}
-      {schwabConnected && positions.length > 0 && (
+      {/* Pull entry dates + buy-backs + closed trades from Schwab */}
+      {schwabConnected && (
         <div style={{ margin: "8px 0 4px", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
           <button onClick={syncEntryDates} disabled={syncing} style={{ padding: "8px 14px", borderRadius: 8, border: `1px solid ${T.accent}`, cursor: "pointer", background: "transparent", color: T.accent, fontFamily: T.fontMono, fontSize: 12, fontWeight: 700, opacity: syncing ? 0.6 : 1 }}>
-            {syncing ? "Syncing…" : "⬇ Sync from Schwab (entry dates + buy-backs)"}
+            {syncing ? "Syncing…" : "⬇ Sync from Schwab (entry dates + buy-backs + closed trades)"}
           </button>
           {syncMsg && <span style={{ color: syncMsg.ok ? T.textDim : T.danger, fontFamily: T.fontMono, fontSize: 12 }}>{syncMsg.text}</span>}
         </div>
@@ -173,7 +268,7 @@ export default function WorkingPositionsTab() {
         <div style={{ ...card, display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap", padding: "12px 16px" }}>
           <span style={{ color: T.success, fontWeight: 700, fontFamily: T.fontMono, fontSize: 12 }}>✓ Recently closed</span>
           {recentClosed.map((cl, i) => (
-            <span key={i} style={{ color: T.textDim, fontFamily: T.fontMono, fontSize: 12 }}>
+            <span key={i} title={`${cl.sym} $${cl.strike} call — ${CLOSE_HOW[cl.how] || cl.how}${cl.how === "bought" ? ` by buying it back at ${usd(cl.buyback)}` : ""} on ${cl.closedOn}. This covered call is closed; open Trades → Closed for the full lifecycle chart.`} style={{ color: T.textDim, fontFamily: T.fontMono, fontSize: 12, cursor: "help" }}>
               <b style={{ color: T.text }}>{cl.sym} ${cl.strike}</b> {CLOSE_HOW[cl.how] || cl.how}{cl.how === "bought" ? ` @ ${usd(cl.buyback)}` : ""} · {cl.closedOn}
             </span>
           ))}
@@ -184,11 +279,16 @@ export default function WorkingPositionsTab() {
       {/* Totals strip */}
       {rows.length > 0 && (
         <div style={{ ...card, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: 12 }}>
-          <Tot T={T} label="Money in trade" value={usd(totals.shareCost - totals.premium)} />
-          <Tot T={T} label="Premium" value={usd(totals.premium)} color={T.success} />
-          <Tot T={T} label="Kept so far" value={usd(totals.kept, true)} color={totals.kept >= 0 ? T.success : T.danger} />
-          <Tot T={T} label="If closed now" value={usd(totals.close, true)} color={totals.close >= 0 ? T.success : T.danger} />
-          <Tot T={T} label="Best case" value={usd(totals.maxProfit, true)} color={T.accent} />
+          <Tot T={T} label="Money in trade" value={usd(totals.shareCost - totals.premium)}
+            tip="Cash currently tied up in these trades — what you paid for the shares minus the premium you've already collected. This is your true cost basis." />
+          <Tot T={T} label="Premium" value={usd(totals.premium)} color={T.success}
+            tip="Total option premium collected across all open covered calls (fill price × 100 × contracts)." />
+          <Tot T={T} label="Kept so far" value={usd(totals.kept, true)} color={totals.kept >= 0 ? T.success : T.danger}
+            tip="Premium kept so far — what you collected minus what it would cost to buy the calls back right now. You keep all of it if the calls expire worthless." />
+          <Tot T={T} label="If closed now" value={usd(totals.close, true)} color={totals.close >= 0 ? T.success : T.danger}
+            tip="Total profit/loss if you closed everything at current prices — the shares' gain or loss plus the premium kept." />
+          <Tot T={T} label="Best case" value={usd(totals.maxProfit, true)} color={T.accent}
+            tip="Maximum profit if the shares get called away at the strike — the gain up to the strike plus all the premium collected." />
         </div>
       )}
 
@@ -209,7 +309,7 @@ export default function WorkingPositionsTab() {
             {/* Column header — Schwab covered-call order-row columns */}
             <div style={{ display: "grid", gridTemplateColumns: CS_COLS, padding: "9px 16px", borderBottom: `1px solid ${T.border}` }}>
               {["Strategy", "Side", "Qty", "Pos Effect", "Symbol", "Exp", "Strike", "Strike Type", "Price", "Order", "TIF", "Exch", "", ""].map((h, i) => (
-                <div key={i} style={{ color: T.textDim, fontSize: 9, fontFamily: T.fontMono, letterSpacing: 0.5, textTransform: "uppercase", fontWeight: 600 }}>{h}</div>
+                <div key={i} title={HEADER_TIPS[i]} style={{ color: T.textDim, fontSize: 9, fontFamily: T.fontMono, letterSpacing: 0.5, textTransform: "uppercase", fontWeight: 600, cursor: "help" }}>{h}</div>
               ))}
             </div>
             {rows.map(({ p, c, light, fill, entryMs }) => {
@@ -243,16 +343,17 @@ export default function WorkingPositionsTab() {
                       <div style={dim}>AUTO</div>
                       <div style={{ ...cellBase, fontWeight: 700, display: "flex", alignItems: "center", gap: 5 }}>
                         {p.sym}
-                        {acctShort(p) && <span style={{ fontSize: 9, fontWeight: 700, color: T.accent, background: T.accentDim, padding: "1px 5px", borderRadius: 4 }}>{acctShort(p)}</span>}
+                        {acctShort(p) && <span title={`Schwab account ${accountLabel(p)}`} style={{ fontSize: 9, fontWeight: 700, color: T.accent, background: T.accentDim, padding: "1px 5px", borderRadius: 4, cursor: "help" }}>{acctShort(p)}</span>}
                       </div>
                       <div style={cellBase}>{csExp(p.expiry)}</div>
                       <div style={cellBase}>{p.strike}</div>
                       <div style={cellBase}>CALL</div>
-                      <div style={cellBase}>{c.breakeven.toFixed(2)} <span style={{ color: T.textDim }}>LMT</span></div>
+                      <div style={cellBase}>{c.breakeven.toFixed(2)} <span style={{ color: T.textDim }}>LMT</span>{beSuspect(p) && <span title={BE_WARN} style={{ color: T.warn || T.warning, cursor: "help", marginLeft: 3 }}>⚠</span>}</div>
                       <div style={dim}>LIMIT</div>
                       <div style={dim}>DAY</div>
                       <div style={dim}>BEST</div>
-                      <div style={{ ...cellBase, color: DOT[light.key], fontSize: 11, whiteSpace: "normal", lineHeight: 1.3 }}>
+                      <div style={{ ...cellBase, color: DOT[light.key], fontSize: 11, whiteSpace: "normal", lineHeight: 1.3, cursor: "help" }}
+                        title={`${light.label} — ${LEGEND.find((l) => l.key === light.key)?.text || ""} (~${Math.round(light.delta * 100)}% chance the call finishes in the money).${Number(p.gtc) > 0 ? ` GTC buy-back at ${usd(p.gtc)}${fill.fillDays == null ? "" : fill.fillDays < 1 ? " — likely to fill around now at the current price" : ` — estimated to fill in about ${Math.round(fill.fillDays)} day${Math.round(fill.fillDays) === 1 ? "" : "s"}`}.` : ""}`}>
                         {light.label} · {Math.round(light.delta * 100)}%
                         {Number(p.gtc) > 0 && (
                           <div style={{ color: fill.fillDays != null && fill.fillDays < 2 ? T.success : T.textDim, fontSize: 10, fontWeight: 700 }}>
@@ -276,7 +377,8 @@ export default function WorkingPositionsTab() {
                       <div />
                       <div />
                       <div />
-                      <div style={{ ...cellBase, fontSize: 11, color: c.close >= 0 ? T.success : T.danger }}>if closed {usd(c.close, true)} · {(c.health * 100).toFixed(1)}%</div>
+                      <div style={{ ...cellBase, fontSize: 11, color: c.close >= 0 ? T.success : T.danger, cursor: "help" }}
+                        title={`If you closed this position now — buying the call back at its current price — you'd net ${usd(c.close, true)}. The ${(c.health * 100).toFixed(1)}% is the position's health: current share value plus premium kept, divided by what you paid for the shares (over 100% = ahead).`}>if closed {usd(c.close, true)} · {(c.health * 100).toFixed(1)}%</div>
                       <div />
                     </div>
                     {/* Leg 3 — working GTC buy-to-close order (the buy-back), if set */}
@@ -294,7 +396,8 @@ export default function WorkingPositionsTab() {
                         <div style={dim}>LIMIT</div>
                         <div style={{ ...cellBase, color: T.warn, fontWeight: 700 }}>GTC</div>
                         <div style={dim}>BEST</div>
-                        <div style={{ ...cellBase, color: T.success, fontSize: 11 }}>buy-back · keeps {usd(fill.gtcKeep)}</div>
+                        <div style={{ ...cellBase, color: T.success, fontSize: 11, cursor: "help" }}
+                          title={`Standing GTC buy-to-close at ${usd(p.gtc)}. If it fills you keep ${usd(fill.gtcKeep)} of the premium you collected — the rest pays to close the call early and free up the shares.`}>buy-back · keeps {usd(fill.gtcKeep)}</div>
                         <div />
                       </div>
                     )}
@@ -310,20 +413,20 @@ export default function WorkingPositionsTab() {
       {/* Shares by lot — fed by the same live marks */}
       <SharesByLot positions={livePositions} lots={lots} onSaveLot={saveLot} onDeleteLot={deleteLot} />
 
-      {closed.length > 0 && (
-        <div style={{ color: T.textDim, fontSize: 12, marginTop: 8 }}>
-          {closed.length} closed call{closed.length === 1 ? "" : "s"} in history (see the Trades tab).
-        </div>
-      )}
+      {/* Trade History — every closed covered call, with lifecycle charts + edits */}
+      <TradeHistory closed={closed} accounts={accounts} onUpdate={updateClosed} onDelete={deleteClosed}
+        onSync={syncEntryDates} syncing={syncing} syncMsg={syncMsg} schwabConnected={schwabConnected} />
     </div>
   );
 }
 
 // ── Totals cell ───────────────────────────────────────────────────────────────
-function Tot({ T, label, value, color }) {
+function Tot({ T, label, value, color, tip }) {
   return (
-    <div>
-      <div style={{ color: T.textDim, fontSize: 10, fontFamily: T.fontMono, letterSpacing: 1, textTransform: "uppercase" }}>{label}</div>
+    <div title={tip} style={tip ? { cursor: "help" } : undefined}>
+      <div style={{ color: T.textDim, fontSize: 10, fontFamily: T.fontMono, letterSpacing: 1, textTransform: "uppercase" }}>
+        {label}{tip && <span style={{ marginLeft: 4, opacity: 0.6 }}>ⓘ</span>}
+      </div>
       <div style={{ color: color || T.text, fontSize: 20, fontWeight: 700, fontFamily: T.fontMono, marginTop: 4 }}>{value}</div>
     </div>
   );
@@ -349,12 +452,18 @@ function Detail({ T, p, c, fill, entryMs, acctLabel, onUpdateLive, onClose }) {
           <span style={{ fontSize: 10, fontWeight: 700, color: T.accent, background: T.accentDim, padding: "2px 8px", borderRadius: 5, fontFamily: T.fontMono }}>Schwab account {acctLabel || `··${p.acct}`}</span>
         </div>
       )}
+      {beSuspect(p) && (
+        <div style={{ marginTop: 10, padding: "10px 12px", borderRadius: 8, border: `1px solid ${(T.warn || T.warning)}55`, background: `${T.warn || T.warning}12`, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          <span style={{ color: T.warn || T.warning, fontFamily: T.fontMono, fontSize: 12, lineHeight: 1.5, flex: 1, minWidth: 220 }}>⚠ Breakeven looks off ({usd(c.breakeven)}). The call price ({usd(p.fillCall)}) is over 25% of the share price — likely imported per-contract (×100) instead of per-share.</span>
+          <button onClick={() => onUpdateLive(p.id, { fillCall: Number(p.fillCall) / 100 })} style={{ padding: "7px 12px", borderRadius: 7, border: `1px solid ${T.accent}`, cursor: "pointer", background: T.accent, color: "#0A0A0A", fontFamily: T.fontMono, fontSize: 12, fontWeight: 700 }}>Fix: ÷100 → {usd(Number(p.fillCall) / 100)}</button>
+        </div>
+      )}
       {/* Position summary */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(96px, 1fr))", gap: 8, margin: "14px 0" }}>
         <div style={box}><div style={lbl}>Money in</div><div style={{ ...val, color: T.text }}>{usd(c.basis)}</div></div>
         <div style={box}><div style={lbl}>If closed now</div><div style={{ ...val, color: c.close >= 0 ? T.success : T.danger }}>{usd(c.close, true)}</div></div>
         <div style={box}><div style={lbl}>Max profit</div><div style={{ ...val, color: T.accent }}>{usd(c.maxProfit, true)}</div></div>
-        <div style={box}><div style={lbl}>Breakeven</div><div style={{ ...val, color: T.warn }}>{usd(c.breakeven)}</div></div>
+        <div style={box} title={beSuspect(p) ? BE_WARN : undefined}><div style={lbl}>Breakeven{beSuspect(p) ? " ⚠" : ""}</div><div style={{ ...val, color: T.warn }}>{usd(c.breakeven)}</div></div>
         <div style={box}><div style={lbl}>Health</div><div style={{ ...val, color: T.text }}>{(c.health * 100).toFixed(1)}%</div></div>
       </div>
 
@@ -384,6 +493,10 @@ function Detail({ T, p, c, fill, entryMs, acctLabel, onUpdateLive, onClose }) {
 
       {/* Live marks — editable */}
       <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 14 }}>
+        <label style={{ fontSize: 11, color: beSuspect(p) ? (T.warn || T.warning) : T.textDim }}>Call sold at (entry)<br />
+          <input defaultValue={p.fillCall} onBlur={(e) => onUpdateLive(p.id, { fillCall: Number(e.target.value) || p.fillCall })} style={editStyle} /></label>
+        <label style={{ fontSize: 11, color: T.textDim }}>Share price paid<br />
+          <input defaultValue={p.fillStock} onBlur={(e) => onUpdateLive(p.id, { fillStock: Number(e.target.value) || p.fillStock })} style={editStyle} /></label>
         <label style={{ fontSize: 11, color: T.textDim }}>Live stock<br />
           <input defaultValue={p.liveStock} onBlur={(e) => onUpdateLive(p.id, { liveStock: Number(e.target.value) || p.liveStock })} style={editStyle} /></label>
         <label style={{ fontSize: 11, color: T.textDim }}>Live call<br />

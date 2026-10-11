@@ -192,6 +192,7 @@ export default function SelectionTab({ onNavigateToGlossary, sharedSymbol, onSym
   const [optimizedFlash, setOptimizedFlash] = useState(false);
   const [showOptimizeInfo, setShowOptimizeInfo] = useState(false);
   const [activeInfoTip, setActiveInfoTip] = useState(null);
+  const [enrichment, setEnrichment] = useState(null); // earnings/ex-div/IV from getBestReturns → Key Events
   const [strikeRangeMin, setStrikeRangeMin] = useState(95);  // % of stock price
   const [strikeRangeMax, setStrikeRangeMax] = useState(115); // % of stock price
 
@@ -1002,10 +1003,20 @@ export default function SelectionTab({ onNavigateToGlossary, sharedSymbol, onSym
           </Card>
 
           {/* Best Returns — three one-click strategies scored on the live chain */}
-          <BestReturns symbol={symbol} contracts={contracts} onApply={pickFromChain} />
+          <BestReturns symbol={symbol} contracts={contracts} onApply={pickFromChain} onData={setEnrichment} />
 
           {/* Key Events — timing notes between now and the selected expiration */}
-          <KeyEvents symbol={symbol} expiration={expirationDate} />
+          <KeyEvents
+            symbol={symbol}
+            expiration={expirationDate}
+            strike={strikePrice}
+            price={stock?.price}
+            earningsDate={enrichment?.earningsDate}
+            exDivDate={enrichment?.exDivDate}
+            dividendRate={enrichment?.dividendRate}
+            ivPct={enrichment?.ivPct}
+            InfoTip={InfoTip}
+          />
 
           {/* Option chain — click a call's Bid to set the strike + premium in Contract Cost above */}
           <OptionChain symbol={symbol} highlightStrike={strikePrice} highlightExpiration={expirationDate} highlightSide={optionType} onPickStrike={pickFromChain} />

@@ -16,3 +16,13 @@ export const getIntradayCompare = (symbol) =>
 // trend:[{ date, captured, capturedMin, eod, priorClose, signal }] }.
 export const getMinuteTrend = (symbol, minute, days) =>
   httpsCallable(getFunctions(getApp()), "getMinuteTrend")({ symbol, minute, days }).then((r) => r.data);
+
+// Regular-hours bars for one past session (on-demand day detail). interval is
+// one of "1m" | "5m" | "30m" | "1h". Returns { symbol, date, interval, minutes:[{ m, t, c }] }.
+export const getIntradayDay = (symbol, date, interval = "5m") =>
+  httpsCallable(getFunctions(getApp()), "getIntradayDay")({ symbol, date, interval }).then((r) => r.data);
+
+// Every session's intraday path for the Stacked View (one call). Returns
+// { symbol, minute, days, interval, sessions:[{ date, priorClose, captured, signal, minutes:[{m,c}] }] }.
+export const getIntradayRange = (symbol, minute, days) =>
+  httpsCallable(getFunctions(getApp()), "getIntradayRange")({ symbol, minute, days }).then((r) => r.data);

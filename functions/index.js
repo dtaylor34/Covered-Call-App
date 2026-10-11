@@ -262,6 +262,7 @@ exports.stripeWebhook         = stripe.stripeWebhook;
 // Phase 1: OAuth flow + account sync + market data proxy
 const schwab = require("./schwab");
 exports.schwabInitiateOAuth  = schwab.schwabInitiateOAuth;
+exports.schwabReauthorize    = schwab.schwabReauthorize;
 exports.schwabExchangeToken  = schwab.schwabExchangeToken;
 exports.schwabRefreshToken   = schwab.schwabRefreshToken;
 exports.schwabDisconnect     = schwab.schwabDisconnect;
@@ -285,10 +286,20 @@ exports.getBestReturns = bestReturns.getBestReturns;
 const bootstrap = require("./bootstrap");
 exports.claimOwnership = bootstrap.claimOwnership;
 
+// ── Fundamentals (earnings / dividend) for Best Returns + Key Events ──────────
+const fundamentals = require("./fundamentals");
+exports.getFundamentals = fundamentals.getFundamentals;
+
+// ── AI exit advisor (Options → Projections; uses the ANTHROPIC_API_KEY secret) ─
+const aiAdvisor = require("./aiAdvisor");
+exports.optionsExitAdvice = aiAdvisor.optionsExitAdvice;
+
 // ── Price history for the trend chart (Schwab real-time → Yahoo fallback) ─────
 const priceHistory = require("./priceHistory");
 exports.getPriceHistory = priceHistory.getPriceHistory;
 exports.getIntradayCompare = priceHistory.getIntradayCompare;
+exports.getIntradayDay = priceHistory.getIntradayDay;
+exports.getIntradayRange = priceHistory.getIntradayRange;
 exports.getMinuteTrend = priceHistory.getMinuteTrend;
 
 // ── Google Sheet ledger sync (feature/working-lots-sheets) ───────────────────
