@@ -1,8 +1,8 @@
 // ─── src/components/ClosedTradeChart.jsx ─────────────────────────────────────
 // Lifecycle chart for a CLOSED covered call: the stock from (a little before)
 // entry through exit, with the strike + breakeven, an "entry" vertical, and the
-// trigger/sale marked with a circle inside a white square (colored by outcome:
-// bought back / expired / called away). For review — what happened and when.
+// trigger/sale marked with a circle inside a square + an "exit" vertical, both
+// colored by outcome (bought back / expired / called away). For review.
 
 import { useState, useEffect } from "react";
 import { useTheme } from "../contexts/ThemeContext";
@@ -121,11 +121,12 @@ export default function ClosedTradeChart({ symbol, strike, breakeven, entryStock
             </>)}
           </>)}
 
-          {/* exit marker: circle inside a white square */}
+          {/* exit marker: circle inside a square, colored by outcome (theme-aware) */}
           {Number.isFinite(exitAtPrice) && (<>
-            <rect x={xT(exit) - 9} y={yP(exitAtPrice) - 9} width={18} height={18} rx="2" fill="none" stroke="#FFFFFF" strokeWidth="2" />
+            <line x1={xT(exit)} y1={PT} x2={xT(exit)} y2={PB} stroke={exitColor} strokeWidth="1" strokeDasharray="4 3" opacity="0.55" />
+            <rect x={xT(exit) - 9} y={yP(exitAtPrice) - 9} width={18} height={18} rx="2" fill="none" stroke={exitColor} strokeWidth="2" />
             <circle cx={xT(exit)} cy={yP(exitAtPrice)} r="5.5" fill={exitColor} stroke={T.surface} strokeWidth="1.5" />
-            <text x={xT(exit)} y={yP(exitAtPrice) - 16} textAnchor="middle" fontSize="9" fontFamily={font} fill="#FFFFFF" fontWeight="700">{REASON[exitReason] || "exit"} {fmtDate(exit)}</text>
+            <text x={xT(exit)} y={yP(exitAtPrice) - 16} textAnchor="middle" fontSize="9" fontFamily={font} fill={exitColor} fontWeight="700">{REASON[exitReason] || "exit"} {fmtDate(exit)}</text>
           </>)}
 
           {hv && (<g>

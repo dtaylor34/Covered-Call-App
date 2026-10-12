@@ -5,7 +5,7 @@
 //   • price at minute N  >  prev close  → SELL MARKET alert
 //   • price at minute N  <  prev close  → BUY MARKET alert
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useTheme } from "../contexts/ThemeContext";
 import { getIntradayCompare } from "../services/priceHistory";
 import DataTrendChart from "./DataTrendChart";
@@ -22,6 +22,8 @@ export default function MinuteCompareChart({ symbol }) {
   const [error, setError] = useState("");
   const [minuteInput, setMinuteInput] = useState("15");
   const [mode, setMode] = useState("intraday"); // intraday | trend
+  const [hover, setHover] = useState(null);     // index into `mins` under the cursor
+  const svgRef = useRef(null);
 
   useEffect(() => {
     if (mode !== "intraday") return;
@@ -53,6 +55,24 @@ export default function MinuteCompareChart({ symbol }) {
   const pad = (hi - lo) * 0.1 || 1; lo -= pad; hi += pad;
   const xM = (m) => PL + (maxM ? (m / maxM) * (PR - PL) : 0);
   const yP = (v) => { const r = PB - ((v - lo) / ((hi - lo) || 1)) * (PB - PT); return Number.isFinite(r) ? r : PB; };
+
+  // clientX → the `mins` index whose minute is closest to the cursor.
+  const idxFromEvent = (e) => {
+    const rect = svgRef.current?.getBoundingClientRect();
+    if (!rect || !rect.width || !mins.length) return null;
+    const xUser = ((e.clientX - rect.left) / rect.width) * VBW;
+    const frac = Math.max(0, Math.min(1, (xUser - PL) / (PR - PL)));
+    const m = frac * maxM;
+    let best = 0, bd = Infinity;
+    for (let i = 0; i < mins.length; i++) { const d = Math.abs(mins[i].m - m); if (d < bd) { bd = d; best = i; } }
+    return best;
+  };
+  const onMove = (e) => { const i = idxFromEvent(e); if (i != null) setHover(i); };
+  const onLeave = () => setHover(null);
+  const hv = hover != null && hover < mins.length ? mins[hover] : null;
+  const hvDiff = hv && hasBase ? hv.c - prevClose : null;
+  const hvPct = hv && hasBase && prevClose ? (hvDiff / prevClose) * 100 : null;
+  const hvCol = hvDiff == null ? T.accent : hvDiff > 0 ? T.danger : hvDiff < 0 ? T.success : T.textDim;
 
   const font = T.fontMono;
   const card = { background: T.surface, border: `1px solid ${T.border}`, borderRadius: T.r || 10, padding: "16px 18px", marginBottom: 16 };
@@ -107,7 +127,8 @@ export default function MinuteCompareChart({ symbol }) {
         ) : mins.length === 0 ? (
           <div style={{ height: 200, display: "flex", alignItems: "center", justifyContent: "center", color: T.textDim, fontFamily: font, fontSize: 13 }}>No intraday minutes for {symbol}.</div>
         ) : (
-          <svg viewBox={`0 0 ${VBW} ${VBH}`} style={{ width: "100%", height: "auto", display: "block" }}>
+          <svg ref={svgRef} viewBox={`0 0 ${VBW} ${VBH}`} style={{ width: "100%", height: "auto", display: "block", cursor: "crosshair" }}
+            onMouseMove={onMove} onMouseLeave={onLeave}>
             {/* y gridlines + labels */}
             {yTicks.map((v, i) => (
               <g key={i}>
@@ -139,7 +160,34 @@ export default function MinuteCompareChart({ symbol }) {
                 <text x={xM(pick.m)} y={VBH - 6} textAnchor="middle" fontSize="9" fontFamily={font} fill={T.accent}>min {pick.m} · {clock(pick.m)}</text>
               </>
             )}
+
+            {/* hover crosshair */}
+            {hv && (
+              <g style={{ pointerEvents: "none" }}>
+                <line x1={xM(hv.m)} y1={PT} x2={xM(hv.m)} y2={PB} stroke={T.text} strokeWidth="1" opacity="0.25" />
+                <circle cx={xM(hv.m)} cy={yP(hv.c)} r="4" fill={hvCol} stroke={T.surface} strokeWidth="1.5" />
+              </g>
+            )}
           </svg>
+        )}
+
+        {/* hover readout tag, following the point */}
+        {hv && (
+          <div style={{
+            position: "absolute", left: `${(xM(hv.m) / VBW) * 100}%`, top: `${(yP(hv.c) / VBH) * 100}%`,
+            transform: "translate(-50%, calc(-100% - 10px))", pointerEvents: "none",
+            background: T.card, border: `1px solid ${hvCol}66`, borderRadius: 7, padding: "5px 9px",
+            fontFamily: font, fontSize: 10.5, color: T.text, whiteSpace: "nowrap", boxShadow: "0 4px 16px rgba(0,0,0,0.3)", zIndex: 10, lineHeight: 1.5,
+          }}>
+            <div><b style={{ color: hvCol }}>${px2(hv.c)}</b> · min {hv.m} · {clock(hv.m)}</div>
+            {hvDiff != null && (
+              <div style={{ color: T.textDim }}>
+                <b style={{ color: hvCol }}>{hvDiff >= 0 ? "+" : ""}{hvDiff.toFixed(2)}</b>
+                {hvPct != null && <> ({hvDiff >= 0 ? "+" : ""}{hvPct.toFixed(2)}%)</>} vs prev close
+                {" · "}{hvDiff > 0 ? "above" : hvDiff < 0 ? "below" : "at"}
+              </div>
+            )}
+          </div>
         )}
       </div>
       <div style={{ color: T.textMuted || T.textDim, fontSize: 10, fontFamily: font, marginTop: 6, lineHeight: 1.5 }}>
