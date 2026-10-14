@@ -41,17 +41,17 @@ function solveStockForCall(target, K, days, iv) {
   return (lo + hi) / 2;
 }
 
-export default function WorkingPositionChart({ symbol, strike, breakeven, currentPrice, entryStock, expiry, openedAtMs, gtc, keeps, entryCall, currentCall, iv, daysToExpiry, onSetEntry }) {
+export default function WorkingPositionChart({ symbol, strike, breakeven, currentPrice, entryStock, expiry, openedAtMs, gtc, keeps, contracts, entryCall, currentCall, iv, daysToExpiry, onSetEntry }) {
   const { T } = useTheme();
   const [daily, setDaily] = useState([]);
   const [intra, setIntra] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [hoverI, setHoverI] = useState(null);
+  const [hover, setHover] = useState(null); // { t, c, v, future, nearGreen }
   const [range, setRange] = useState("3m");
 
   useEffect(() => {
-    let alive = true; setLoading(true); setError(""); setHoverI(null);
+    let alive = true; setLoading(true); setError(""); setHover(null);
     Promise.allSettled([getPriceHistory(symbol, "6M"), getPriceHistory(symbol, "1W")])
       .then(([d, i]) => {
         if (!alive) return;
@@ -87,9 +87,10 @@ export default function WorkingPositionChart({ symbol, strike, breakeven, curren
   const premCurve = useMemo(() => {
     if (!sel.full || !expMs || !(K > 0) || !(vol > 0)) return [];
     const out = [];
-    for (const p of pts) { const dl = Math.max(0, (expMs - p.t) / DAY); out.push({ t: p.t, v: callVal(p.c, K, dl, vol) }); }
+    // historical: real stock path (entry→now). future: stock held flat at today's price (now→exp).
+    for (const p of pts) { const dl = Math.max(0, (expMs - p.t) / DAY); out.push({ t: p.t, v: callVal(p.c, K, dl, vol), c: p.c, future: false }); }
     const steps = 30;
-    for (let i = 1; i <= steps; i++) { const t = nowMs + (expMs - nowMs) * (i / steps); const dl = Math.max(0, (expMs - t) / DAY); out.push({ t, v: callVal(Number(currentPrice), K, dl, vol) }); }
+    for (let i = 1; i <= steps; i++) { const t = nowMs + (expMs - nowMs) * (i / steps); const dl = Math.max(0, (expMs - t) / DAY); out.push({ t, v: callVal(Number(currentPrice), K, dl, vol), c: Number(currentPrice), future: true }); }
     return out.filter((p) => Number.isFinite(p.v));
   }, [sel.full, pts, expMs, K, vol, currentPrice, nowMs]);
 
@@ -112,19 +113,40 @@ export default function WorkingPositionChart({ symbol, strike, breakeven, curren
   const premLine = showPrem ? premCurve.map((p, i) => (i ? "L" : "M") + xT(p.t).toFixed(1) + " " + yP2(p.v).toFixed(1)).join(" ") : "";
 
   const onMove = (e) => {
-    if (!pts.length) return;
+    if (!pts.length && !premCurve.length) return;
     const rect = e.currentTarget.getBoundingClientRect();
     const vbx = ((e.clientX - rect.left) / rect.width) * VBW;
+    const vby = ((e.clientY - rect.top) / rect.height) * VBH;
+    // Near the green "buy-back" level line? (its info is the same all along x)
+    const nearGreen = gtcLevel != null && Math.abs(vby - yP(gtcLevel)) < 7;
+    // In Range view, snap to the buy-back-cost curve so the whole span — including
+    // the future exit window — is hoverable (it carries both stock `c` and cost `v`).
+    if (showPrem && premCurve.length) {
+      let bi = 0, bd = Infinity;
+      for (let i = 0; i < premCurve.length; i++) { const d = Math.abs(xT(premCurve[i].t) - vbx); if (d < bd) { bd = d; bi = i; } }
+      const p = premCurve[bi];
+      setHover({ t: p.t, c: p.c, v: p.v, future: p.future, nearGreen });
+      return;
+    }
     let best = 0, bd = Infinity;
     for (let i = 0; i < pts.length; i++) { const d = Math.abs(xT(pts[i].t) - vbx); if (d < bd) { bd = d; best = i; } }
-    setHoverI(best);
+    const p = pts[best];
+    setHover({ t: p.t, c: p.c, v: null, future: false, nearGreen });
   };
 
   const font = T.fontMono;
   const card = { background: T.surface, border: `1px solid ${T.border}`, borderRadius: T.r || 10, padding: "14px 16px", marginBottom: 14 };
   const yTicks = [0, 1, 2, 3, 4].map((i) => lo + ((hi - lo) * i) / 4);
   const premTicks = showPrem ? [0, 1, 2, 3].map((i) => (premMax * i) / 3) : [];
-  const hv = hoverI != null ? pts[hoverI] : null;
+  const hv = hover;
+  // Per-contract dollars: option prices are per share → ×100×contracts.
+  const nContracts = Math.max(1, Number(contracts) || 1);
+  const premCollected = Number(entryCall) > 0 ? Number(entryCall) * 100 * nContracts : null;    // premium you took in
+  const hvBuyBack = hv && hv.v != null ? hv.v * 100 * nContracts : null;                          // $ to buy back at the hovered time
+  const hvKeep = hvBuyBack != null && premCollected != null ? premCollected - hvBuyBack : null;   // what you'd keep if you bought back then
+  const nowBuyBack = Number(currentCall) >= 0 ? Number(currentCall) * 100 * nContracts : null;    // $ to buy back right now
+  const nowKeep = nowBuyBack != null && premCollected != null ? premCollected - nowBuyBack : null;
+  const gtcCost = Number(gtc) > 0 ? Number(gtc) * 100 * nContracts : null;                        // $ to buy back if the GTC fills
   const amber = T.warn || T.warning || "#E6A23C";
   const entryColor = T.pro || "#6366f1"; // entry marker — distinct from accent (today) and amber (breakeven)
   const hasOpened = Number.isFinite(openedAtMs) && openedAtMs >= tMin && openedAtMs <= tMax;
@@ -169,7 +191,7 @@ export default function WorkingPositionChart({ symbol, strike, breakeven, curren
         ) : noData ? (
           <div style={{ height: 200, display: "flex", alignItems: "center", justifyContent: "center", color: T.textDim, fontFamily: font, fontSize: 13 }}>No {sel.intraday ? "intraday" : ""} data for this range.</div>
         ) : (
-          <svg viewBox={`0 0 ${VBW} ${VBH}`} style={{ width: "100%", height: "auto", display: "block" }} onMouseMove={onMove} onMouseLeave={() => setHoverI(null)}>
+          <svg viewBox={`0 0 ${VBW} ${VBH}`} style={{ width: "100%", height: "auto", display: "block" }} onMouseMove={onMove} onMouseLeave={() => setHover(null)}>
             <defs>
               <linearGradient id="wpcArea" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="0%" stopColor={T.accent} stopOpacity="0.20" />
@@ -205,7 +227,7 @@ export default function WorkingPositionChart({ symbol, strike, breakeven, curren
             )}
             {gtcLevel != null && gtcLevel > lo && gtcLevel < hi && (
               <>
-                <line x1={PL} y1={yP(gtcLevel)} x2={RX} y2={yP(gtcLevel)} stroke={T.success} strokeWidth="1.5" strokeDasharray="6 3" />
+                <line x1={PL} y1={yP(gtcLevel)} x2={RX} y2={yP(gtcLevel)} stroke={T.success} strokeWidth={hv?.nearGreen ? 2.75 : 1.5} strokeDasharray="6 3" />
                 <text x={PL + 4} y={yP(gtcLevel) - 4} textAnchor="start" fontSize="10" fontFamily={font} fill={T.success} fontWeight="700">Buy-back {money(gtc)} @ stock ≤ {money(gtcLevel)}</text>
               </>
             )}
@@ -266,16 +288,34 @@ export default function WorkingPositionChart({ symbol, strike, breakeven, curren
             {hv && (
               <g>
                 <line x1={xT(hv.t)} y1={PT} x2={xT(hv.t)} y2={PB} stroke={T.textDim} strokeWidth="1" strokeDasharray="3 3" />
-                <circle cx={xT(hv.t)} cy={yP(hv.c)} r="3.5" fill={T.accent} stroke={T.surface} strokeWidth="2" />
+                {hv.c != null && !hv.future && <circle cx={xT(hv.t)} cy={yP(hv.c)} r="3.5" fill={T.accent} stroke={T.surface} strokeWidth="2" />}
+                {hv.v != null && <circle cx={xT(hv.t)} cy={yP2(hv.v)} r="3.5" fill={PREM_COLOR} stroke={T.surface} strokeWidth="2" />}
               </g>
             )}
           </svg>
         )}
 
         {hv && (
-          <div style={{ position: "absolute", top: 0, left: `${(xT(hv.t) / VBW) * 100}%`, transform: `translateX(${xT(hv.t) > VBW * 0.7 ? "-105%" : "8px"})`, background: T.card, border: `1px solid ${T.border}`, borderRadius: 7, padding: "6px 9px", pointerEvents: "none", fontFamily: font, fontSize: 11, whiteSpace: "nowrap", boxShadow: "0 6px 18px #00000055" }}>
-            <div style={{ color: T.text, fontWeight: 700 }}>{money(hv.c)}</div>
-            <div style={{ color: T.textDim, marginTop: 2 }}>{fmtHover(hv.t)}</div>
+          <div style={{ position: "absolute", top: 0, left: `${(xT(hv.t) / VBW) * 100}%`, transform: `translateX(${xT(hv.t) > VBW * 0.7 ? "-105%" : "8px"})`, background: T.card, border: `1px solid ${hv.nearGreen ? T.success : T.border}`, borderRadius: 7, padding: "6px 9px", pointerEvents: "none", fontFamily: font, fontSize: 11, whiteSpace: "nowrap", boxShadow: "0 6px 18px #00000055" }}>
+            {hv.nearGreen && gtcLevel != null ? (
+              <>
+                <div style={{ color: T.success, fontWeight: 700 }}>GTC buy-back</div>
+                <div style={{ color: T.textDim, marginTop: 2 }}>fills when stock ≤ {money(gtcLevel)}</div>
+                {gtcCost != null && <div style={{ color: T.text, marginTop: 2 }}>cost <b style={{ color: PREM_COLOR }}>{money(gtcCost)}</b> <span style={{ color: T.textDim }}>({money(gtc)}/sh)</span></div>}
+                {Number(keeps) > 0 && <div style={{ color: T.text }}>you keep <b style={{ color: T.success }}>{money(keeps)}</b></div>}
+              </>
+            ) : (
+              <>
+                <div style={{ color: T.text, fontWeight: 700 }}>{hv.future ? "stock (flat) " : ""}{money(hv.c)}</div>
+                <div style={{ color: T.textDim, marginTop: 2 }}>{fmtHover(hv.t)}</div>
+                {hvBuyBack != null && (
+                  <div style={{ color: T.text, marginTop: 3 }}>buy back <b style={{ color: PREM_COLOR }}>{money(hvBuyBack)}</b> <span style={{ color: T.textDim }}>({money(hv.v)}/sh)</span></div>
+                )}
+                {hvKeep != null && (
+                  <div style={{ color: T.text }}>you keep <b style={{ color: hvKeep >= 0 ? T.success : T.danger }}>{money(hvKeep)}</b></div>
+                )}
+              </>
+            )}
           </div>
         )}
       </div>
@@ -301,6 +341,7 @@ export default function WorkingPositionChart({ symbol, strike, breakeven, curren
       <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginTop: 8, fontFamily: font, fontSize: 11, color: T.textDim }}>
         {Number(entryCall) > 0 && <span>Entry call <b style={{ color: T.text }}>{money(entryCall)}</b></span>}
         {Number(currentCall) >= 0 && <span>Current call <b style={{ color: T.text }}>{money(currentCall)}</b></span>}
+        {nowBuyBack != null && <span>Buy back now <b style={{ color: PREM_COLOR }}>{money(nowBuyBack)}</b>{nowKeep != null && <> → keep <b style={{ color: nowKeep >= 0 ? T.success : T.danger }}>{money(nowKeep)}</b></>}</span>}
         {Number(gtc) > 0 && <span>GTC exit <b style={{ color: T.success }}>{money(gtc)}</b></span>}
         {Number(keeps) > 0 && <span>→ keeps <b style={{ color: T.success }}>{money(keeps)}</b></span>}
         {gtcLevel != null && <span>buy-back fills if stock ≤ <b style={{ color: T.success }}>{money(gtcLevel)}</b> <span style={{ color: T.textMuted || T.textDim }}>(at today's DTE)</span></span>}

@@ -484,6 +484,7 @@ function Detail({ T, p, c, fill, entryMs, acctLabel, onUpdateLive, onClose }) {
         openedAtMs={entryMs ?? p.openedAtMs}
         gtc={p.gtc ?? 0.1}
         keeps={fill.gtcKeep}
+        contracts={p.contracts || 1}
         entryCall={p.fillCall}
         currentCall={p.liveCall}
         iv={(p.iv || 25) / 100}
