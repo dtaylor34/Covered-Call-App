@@ -11,7 +11,7 @@ import { useTheme } from "../contexts/ThemeContext";
 import { usePositions } from "../hooks/usePositions";
 import { getPriceHistory } from "../services/priceHistory";
 import { optionsExitAdvice } from "../services/ai";
-import { callVal } from "../lib/coveredCallMath";
+import { callVal, strikeStep } from "../lib/coveredCallMath";
 
 const usd = (n, signed) => { const a = Math.abs(n || 0); const s = "$" + a.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); if (signed) return a < 0.005 ? "$0.00" : (n > 0 ? "+" : "−") + s; return (n < -0.005 ? "−" : "") + s; };
 const num = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
@@ -68,6 +68,13 @@ export default function CoveredCallsProjectionsTab() {
 
   const nearest = (ms) => { if (!points.length || !Number.isFinite(ms)) return null; let best = points[0], bd = Infinity; for (const p of points) { const d = Math.abs(p.t - ms); if (d < bd) { bd = d; best = p; } } return best; };
   const entry = useMemo(() => nearest(entryMs), [entryMs, points]);
+
+  // What the call would have SOLD FOR at the entry date: Black-Scholes value of the
+  // chosen strike (or the nearest standard strike if none entered yet) using the
+  // entry-date stock price, DTE, and IV. This is the premium you'd have collected.
+  const estK = K > 0 ? K : (entry ? Math.round(entry.c / strikeStep(entry.c)) * strikeStep(entry.c) : 0);
+  const estPremSh = (entry && estK > 0 && ivv > 0) ? callVal(entry.c, estK, DTE, ivv / 100) : null;
+  const estPremTotal = estPremSh != null ? estPremSh * shares : null;
 
   // Covered-call P&L each day: stock move + premium kept (premium − cost to buy
   // the call back, marked with Black-Scholes). At/after expiry the call is intrinsic.
@@ -167,6 +174,19 @@ export default function CoveredCallsProjectionsTab() {
           <label style={{ fontSize: 11, color: T.textDim }}>Contracts<br /><input value={contracts} onChange={(e) => setContracts(e.target.value)} style={{ ...inp, width: 70 }} /></label>
           <label style={{ fontSize: 11, color: T.textDim }}>Entry date<br /><input type="date" value={msToDate(entry?.t)} onChange={(e) => { const ms = dateToMs(e.target.value); if (ms) setEntryMs(ms); }} style={{ ...inp, width: 150 }} /></label>
         </div>
+
+        {/* What the call would have sold for at entry (Black-Scholes estimate) */}
+        {sym && entry && estPremSh != null && (
+          <div style={{ marginBottom: 12, padding: "10px 13px", borderRadius: 8, border: `1px solid ${T.success}44`, background: `${T.success}10`, fontFamily: font, fontSize: 12.5, color: T.text, lineHeight: 1.7, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+            <span>
+              At entry (<b>{fmtDate(entry.t)}</b>, {sym} <b>{px(entry.c)}</b>), a <b style={{ color: T.danger }}>${estK}</b> call · {DTE} DTE · {ivv}% IV would have sold for ≈ <b style={{ color: T.success }}>{px(estPremSh)}/sh</b> → <b style={{ color: T.success }}>{usd(estPremTotal)}</b> for {n} contract{n === 1 ? "" : "s"}.
+            </span>
+            <span style={{ display: "inline-flex", gap: 6 }}>
+              {!(K > 0) && <button onClick={() => setStrike(String(estK))} style={pill(false)}>Use ${estK} strike</button>}
+              <button onClick={() => { if (!(K > 0)) setStrike(String(estK)); setPremium(px(estPremSh)); }} style={pill(true)}>Use est. premium</button>
+            </span>
+          </div>
+        )}
 
         {!sym ? <div style={{ color: T.textDim, fontFamily: font, fontSize: 13 }}>Pick a working covered call, or enter a symbol + strike + premium to back-test.</div> : (
         <div style={{ position: "relative", width: "100%" }}>

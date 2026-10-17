@@ -41,7 +41,7 @@ export const SYMBOL_GROUPS = [
     ["JPM", "JPMorgan"], ["BAC", "Bank of America"], ["XOM", "Exxon Mobil"], ["UNH", "UnitedHealth"], ["LLY", "Eli Lilly"],
     ["WMT", "Walmart"], ["COST", "Costco"], ["DIS", "Disney"], ["BA", "Boeing"], ["PLTR", "Palantir"],
     ["COIN", "Coinbase"], ["HOOD", "Robinhood"], ["SOFI", "SoFi"], ["F", "Ford"], ["INTC", "Intel"],
-    ["PFE", "Pfizer"], ["KO", "Coca-Cola"], ["T", "AT&T"],
+    ["PFE", "Pfizer"], ["KO", "Coca-Cola"], ["T", "AT&T"], ["OKLO", "Oklo"],
   ] },
 ];
 

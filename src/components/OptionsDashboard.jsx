@@ -22,7 +22,9 @@ const expLabel = (iso) => { const [y, m, d] = String(iso || "").split("-").map(N
 const monthName = (iso) => { const [y, m] = String(iso || "").split("-").map(Number); return y ? new Date(y, m - 1, 1).toLocaleDateString("en-US", { month: "short" }) : iso; };
 
 // ── Price trend chart (Day / Week / Month) ───────────────────────────────────
-const VBW = 820, VBH = 280, PL = 56, PR = 806, PT = 16, PB = 250;
+// Geometry matched to DataTrendChart (the Minute Compare chart below) so the two
+// charts render at identical size and their plot areas line up exactly.
+const VBW = 840, VBH = 270, PL = 54, PR = 828, PT = 18, PB = 224;
 function TrendChart({ symbol, T }) {
   const [gran, setGran] = useState("D");
   const [pts, setPts] = useState([]);
