@@ -202,7 +202,7 @@ export default function WorkingPositionsTab() {
     const c = positionCalcs(p);
     const iv = (p.iv || 25) / 100;
     const light = stoplight({ liveStock: p.liveStock, strike: p.strike, daysToExpiry: p.daysToExpiry, iv, breakeven: c.breakeven });
-    const fill = gtcFillEstimate({ S: p.liveStock, strike: p.strike, daysLeft: Math.max(1, Math.round(p.daysToExpiry || 1)), iv, gtc: p.gtc ?? 0.1, fillCall: p.fillCall, contracts: p.contracts || 1 });
+    const fill = gtcFillEstimate({ S: p.liveStock, strike: p.strike, daysLeft: Math.max(1, Math.round(p.daysToExpiry || 1)), iv, gtc: p.gtc ?? 0.1, fillCall: p.fillCall, contracts: p.contracts || 1, liveCall: p.liveCall });
     // Entry = when the covered call was SOLD/opened (not the share-lot purchase).
     const entryMs = Number.isFinite(p.openedAtMs) ? p.openedAtMs : null;
     return { p, c, light, fill, liveSource: live[p.id]?.source, entryMs };
@@ -353,11 +353,11 @@ export default function WorkingPositionsTab() {
                       <div style={dim}>DAY</div>
                       <div style={dim}>BEST</div>
                       <div style={{ ...cellBase, color: DOT[light.key], fontSize: 11, whiteSpace: "normal", lineHeight: 1.3, cursor: "help" }}
-                        title={`${light.label} — ${LEGEND.find((l) => l.key === light.key)?.text || ""} (~${Math.round(light.delta * 100)}% chance the call finishes in the money).${Number(p.gtc) > 0 ? ` GTC buy-back at ${usd(p.gtc)}${fill.fillDays == null ? "" : fill.fillDays < 1 ? " — likely to fill around now at the current price" : ` — estimated to fill in about ${Math.round(fill.fillDays)} day${Math.round(fill.fillDays) === 1 ? "" : "s"}`}.` : ""}`}>
+                        title={`${light.label} — ${LEGEND.find((l) => l.key === light.key)?.text || ""} (~${Math.round(light.delta * 100)}% chance the call finishes in the money).${Number(p.gtc) > 0 ? ` GTC buy-back at ${usd(p.gtc)} — call ${fill.usingLiveMark ? "mark" : "(modeled)"} ${fill.markNow != null ? usd(fill.markNow) : "—"}${fill.filledNow ? " ≤ limit, should be filling now" : " > limit, not filled"}${!fill.filledNow && fill.fillDays != null ? `; ~${Math.round(fill.fillDays)}d est. to reach it at current IV` : ""}.` : ""}`}>
                         {light.label} · {Math.round(light.delta * 100)}%
                         {Number(p.gtc) > 0 && (
-                          <div style={{ color: fill.fillDays != null && fill.fillDays < 2 ? T.success : T.textDim, fontSize: 10, fontWeight: 700 }}>
-                            {fill.fillDays == null ? `GTC ${usd(p.gtc)}` : fill.fillDays < 1 ? `↓GTC fills ~now` : `↓GTC ~${Math.round(fill.fillDays)}d`}
+                          <div style={{ color: fill.filledNow ? T.success : T.textDim, fontSize: 10, fontWeight: 700 }}>
+                            {fill.filledNow ? `↓GTC ${usd(p.gtc)} hit` : `GTC ${usd(p.gtc)}${fill.markNow != null ? ` · mk ${usd(fill.markNow)}` : ""}`}
                           </div>
                         )}
                       </div>
@@ -377,8 +377,13 @@ export default function WorkingPositionsTab() {
                       <div />
                       <div />
                       <div />
-                      <div style={{ ...cellBase, fontSize: 11, color: c.close >= 0 ? T.success : T.danger, cursor: "help" }}
-                        title={`If you closed this position now — buying the call back at its current price — you'd net ${usd(c.close, true)}. The ${(c.health * 100).toFixed(1)}% is the position's health: current share value plus premium kept, divided by what you paid for the shares (over 100% = ahead).`}>if closed {usd(c.close, true)} · {(c.health * 100).toFixed(1)}%</div>
+                      {c.hasCostBasis ? (
+                        <div style={{ ...cellBase, fontSize: 11, color: c.close >= 0 ? T.success : T.danger, cursor: "help" }}
+                          title={`If you closed this position now — buying the call back at its current price — you'd net ${usd(c.close, true)}. The ${(c.health * 100).toFixed(1)}% is the position's health: current share value plus premium kept, divided by what you paid for the shares (over 100% = ahead).`}>if closed {usd(c.close, true)} · {(c.health * 100).toFixed(1)}%</div>
+                      ) : (
+                        <div style={{ ...cellBase, fontSize: 11, color: c.kept >= 0 ? T.success : T.danger, cursor: "help" }}
+                          title={`Premium kept so far on the call: what you collected (${usd(c.premium)}) minus the cost to buy it back now (${usd(c.buyback)}). Add a share cost basis to see whole-position P&L.`}>call kept {usd(c.kept, true)}</div>
+                      )}
                       <div />
                     </div>
                     {/* Leg 3 — working GTC buy-to-close order (the buy-back), if set */}
@@ -439,11 +444,13 @@ function Detail({ T, p, c, fill, entryMs, acctLabel, onUpdateLive, onClose }) {
   const lbl = { color: T.textDim, fontSize: 9, fontFamily: T.fontMono, letterSpacing: 1, textTransform: "uppercase" };
   const val = { fontSize: 16, fontWeight: 700, fontFamily: T.fontMono, marginTop: 4 };
   const editStyle = { width: 90, minHeight: 38, padding: "0 10px", border: `1px solid ${T.border}`, borderRadius: 8, background: T.inputBg || T.card, color: T.text, fontFamily: T.fontMono, fontSize: 13 };
-  const fillMsg = fill.fillDays == null
-    ? `The call stays above ${usd(p.gtc ?? 0.1)} through expiration at this price.`
-    : fill.fillDays >= (p.daysToExpiry || 1) - 0.01
-      ? `Already at/under ${usd(p.gtc ?? 0.1)} — the GTC fills right away.`
-      : fill.fillDays < 1 ? "Fills around expiration day." : `Fills with ~${Math.round(fill.fillDays)} days left.`;
+  // Fill status from the call's ACTUAL price (live mark) — not a model.
+  const markTxt = fill.markNow != null ? usd(fill.markNow) : "—";
+  const fillMsg = fill.filledNow
+    ? `Call ${fill.usingLiveMark ? "mark" : "(modeled)"} ${markTxt} is at/under your ${usd(p.gtc ?? 0.1)} limit — the buy-back should be filling.`
+    : fill.usingLiveMark
+      ? `Not filled: call mark ${markTxt} is above your ${usd(p.gtc ?? 0.1)} limit.${fill.fillDays != null ? ` At today's price it reaches ${usd(p.gtc ?? 0.1)} in ~${Math.round(fill.fillDays)} day${Math.round(fill.fillDays) === 1 ? "" : "s"} (estimate, current IV).` : " It stays above the limit through expiration at this price."}`
+      : `No live call quote — modeled value ${markTxt} vs your ${usd(p.gtc ?? 0.1)} limit. Connect Schwab for the real mark.`;
 
   return (
     <div style={{ padding: "4px 18px 18px", borderTop: `1px solid ${T.border}` }}>
@@ -458,14 +465,22 @@ function Detail({ T, p, c, fill, entryMs, acctLabel, onUpdateLive, onClose }) {
           <button onClick={() => onUpdateLive(p.id, { fillCall: Number(p.fillCall) / 100 })} style={{ padding: "7px 12px", borderRadius: 7, border: `1px solid ${T.accent}`, cursor: "pointer", background: T.accent, color: "#0A0A0A", fontFamily: T.fontMono, fontSize: 12, fontWeight: 700 }}>Fix: ÷100 → {usd(Number(p.fillCall) / 100)}</button>
         </div>
       )}
-      {/* Position summary */}
+      {/* Position summary. Stock-leg metrics need a real share cost basis; the
+          premium/buy-back figures below never do. */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(96px, 1fr))", gap: 8, margin: "14px 0" }}>
-        <div style={box}><div style={lbl}>Money in</div><div style={{ ...val, color: T.text }}>{usd(c.basis)}</div></div>
-        <div style={box}><div style={lbl}>If closed now</div><div style={{ ...val, color: c.close >= 0 ? T.success : T.danger }}>{usd(c.close, true)}</div></div>
-        <div style={box}><div style={lbl}>Max profit</div><div style={{ ...val, color: T.accent }}>{usd(c.maxProfit, true)}</div></div>
-        <div style={box} title={beSuspect(p) ? BE_WARN : undefined}><div style={lbl}>Breakeven{beSuspect(p) ? " ⚠" : ""}</div><div style={{ ...val, color: T.warn }}>{usd(c.breakeven)}</div></div>
-        <div style={box}><div style={lbl}>Health</div><div style={{ ...val, color: T.text }}>{(c.health * 100).toFixed(1)}%</div></div>
+        <div style={box}><div style={lbl}>Premium kept</div><div style={{ ...val, color: c.kept >= 0 ? T.success : T.danger }}>{usd(c.kept, true)}</div></div>
+        <div style={box}><div style={lbl}>Buy-back now</div><div style={{ ...val, color: T.text }}>{usd(c.buyback)}</div></div>
+        <div style={box}><div style={lbl}>Money in</div><div style={{ ...val, color: T.text }}>{c.hasCostBasis ? usd(c.basis) : "—"}</div></div>
+        <div style={box}><div style={lbl}>If closed now</div><div style={{ ...val, color: c.hasCostBasis ? (c.close >= 0 ? T.success : T.danger) : T.textDim }}>{c.hasCostBasis ? usd(c.close, true) : "—"}</div></div>
+        <div style={box}><div style={lbl}>Max profit</div><div style={{ ...val, color: c.hasCostBasis ? T.accent : T.textDim }}>{c.hasCostBasis ? usd(c.maxProfit, true) : "—"}</div></div>
+        <div style={box} title={beSuspect(p) ? BE_WARN : undefined}><div style={lbl}>Breakeven{beSuspect(p) && c.hasCostBasis ? " ⚠" : ""}</div><div style={{ ...val, color: c.hasCostBasis ? T.warn : T.textDim }}>{c.hasCostBasis ? usd(c.breakeven) : "—"}</div></div>
+        <div style={box}><div style={lbl}>Health</div><div style={{ ...val, color: c.hasCostBasis ? T.text : T.textDim }}>{c.hasCostBasis ? `${(c.health * 100).toFixed(1)}%` : "—"}</div></div>
       </div>
+      {!c.hasCostBasis && (
+        <div style={{ color: T.textDim, fontFamily: T.fontMono, fontSize: 11, marginTop: -4, marginBottom: 6, lineHeight: 1.5 }}>
+          Stock-leg metrics (money in, if-closed, max profit, breakeven, health) are hidden — no share cost basis entered. The covered-call figures above (premium kept, buy-back) don't need it. Add “Share price paid” below to see the whole-position P&L.
+        </div>
+      )}
 
       {/* GTC fill estimate */}
       <div style={{ padding: "12px 14px", background: T.accentDim, borderRadius: 8, marginBottom: 14 }}>

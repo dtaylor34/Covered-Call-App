@@ -12,7 +12,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { useTheme } from "../contexts/ThemeContext";
 import { getPriceHistory } from "../services/priceHistory";
-import { callVal } from "../lib/coveredCallMath";
+import { callVal, impliedVol } from "../lib/coveredCallMath";
 
 const VBW = 760, VBH = 240, PL = 54, PT = 16, PB = 204;
 const DAY = 86400000;
@@ -79,7 +79,10 @@ export default function WorkingPositionChart({ symbol, strike, breakeven, curren
   const showFuture = (sel.full || !sel.intraday) && futureMs > 0;
   const tMax = showFuture ? expMs : nowMs;
 
-  const K = Number(strike), vol = Number(iv);
+  // Calibrate volatility to the LIVE call mark when we have one — a stale/default
+  // IV badly misplaces the buy-back level (e.g. puts it far too high into earnings).
+  const K = Number(strike);
+  const vol = impliedVol(Number(currentCall), Number(currentPrice), K, Number(daysToExpiry), Number(iv));
   const gtcLevel = solveStockForCall(Number(gtc), K, Number(daysToExpiry), vol);
 
   // Buy-back-cost theta arch (Range view only): historical premium from the real
@@ -107,6 +110,9 @@ export default function WorkingPositionChart({ symbol, strike, breakeven, curren
   const xT = (t) => PL + ((t - tMin) / ((tMax - tMin) || 1)) * (RX - PL);
   const yP = (v) => { const r = PB - ((v - lo) / ((hi - lo) || 1)) * (PB - PT); return Number.isFinite(r) ? r : PB; };
   const yP2 = (v) => { const r = PB - (v / (premMax || 1)) * (PB - PT); return Number.isFinite(r) ? r : PB; };
+  // First point on the buy-back-cost arch where it decays to your GTC limit — the
+  // modeled fill (holding the stock flat at today's price, current IV).
+  const gtcCross = (showPrem && Number(gtc) > 0) ? (premCurve.find((p) => p.v <= Number(gtc)) || null) : null;
 
   const line = pts.map((p, i) => (i ? "L" : "M") + xT(p.t).toFixed(1) + " " + yP(p.c).toFixed(1)).join(" ");
   const area = pts.length ? `${line} L ${xT(pts[pts.length - 1].t).toFixed(1)} ${PB} L ${xT(pts[0].t).toFixed(1)} ${PB} Z` : "";
@@ -228,7 +234,7 @@ export default function WorkingPositionChart({ symbol, strike, breakeven, curren
             {gtcLevel != null && gtcLevel > lo && gtcLevel < hi && (
               <>
                 <line x1={PL} y1={yP(gtcLevel)} x2={RX} y2={yP(gtcLevel)} stroke={T.success} strokeWidth={hv?.nearGreen ? 2.75 : 1.5} strokeDasharray="6 3" />
-                <text x={PL + 4} y={yP(gtcLevel) - 4} textAnchor="start" fontSize="10" fontFamily={font} fill={T.success} fontWeight="700">Buy-back {money(gtc)} @ stock ≤ {money(gtcLevel)}</text>
+                <text x={PL + 4} y={yP(gtcLevel) - 4} textAnchor="start" fontSize="10" fontFamily={font} fill={T.success} fontWeight="700">Buy-back {money(gtc)} ≈ stock {money(gtcLevel)} (est.)</text>
               </>
             )}
             {Number(breakeven) > 0 && (
@@ -252,6 +258,13 @@ export default function WorkingPositionChart({ symbol, strike, breakeven, curren
                   <>
                     <line x1={PL} y1={yP2(gtc)} x2={RX} y2={yP2(gtc)} stroke={PREM_COLOR} strokeWidth="1" strokeDasharray="2 3" opacity="0.6" />
                     <text x={RX - 4} y={yP2(gtc) - 3} textAnchor="end" fontSize="9" fontFamily={font} fill={PREM_COLOR}>GTC {money(gtc)}</text>
+                  </>
+                )}
+                {/* estimated fill: where the arch decays to your GTC limit */}
+                {gtcCross && (
+                  <>
+                    <circle cx={xT(gtcCross.t)} cy={yP2(Number(gtc))} r="4.5" fill={PREM_COLOR} stroke={T.surface} strokeWidth="2" />
+                    <text x={xT(gtcCross.t)} y={yP2(Number(gtc)) - 8} textAnchor="middle" fontSize="9" fontFamily={font} fill={PREM_COLOR} fontWeight="700">est. fill {fmtDate(gtcCross.t)}</text>
                   </>
                 )}
               </>
@@ -300,7 +313,7 @@ export default function WorkingPositionChart({ symbol, strike, breakeven, curren
             {hv.nearGreen && gtcLevel != null ? (
               <>
                 <div style={{ color: T.success, fontWeight: 700 }}>GTC buy-back</div>
-                <div style={{ color: T.textDim, marginTop: 2 }}>fills when stock ≤ {money(gtcLevel)}</div>
+                <div style={{ color: T.textDim, marginTop: 2 }}>≈ near stock {money(gtcLevel)} (est.) · real trigger = call mark ≤ {money(gtc)}</div>
                 {gtcCost != null && <div style={{ color: T.text, marginTop: 2 }}>cost <b style={{ color: PREM_COLOR }}>{money(gtcCost)}</b> <span style={{ color: T.textDim }}>({money(gtc)}/sh)</span></div>}
                 {Number(keeps) > 0 && <div style={{ color: T.text }}>you keep <b style={{ color: T.success }}>{money(keeps)}</b></div>}
               </>
@@ -344,7 +357,7 @@ export default function WorkingPositionChart({ symbol, strike, breakeven, curren
         {nowBuyBack != null && <span>Buy back now <b style={{ color: PREM_COLOR }}>{money(nowBuyBack)}</b>{nowKeep != null && <> → keep <b style={{ color: nowKeep >= 0 ? T.success : T.danger }}>{money(nowKeep)}</b></>}</span>}
         {Number(gtc) > 0 && <span>GTC exit <b style={{ color: T.success }}>{money(gtc)}</b></span>}
         {Number(keeps) > 0 && <span>→ keeps <b style={{ color: T.success }}>{money(keeps)}</b></span>}
-        {gtcLevel != null && <span>buy-back fills if stock ≤ <b style={{ color: T.success }}>{money(gtcLevel)}</b> <span style={{ color: T.textMuted || T.textDim }}>(at today's DTE)</span></span>}
+        {gtcLevel != null && <span>buy-back ≈ fills near stock <b style={{ color: T.success }}>{money(gtcLevel)}</b> <span style={{ color: T.textMuted || T.textDim }}>(est., current IV — the real trigger is the call's mark hitting {money(gtc)})</span></span>}
         {showPrem && <span style={{ color: PREM_COLOR }}>violet = cost to buy back over time (theta); stock held flat after today</span>}
         {Number.isFinite(openedAtMs) && !sel.full && (nowMs - openedAtMs) < 14 * DAY && <span style={{ color: amber }}>Entry was recent — tap <b>Range</b> to see it from entry → expiration (it sits next to “today” on longer ranges).</span>}
       </div>

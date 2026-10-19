@@ -89,8 +89,12 @@ export function positionCalcs(p) {
   const maxProfit = (K - fillStock) * shares + premium;
   const health = shareCost ? (marketValue + premium - buyback) / shareCost : 0;
   const basis = shareCost - premium;                  // "money in the trade"
+  // Stock-leg metrics (breakeven/maxProfit/health/basis/stockPL/close) are only
+  // meaningful with a real share cost basis. A missing or sub-premium fillStock
+  // (e.g. a call imported/entered without the stock leg) makes them nonsense.
+  const hasCostBasis = Number(fillStock) > 0 && fillStock > fillCall;
 
-  return { contracts, shares, shareCost, premium, buyback, kept, marketValue, stockPL, close, breakeven, maxProfit, health, basis };
+  return { contracts, shares, shareCost, premium, buyback, kept, marketValue, stockPL, close, breakeven, maxProfit, health, basis, hasCostBasis };
 }
 
 // ── Stoplight ─────────────────────────────────────────────────────────────────
@@ -120,19 +124,39 @@ export function stoplight({ liveStock, strike, daysToExpiry, iv, breakeven }) {
  * @returns {{ fillDays:number|null, gtcKeep:number }} fillDays = days-to-expiry
  *          at which it fills (null if never within the window); gtcKeep in dollars.
  */
-export function gtcFillEstimate({ S, strike, daysLeft, iv, gtc, fillCall, contracts = 1 }) {
+export function gtcFillEstimate({ S, strike, daysLeft, iv, gtc, fillCall, contracts = 1, liveCall = null }) {
   const shares = contracts * 100;
   const gtcKeep = (fillCall - gtc) * shares;
-  const cNow = callVal(S, strike, daysLeft, iv);
+  // Whether the buy-back has filled is decided by the call's ACTUAL price (the
+  // live mark), not a model — a stale/default IV can badly misprice the call and
+  // falsely declare a fill. Use the live mark when present; model only as a last
+  // resort, and calibrate the fill-timing projection to the mark's implied vol.
+  const modeled = callVal(S, strike, daysLeft, iv);
+  const usingLiveMark = Number.isFinite(liveCall) && liveCall > 0;
+  const markNow = usingLiveMark ? liveCall : modeled;
+  const filledNow = Number.isFinite(markNow) && markNow <= gtc;
+  const ivUsed = usingLiveMark ? impliedVol(liveCall, S, strike, daysLeft, iv) : iv;
+  // Modeled projection of WHEN it could fill (stock flat, decay only) — an
+  // estimate using the mark-implied vol, not a quote. null = not within the window.
   let fillDays = null;
-  if (cNow <= gtc) {
+  if (filledNow) {
     fillDays = daysLeft;
   } else {
     for (let d = daysLeft; d >= 0; d -= 0.25) {
-      if (callVal(S, strike, Math.max(0, d), iv) <= gtc) { fillDays = Math.max(0, d); break; }
+      if (callVal(S, strike, Math.max(0, d), ivUsed) <= gtc) { fillDays = Math.max(0, d); break; }
     }
   }
-  return { fillDays, gtcKeep };
+  return { fillDays, gtcKeep, markNow, filledNow, usingLiveMark };
+}
+
+/** Implied volatility from a call's market price (bisection). Falls back to `guess`. */
+export function impliedVol(mark, S, K, days, guess = DEFAULT_IV) {
+  if (!(mark > 0) || !(S > 0) || !(K > 0) || !(days > 0)) return guess;
+  let lo = 0.01, hi = 5;
+  if (callVal(S, K, days, hi) < mark) return hi;     // mark above model's max → cap
+  if (callVal(S, K, days, lo) > mark) return lo;     // below model's min → floor
+  for (let i = 0; i < 50; i++) { const mid = (lo + hi) / 2; if (callVal(S, K, days, mid) < mark) lo = mid; else hi = mid; }
+  return (lo + hi) / 2;
 }
 
 // ── Lots ──────────────────────────────────────────────────────────────────────
