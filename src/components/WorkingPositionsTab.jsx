@@ -14,7 +14,7 @@ import { useLivePortfolio } from "../hooks/useLivePortfolio";
 import { positionCalcs, stoplight, gtcFillEstimate } from "../lib/coveredCallMath";
 import WorkingPositionChart from "./WorkingPositionChart";
 import { parsePaste, positionId } from "../lib/positionParser";
-import { parseSchwabOpenDates, parseSchwabClosedCycles, isCoveredCallUnderlying } from "../lib/schwabPositions";
+import { parseSchwabOpenDates, parseSchwabClosedCycles, parseSchwabGtcOrders, isCoveredCallUnderlying } from "../lib/schwabPositions";
 import { useBrokerConnection } from "../hooks/useBrokerConnection";
 import { schwabGetOrders, schwabReauthorize } from "../services/schwabApi";
 import { getPriceHistory } from "../services/priceHistory";
@@ -41,6 +41,9 @@ const expShort = (iso) => {
   return new Date(y, (m || 1) - 1, d || 1).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 };
 const CLOSE_HOW = { bought: "bought back", expired: "expired", called: "called away" };
+// A resting GTC buy-back order still live at Schwab (authoritative "not filled").
+const GTC_ACTIVE = ["WORKING", "QUEUED", "ACCEPTED", "PENDING_ACTIVATION", "OPEN", "AWAITING_PARENT_ORDER"];
+const gtcWorking = (p) => GTC_ACTIVE.includes(String(p?.gtcStatus || "").toUpperCase());
 // A scaling error (option price stored per-contract ×100 instead of per-share)
 // shows up as a call premium that's a large fraction of the STOCK's market price
 // — not the cost basis (a legit low-cost-basis call can have a big premium vs its
@@ -117,6 +120,7 @@ export default function WorkingPositionsTab() {
     setSyncing(true); setSyncMsg({ ok: true, text: "Pulling from Schwab…" });
     try {
       let dated = 0, closedN = 0, importedN = 0, acctsHit = 0, ordersN = 0, buybacksSeen = 0, skipped = 0, expiredN = 0, calledN = 0;
+      const checkedMs = Date.now();
       const closedIds = new Set();
       const DAY = 86400000;
       // Existing closed records, so we don't re-import the same buy-back.
@@ -129,11 +133,15 @@ export default function WorkingPositionsTab() {
         acctsHit++;
         ordersN += (Array.isArray(orders) ? orders : (orders?.orders || [])).length;
         const openByKey = parseSchwabOpenDates(orders);
-        // Entry (sell-to-open) dates for existing positions.
+        const gtcOrders = parseSchwabGtcOrders(orders); // resting buy-back orders + their status
+        // Entry (sell-to-open) dates + live GTC order status for existing positions.
         for (const p of positions) {
           if (p.acct && p.acct !== acctTag) continue;
           const k = `${p.sym}|${p.strike}|${p.expiry}`;
           if (openByKey[k] != null && openByKey[k] !== p.openedAtMs) { await updateLive(p.id, { openedAtMs: openByKey[k] }); dated++; }
+          // Authoritative "is my buy-back still working at Schwab" flag.
+          const g = gtcOrders[k];
+          if (g && (p.gtcStatus !== g.status)) { await updateLive(p.id, { gtcStatus: g.status, gtcCheckedMs: checkedMs }); }
         }
         // Every buy-back (buy-to-close) in the window → close the matching open
         // position if we have one, otherwise import it as a closed trade.
@@ -398,7 +406,7 @@ export default function WorkingPositionsTab() {
                         <div style={cellBase}>{p.strike}</div>
                         <div style={cellBase}>CALL</div>
                         <div style={cellBase}>{Number(p.gtc).toFixed(2)} <span style={{ color: T.textDim }}>LMT</span></div>
-                        <div style={dim}>LIMIT</div>
+                        <div style={gtcWorking(p) ? { ...cellBase, color: T.success, fontWeight: 700 } : dim} title={gtcWorking(p) ? `Confirmed at Schwab: this buy-back order is ${p.gtcStatus} (not filled)${p.gtcCheckedMs ? ` as of ${new Date(p.gtcCheckedMs).toLocaleDateString()}` : ""}.` : undefined}>{gtcWorking(p) ? p.gtcStatus : "LIMIT"}</div>
                         <div style={{ ...cellBase, color: T.warn, fontWeight: 700 }}>GTC</div>
                         <div style={dim}>BEST</div>
                         <div style={{ ...cellBase, color: T.success, fontSize: 11, cursor: "help" }}
@@ -444,13 +452,16 @@ function Detail({ T, p, c, fill, entryMs, acctLabel, onUpdateLive, onClose }) {
   const lbl = { color: T.textDim, fontSize: 9, fontFamily: T.fontMono, letterSpacing: 1, textTransform: "uppercase" };
   const val = { fontSize: 16, fontWeight: 700, fontFamily: T.fontMono, marginTop: 4 };
   const editStyle = { width: 90, minHeight: 38, padding: "0 10px", border: `1px solid ${T.border}`, borderRadius: 8, background: T.inputBg || T.card, color: T.text, fontFamily: T.fontMono, fontSize: 13 };
-  // Fill status from the call's ACTUAL price (live mark) — not a model.
+  // Fill status. The resting Schwab order status (if synced) is authoritative;
+  // otherwise fall back to the call's live mark; the model is the last resort.
   const markTxt = fill.markNow != null ? usd(fill.markNow) : "—";
-  const fillMsg = fill.filledNow
-    ? `Call ${fill.usingLiveMark ? "mark" : "(modeled)"} ${markTxt} is at/under your ${usd(p.gtc ?? 0.1)} limit — the buy-back should be filling.`
-    : fill.usingLiveMark
-      ? `Not filled: call mark ${markTxt} is above your ${usd(p.gtc ?? 0.1)} limit.${fill.fillDays != null ? ` At today's price it reaches ${usd(p.gtc ?? 0.1)} in ~${Math.round(fill.fillDays)} day${Math.round(fill.fillDays) === 1 ? "" : "s"} (estimate, current IV).` : " It stays above the limit through expiration at this price."}`
-      : `No live call quote — modeled value ${markTxt} vs your ${usd(p.gtc ?? 0.1)} limit. Connect Schwab for the real mark.`;
+  const fillMsg = gtcWorking(p)
+    ? `✓ Confirmed at Schwab — your buy-back order is ${p.gtcStatus} (NOT filled). Call mark ${markTxt} vs your ${usd(p.gtc ?? 0.1)} limit.${p.gtcCheckedMs ? ` As of last sync ${new Date(p.gtcCheckedMs).toLocaleDateString()}.` : ""}`
+    : fill.filledNow
+      ? `Call ${fill.usingLiveMark ? "mark" : "(modeled)"} ${markTxt} is at/under your ${usd(p.gtc ?? 0.1)} limit — the buy-back should be filling.`
+      : fill.usingLiveMark
+        ? `Not filled: call mark ${markTxt} is above your ${usd(p.gtc ?? 0.1)} limit.${fill.fillDays != null ? ` At today's price it reaches ${usd(p.gtc ?? 0.1)} in ~${Math.round(fill.fillDays)} day${Math.round(fill.fillDays) === 1 ? "" : "s"} (estimate, current IV).` : " It stays above the limit through expiration at this price."}`
+        : `No live call quote — modeled value ${markTxt} vs your ${usd(p.gtc ?? 0.1)} limit. Connect Schwab for the real mark.`;
 
   return (
     <div style={{ padding: "4px 18px 18px", borderTop: `1px solid ${T.border}` }}>

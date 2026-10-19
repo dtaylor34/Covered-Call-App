@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseSchwabPositions, parseOccSymbol, parseSchwabOrders } from "./schwabPositions";
+import { parseSchwabPositions, parseOccSymbol, parseSchwabOrders, parseSchwabGtcOrders } from "./schwabPositions";
 
 // Mock Schwab Trader API response: 200 META shares + 2 short $820 calls (the META example).
 const DATA = {
@@ -53,5 +53,24 @@ describe("parseSchwabOrders", () => {
       { status: "FILLED", price: 9.99, orderLegCollection: [] }, // ignored (not active)
     ];
     expect(parseSchwabOrders(orders)).toEqual({ "META|800|2026-11-06": 2 });
+  });
+});
+
+describe("parseSchwabGtcOrders", () => {
+  it("keeps the resting order's status (authoritative 'not filled' signal)", () => {
+    const orders = [
+      {
+        status: "WORKING", price: 2.00, enteredTime: "2026-10-02T12:34:15+0000",
+        orderLegCollection: [{
+          instruction: "BUY_TO_CLOSE",
+          instrument: { assetType: "OPTION", symbol: "META  261106C00800000", putCall: "CALL", underlyingSymbol: "META" },
+        }],
+      },
+      { status: "FILLED", price: 1.00, orderLegCollection: [] }, // ignored (not active)
+    ];
+    const out = parseSchwabGtcOrders(orders);
+    expect(out["META|800|2026-11-06"].gtc).toBe(2);
+    expect(out["META|800|2026-11-06"].status).toBe("WORKING");
+    expect(out["META|800|2026-11-06"].placedMs).toBe(new Date("2026-10-02T12:34:15+0000").getTime());
   });
 });

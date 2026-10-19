@@ -293,3 +293,35 @@ export function parseSchwabOrders(orders) {
   }
   return gtcByKey;
 }
+
+/**
+ * Richer view of resting GTC buy-to-close call orders: the authoritative
+ * "is my buy-back still working at the broker" signal. Unlike parseSchwabOrders
+ * (which returns just the limit price), this keeps the order STATUS so the UI can
+ * say "WORKING — not filled" instead of inferring a fill from a model/mark.
+ * @returns {object} map "SYM|strike|expiry" -> { gtc, status, placedMs }
+ */
+export function parseSchwabGtcOrders(orders) {
+  const list = Array.isArray(orders) ? orders : (orders?.orders || []);
+  const byKey = {};
+  for (const o of list) {
+    const status = String(o.status || "").toUpperCase();
+    if (status && !ACTIVE_ORDER_STATUS.includes(status)) continue; // only live/resting orders
+    const price = Number(o.price);
+    if (!(price >= 0)) continue;
+    const t = o.enteredTime || o.closeTime;
+    const placedMs = t ? new Date(t).getTime() : null;
+    for (const leg of (o.orderLegCollection || [])) {
+      if (String(leg.instruction || "").toUpperCase() !== "BUY_TO_CLOSE") continue;
+      const inst = leg.instrument || {};
+      const occ = parseOccSymbol(inst.symbol) || {};
+      const putCall = inst.putCall || occ.putCall;
+      if (putCall !== "CALL") continue;
+      const sym = (inst.underlyingSymbol || occ.underlying || "").toUpperCase();
+      if (sym && occ.strike != null && occ.expiry) {
+        byKey[`${sym}|${occ.strike}|${occ.expiry}`] = { gtc: price, status: status || "WORKING", placedMs };
+      }
+    }
+  }
+  return byKey;
+}
