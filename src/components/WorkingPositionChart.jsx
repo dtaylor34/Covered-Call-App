@@ -82,22 +82,26 @@ export default function WorkingPositionChart({ symbol, strike, breakeven, curren
   // Calibrate volatility to the LIVE call mark when we have one — a stale/default
   // IV badly misplaces the buy-back level (e.g. puts it far too high into earnings).
   const K = Number(strike);
-  const vol = impliedVol(Number(currentCall), Number(currentPrice), K, Number(daysToExpiry), Number(iv));
-  const gtcLevel = solveStockForCall(Number(gtc), K, Number(daysToExpiry), vol);
+  // Days to expiry from the actual expiration date (robust to a stale prop).
+  const dte = expMs ? Math.max(0.5, (expMs - nowMs) / DAY) : Number(daysToExpiry);
+  const vol = impliedVol(Number(currentCall), Number(currentPrice), K, dte, Number(iv));
+  const gtcLevel = solveStockForCall(Number(gtc), K, dte, vol);
 
-  // Buy-back-cost theta arch (Range view only): historical premium from the real
-  // stock path (entry→now) + projection with the stock flat (now→exp).
+  // Buy-back-cost curve: the call's value over the visible window (from real stock
+  // prices) + a projection to expiration with the stock held flat. Shown in any
+  // view that includes the future exit window (Range + the non-intraday ranges),
+  // not just Range.
   const premCurve = useMemo(() => {
-    if (!sel.full || !expMs || !(K > 0) || !(vol > 0)) return [];
+    if ((!sel.full && !showFuture) || !expMs || !(K > 0) || !(vol > 0)) return [];
     const out = [];
-    // historical: real stock path (entry→now). future: stock held flat at today's price (now→exp).
+    // visible history: real stock path. future: stock held flat at today's price (now→exp).
     for (const p of pts) { const dl = Math.max(0, (expMs - p.t) / DAY); out.push({ t: p.t, v: callVal(p.c, K, dl, vol), c: p.c, future: false }); }
     const steps = 30;
     for (let i = 1; i <= steps; i++) { const t = nowMs + (expMs - nowMs) * (i / steps); const dl = Math.max(0, (expMs - t) / DAY); out.push({ t, v: callVal(Number(currentPrice), K, dl, vol), c: Number(currentPrice), future: true }); }
     return out.filter((p) => Number.isFinite(p.v));
-  }, [sel.full, pts, expMs, K, vol, currentPrice, nowMs]);
+  }, [sel.full, showFuture, pts, expMs, K, vol, currentPrice, nowMs]);
 
-  const showPrem = sel.full && premCurve.length > 1;
+  const showPrem = (sel.full || showFuture) && premCurve.length > 1;
   const RX = showPrem ? 700 : VBW - 12; // right plot edge (leave room for premium axis)
   const premMax = showPrem ? Math.max(...premCurve.map((p) => p.v), Number(entryCall) || 0, Number(gtc) || 0) * 1.12 || 1 : 1;
 

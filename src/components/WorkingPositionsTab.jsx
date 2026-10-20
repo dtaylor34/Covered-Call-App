@@ -210,7 +210,9 @@ export default function WorkingPositionsTab() {
     const c = positionCalcs(p);
     const iv = (p.iv || 25) / 100;
     const light = stoplight({ liveStock: p.liveStock, strike: p.strike, daysToExpiry: p.daysToExpiry, iv, breakeven: c.breakeven });
-    const fill = gtcFillEstimate({ S: p.liveStock, strike: p.strike, daysLeft: Math.max(1, Math.round(p.daysToExpiry || 1)), iv, gtc: p.gtc ?? 0.1, fillCall: p.fillCall, contracts: p.contracts || 1, liveCall: p.liveCall });
+    const expMsP = dateToMs(p.expiry); // days-to-expiry from the real date (robust to a stale prop)
+    const dteP = expMsP ? Math.max(1, Math.round((expMsP - Date.now()) / 86400000)) : Math.max(1, Math.round(p.daysToExpiry || 1));
+    const fill = gtcFillEstimate({ S: p.liveStock, strike: p.strike, daysLeft: dteP, iv, gtc: p.gtc ?? 0.1, fillCall: p.fillCall, contracts: p.contracts || 1, liveCall: p.liveCall });
     // Entry = when the covered call was SOLD/opened (not the share-lot purchase).
     const entryMs = Number.isFinite(p.openedAtMs) ? p.openedAtMs : null;
     return { p, c, light, fill, liveSource: live[p.id]?.source, entryMs };
@@ -460,7 +462,7 @@ function Detail({ T, p, c, fill, entryMs, acctLabel, onUpdateLive, onClose }) {
     : fill.filledNow
       ? `Call ${fill.usingLiveMark ? "mark" : "(modeled)"} ${markTxt} is at/under your ${usd(p.gtc ?? 0.1)} limit — the buy-back should be filling.`
       : fill.usingLiveMark
-        ? `Not filled: call mark ${markTxt} is above your ${usd(p.gtc ?? 0.1)} limit.${fill.fillDays != null ? ` At today's price it reaches ${usd(p.gtc ?? 0.1)} in ~${Math.round(fill.fillDays)} day${Math.round(fill.fillDays) === 1 ? "" : "s"} (estimate, current IV).` : " It stays above the limit through expiration at this price."}`
+        ? `Not filled: call mark ${markTxt} is above your ${usd(p.gtc ?? 0.1)} limit.${fill.fillDays != null ? ` At today's price it decays to ${usd(p.gtc ?? 0.1)} with ~${Math.round(fill.fillDays)} day${Math.round(fill.fillDays) === 1 ? "" : "s"} left to expiry (estimate, current IV).` : " It stays above the limit through expiration at this price."}`
         : `No live call quote — modeled value ${markTxt} vs your ${usd(p.gtc ?? 0.1)} limit. Connect Schwab for the real mark.`;
 
   return (
