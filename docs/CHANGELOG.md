@@ -1,3 +1,19 @@
+## [2.2.0] — 2026-10-19
+
+### Added
+- **Options → Projections: any-symbol back-test.** Free-symbol input (stocks/ETFs/futures, incl. OKLO) with quick-pick chips; both-valuation (Black-Scholes mark-to-market **and** intrinsic) via new Expiration + IV inputs; a standard **strike ladder** around the selected day; a past→future **price projection** to expiration (flat / ±1σ); a **Position Summary** (net cost, daily theta, max loss/gain, breakeven + % move needed, and a −$5/−$2/flat/+$2 **move table**); and the **live option chain** — click a real bid to load that strike + premium.
+- **Covered Calls → Projections:** estimate what the call **would have sold for** at entry (Black-Scholes), suggesting an ATM strike + premium when the fields are empty.
+- **Minute Compare:** hover tooltip (price, minute, clock time, Δ/% vs prior close).
+- **Covered-call chart:** buy-back-cost **hover** (cost to buy back + premium you'd keep at any point); the buy-back-cost curve now shows in all future-window ranges (1m…6m + Range), with an **"est. fill"** marker where it crosses your GTC limit.
+
+### Fixed
+- **GTC buy-back signal now reads the truth, not a model.** Fill status comes from the resting Schwab order's **WORKING/FILLED status** (new `parseSchwabGtcOrders`) when synced, else the live call **mark** vs your limit — no more false "fills right away" while the order sits above the limit. The buy-back level + theta arch are calibrated to the **mark-implied IV** (not a 25% default), and days-to-expiry is taken from the real expiration date.
+- **Cost-basis guards:** stock-leg metrics (money in / if-closed / max profit / breakeven / health) show "—" with a prompt when no share cost basis is set, instead of nonsense; added cost-basis-free **Premium kept** / **Buy-back now** tiles.
+- **Closed-trade lifecycle chart:** exit marker, label, and a new exit vertical line are theme-colored by outcome (were invisible white on light theme).
+- **Selection tab:** the price trend chart and the Minute Compare chart now share geometry and align.
+
+---
+
 ## [2.1.4] — 2026-10-10
 
 ### Added
