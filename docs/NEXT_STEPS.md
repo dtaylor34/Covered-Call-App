@@ -4,12 +4,30 @@
 > To resume: `cd` into this repo and run `claude --resume` (or `--continue`),
 > or just say: **"read docs/NEXT_STEPS.md and continue."**
 
-_Last updated: 2026-09-28 · Live version: **v2.0.15** · Branch: `api-integration` (PR #1 merged from `feature/working-lots-sheets`)_
+_Last updated: 2026-10-23 · Live version: **v2.3.1** · Branch: `api-integration` (pushed to origin; tags `v2.3.0`, `v2.3.1`)_
 _Live app: https://covered-calls-prod.web.app_
+_Source of truth is git log + the code — if this doc and the repo disagree, trust the repo._
+
+## 🟢 Current state (2026-10-23)
+Schwab is **connected and live**. Shipped today across v2.3.0 + v2.3.1:
+- **Option Chain → live Schwab bid/ask.** The ladder pulls real-time bid/ask from Schwab when connected (works **after hours**, when Yahoo returns no quotes), falling back to Yahoo (15-min delayed). Header badge shows the source (**● Schwab live** vs **Yahoo · 15-min delayed**); new **Update Prices** button re-fetches on demand + stamps a last-updated time. `schwabGetOptionChain` now requests `contractType: ALL` (calls + puts); `useOptionsChain` normalizes Schwab's response to the shared UI shape (`useMarketData.js`).
+- **Fixed:** Working tab's Schwab call marks (`useLivePortfolio.js` read the callable result without `.data`, silently falling back to Yahoo).
+- **Runtime:** all Cloud Functions on **Node.js 22** (Node 20 decommissioned 2026-10-30); `firebase-functions` → 7.4.0.
+
+### ▶️ Next up (unchanged priorities)
+1. **Long-term vs short-term tax** — classify called-away gains LT/ST by each lot's purchase date; separate rate inputs; show holding period. (Recommended next.)
+2. **Schwab auto-import** — one-tap position import on the Working tab via `schwabGetPositions` (Schwab returns *average* cost, so long-held shares still need lot splits).
+3. **Firebase App Check** — needs a reCAPTCHA v3 site key first; do NOT enforce before the client mints valid tokens.
+
+### 🧹 Known debt / follow-ups
+- `firebase-admin` left at ^12 (fine on Node 22); a bump to 14 is a 2-major jump — do deliberately if needed.
+- `npm install` in `functions/` reports ~18 pre-existing transitive vulns (googleapis/stripe trees). Not from our changes; worth a dedicated pass.
+- **Google Sheet sync** functions deployed but need the **Google Sheets API enabled** in the GCP project before `connectSheet` works.
+
+---
 
 ## ✅ Schwab CONNECTED (2026-10-02)
 - User's Schwab app is approved; they connected their real account in the APIs tab (OAuth succeeded). Credentials encrypted + stored server-side.
-- Next: confirm it pulls live positions/quotes (badge "Schwab live"), then build **Schwab auto-import** (#2) and **LT/ST tax** (#1) with real data flowing.
 
 ## ⏳ (history) What we were waiting on
 - The user **waited for Charles Schwab Developer app approval** → received an **App Key** + **Secret**.
