@@ -1,3 +1,13 @@
+## [2.3.0] — 2026-10-23
+
+### Added
+- **Option chain: live Schwab bid/ask + "Update Prices".** The option-chain ladder now pulls real-time bid/ask from **Schwab when your broker is connected** (works after hours, when Yahoo returns no quotes), falling back to **Yahoo (15-min delayed)** otherwise. A header badge shows the active source (**● Schwab live** vs **Yahoo · 15-min delayed**). New **Update Prices** button re-fetches on demand and stamps the last-updated time.
+
+### Changed
+- `schwabGetOptionChain` now requests **calls + puts** (`contractType: ALL`) so the two-sided ladder fills from Schwab.
+
+---
+
 ## [2.2.0] — 2026-10-19
 
 ### Added

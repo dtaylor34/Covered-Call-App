@@ -9,6 +9,8 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { httpsCallable } from "firebase/functions";
 import { functions } from "../firebase";
 import { AnalyticsEvents } from "../services/analytics";
+import { useBrokerConnection } from "./useBrokerConnection";
+import { schwabGetOptionChain } from "../services/schwabApi";
 
 // ── Cloud Function references ──
 const fnGetQuote = httpsCallable(functions, "getStockQuote");
@@ -63,14 +65,58 @@ export function useStockQuote(symbol, refreshInterval = 60000) {
 // ─── useOptionsChain ────────────────────────────────────────────────────────
 
 /**
- * Fetch an options chain for a symbol and expiration.
+ * Normalize Schwab's raw /chains response into the same shape the Yahoo path
+ * returns — { underlyingPrice, chain: { "YYYY-MM-DD": { calls:[], puts:[] } } } —
+ * so consumers (OptionChain, etc.) don't care which source the data came from.
+ * Schwab maps are keyed "YYYY-MM-DD:dte"; each strike → [leg]. Schwab reports
+ * IV as a percent, so we divide by 100 to match Yahoo's decimal.
+ */
+function normalizeSchwabChain(raw) {
+  const out = { underlyingPrice: raw?.underlyingPrice || 0, chain: {} };
+  const leg = (l, kStr) => ({
+    strike: l?.strikePrice ?? parseFloat(kStr),
+    lastPrice: l?.last || l?.mark || 0,
+    bid: l?.bid || 0,
+    ask: l?.ask || 0,
+    impliedVolatility: (l?.volatility || 0) / 100,
+    delta: l?.delta ?? null,
+    openInterest: l?.openInterest || 0,
+    volume: l?.totalVolume || 0,
+  });
+  const add = (map, side) => {
+    for (const expKey of Object.keys(map || {})) {
+      const date = expKey.split(":")[0];
+      const bucket = (out.chain[date] ||= { calls: [], puts: [] });
+      const strikes = map[expKey] || {};
+      for (const kStr of Object.keys(strikes)) {
+        const l = (strikes[kStr] || [])[0];
+        if (l) bucket[side].push(leg(l, kStr));
+      }
+    }
+  };
+  add(raw?.callExpDateMap, "calls");
+  add(raw?.putExpDateMap, "puts");
+  for (const d of Object.keys(out.chain)) {
+    out.chain[d].calls.sort((a, b) => a.strike - b.strike);
+    out.chain[d].puts.sort((a, b) => a.strike - b.strike);
+  }
+  return out;
+}
+
+/**
+ * Fetch an options chain for a symbol and expiration. When the user has a live
+ * Schwab connection, pull real-time bid/ask from Schwab (works after hours too);
+ * otherwise — or if Schwab returns nothing — fall back to Yahoo (15-min delayed).
  *
  * @param {string} symbol - Ticker symbol (null to skip)
  * @param {string} [expiration] - ISO date string or null for nearest
- * @returns {{ chain, loading, error, refresh }}
+ * @returns {{ chain, loading, error, refresh, source }}
  */
 export function useOptionsChain(symbol, expiration = null) {
+  const { activeConnection } = useBrokerConnection();
+  const schwabOn = activeConnection?.status === "connected";
   const [chain, setChain] = useState(null);
+  const [source, setSource] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
@@ -78,9 +124,28 @@ export function useOptionsChain(symbol, expiration = null) {
     if (!symbol) return;
     setLoading(true);
     setError(null);
+
+    // Schwab first (real-time, returns bid/ask even after the close).
+    if (schwabOn) {
+      try {
+        const res = await schwabGetOptionChain({ symbol, expiration, strikeCount: 50 });
+        const norm = normalizeSchwabChain(res?.data);
+        if (Object.keys(norm.chain).length) {
+          setChain(norm);
+          setSource("schwab");
+          setLoading(false);
+          return;
+        }
+      } catch (err) {
+        console.warn("Schwab chain failed, falling back to Yahoo:", err?.message);
+      }
+    }
+
+    // Yahoo fallback (always available, 15-min delayed).
     try {
       const result = await fnGetOptionsChain({ symbol, expiration });
       setChain(result.data);
+      setSource("yahoo");
     } catch (err) {
       setError(err.message || "Failed to fetch options chain");
       AnalyticsEvents.apiError("getOptionsChain", err.code, err.message);
@@ -88,11 +153,11 @@ export function useOptionsChain(symbol, expiration = null) {
     } finally {
       setLoading(false);
     }
-  }, [symbol, expiration]);
+  }, [symbol, expiration, schwabOn]);
 
   useEffect(() => { fetch(); }, [fetch]);
 
-  return { chain, loading, error, refresh: fetch };
+  return { chain, loading, error, refresh: fetch, source };
 }
 
 // ─── useCoveredCalls ────────────────────────────────────────────────────────

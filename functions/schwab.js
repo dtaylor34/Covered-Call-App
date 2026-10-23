@@ -473,7 +473,7 @@ exports.schwabGetOptionChain = onCall({ ...CRYPTO_OPTS, timeoutSeconds: 30 }, as
 
   const params = new URLSearchParams({
     symbol:        symbol.toUpperCase(),
-    contractType:  "CALL",
+    contractType:  "ALL",          // calls + puts → full two-sided ladder for the chain view
     strikeCount:   String(strikeCount),
     includeQuotes: "TRUE",
     strategy:      "SINGLE",

@@ -32,7 +32,9 @@ export default function OptionChain({ symbol, onPickStrike, highlightStrike, hig
     if (highlightExpiration && (expirations || []).includes(highlightExpiration) && highlightExpiration !== exp) setExp(highlightExpiration);
   }, [highlightExpiration, expirations]); // eslint-disable-line
 
-  const { chain, loading, error } = useOptionsChain(symbol, exp);
+  const { chain, loading, error, refresh, source } = useOptionsChain(symbol, exp);
+  const [lastUpdated, setLastUpdated] = useState(null);
+  useEffect(() => { if (chain) setLastUpdated(new Date()); }, [chain]);
   const under = chain?.underlyingPrice || 0;
   const key = exp || (chain?.chain ? Object.keys(chain.chain)[0] : null);
   const legs = key ? chain?.chain?.[key] : null;
@@ -74,7 +76,31 @@ export default function OptionChain({ symbol, onPickStrike, highlightStrike, hig
         <h3 style={{ color: T.text, fontFamily: T.fontDisplay, fontSize: 16, margin: 0 }}>Option chain</h3>
         <span style={{ color: T.text, fontFamily: T.fontMono, fontWeight: 700 }}>{symbol}</span>
         {under > 0 && <span style={{ color: T.accent, fontFamily: T.fontMono, fontSize: 13 }}>${under.toFixed(2)}</span>}
-        <span style={{ color: T.textDim, fontSize: 11 }}>15-min delayed</span>
+        <span style={{ color: source === "schwab" ? T.success : T.textDim, fontSize: 11, fontFamily: T.fontMono }}>
+          {source === "schwab" ? "● Schwab live" : "Yahoo · 15-min delayed"}
+        </span>
+        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
+          {lastUpdated && (
+            <span style={{ color: T.textMuted, fontSize: 10, fontFamily: T.fontMono }}>
+              Updated {lastUpdated.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+            </span>
+          )}
+          <button
+            onClick={() => refresh?.()}
+            disabled={loading}
+            aria-label="Update option prices"
+            style={{
+              padding: "6px 12px", borderRadius: 8, cursor: loading ? "default" : "pointer",
+              fontFamily: T.fontMono, fontSize: 11, fontWeight: 600,
+              border: `1px solid ${loading ? T.border : T.accent}`,
+              background: loading ? T.card : T.accentDim,
+              color: loading ? T.textMuted : T.accent,
+              opacity: loading ? 0.7 : 1, whiteSpace: "nowrap", transition: "all 0.15s",
+            }}
+          >
+            {loading ? "Updating…" : "Update Prices"}
+          </button>
+        </div>
       </div>
 
       {/* Expiration (month) selector */}
