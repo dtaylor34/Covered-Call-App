@@ -70,7 +70,8 @@ export function useLivePortfolio(positions, { refreshMs = 60000 } = {}) {
         let got = false;
         if (schwabOn) {
           try {
-            const chain = await schwabGetOptionChain({ symbol: sym, expiration: expiry });
+            const res = await schwabGetOptionChain({ symbol: sym, expiration: expiry });
+            const chain = res?.data;   // callable returns { data }; the raw Schwab chain is in .data
             eachSchwabCall(chain, expiry, (strike, mark) => { callMark[`${sym}|${expiry}|${strike}`] = mark; });
             got = Object.keys(callMark).some((k) => k.startsWith(`${sym}|${expiry}|`));
           } catch { /* fall through to Yahoo */ }

@@ -1,3 +1,13 @@
+## [2.3.1] — 2026-10-23
+
+### Fixed
+- **Working tab: Schwab call marks now actually apply.** `useLivePortfolio` read the option-chain callable result without `.data`, so live Schwab call prices silently fell back to Yahoo. Now reads `res.data` as intended.
+
+### Changed
+- **Runtime upgrade:** Cloud Functions moved to **Node.js 22** (Node 20 is decommissioned 2026-10-30); `firebase-functions` bumped to **7.4.0**.
+
+---
+
 ## [2.3.0] — 2026-10-23
 
 ### Added
