@@ -1,3 +1,11 @@
+## [2.5.2] — 2026-10-29
+
+### Changed
+- **Contract selector now defaults to 1X** (1 contract / 100 shares) on entering the Selection view — was 2X.
+- Added **quick multiplier chips (1X / 2X / 3X / 5X / 10X)** above the contracts dropdown for one-tap selection; the active count is highlighted and stays in sync with the dropdown. All downstream figures (premium, cost, Best Returns PR) update with it.
+
+---
+
 ## [2.5.1] — 2026-10-29
 
 ### Fixed

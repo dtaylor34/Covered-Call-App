@@ -172,7 +172,7 @@ export default function SelectionTab({ onNavigateToGlossary, sharedSymbol, onSym
   const [manualPrice, setManualPrice] = useState("");
   const tickerRef = useRef(null);
   const priceRef = useRef(null);
-  const [shares, setShares] = useState(200);
+  const [shares, setShares] = useState(100);   // default 1 contract (1X)
   const [strikePrice, setStrikePrice] = useState(null);
   const [expirationDate, setExpirationDate] = useState(null);
   // When the user clicks a Bid in the option chain: { strike, exp, premium }.
@@ -819,6 +819,23 @@ export default function SelectionTab({ onNavigateToGlossary, sharedSymbol, onSym
                 {/* Shares / Contracts */}
                 <div style={{ flex: 1, marginBottom: 0 }}>
                   <label style={{ color: palette.textDim, fontSize: 11, fontFamily: font, letterSpacing: "1px", textTransform: "uppercase", display: "block", marginBottom: 8 }}>Select Contracts</label>
+                  {/* Quick multiplier chips — one-tap contract counts. */}
+                  <div style={{ display: "flex", gap: 6, marginBottom: 8, flexWrap: "wrap" }}>
+                    {[1, 2, 3, 5, 10].map((mult) => {
+                      const active = !isCustomContracts && contracts === mult;
+                      return (
+                        <button key={mult} onClick={() => { setIsCustomContracts(false); setShares(mult * 100); }}
+                          style={{
+                            padding: "6px 14px", borderRadius: 8, cursor: "pointer", fontFamily: font, fontSize: 12, fontWeight: 700,
+                            border: `1px solid ${active ? palette.accent : palette.borderLight}`,
+                            background: active ? palette.accent : "transparent",
+                            color: active ? "#0A0A0A" : palette.textDim, transition: "all 0.15s",
+                          }}>
+                          {mult}X
+                        </button>
+                      );
+                    })}
+                  </div>
                   <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
                     <div style={{ position: "relative", flex: 1 }}>
                       <select 
