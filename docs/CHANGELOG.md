@@ -1,3 +1,10 @@
+## [2.5.1] — 2026-10-29
+
+### Fixed
+- **Best Returns PR now tracks the contract count you select.** It only re-fetched on symbol change and showed "premium received" for the contract count from that last fetch (e.g. switching 2 → 1 kept showing 2's premium). PR and the applied-strategy summary now scale off the live `contracts` prop — updating instantly, with no extra chain scoring.
+
+---
+
 ## [2.5.0] — 2026-10-29
 
 ### Added

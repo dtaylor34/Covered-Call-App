@@ -70,7 +70,10 @@ export default function BestReturns({ symbol, contracts, onApply, onData }) {
     if (!pick) return "No qualifying strike in this band";
     const premSh = pick.prem || pick.bid;
     const otm = pick.otmPct != null ? ` · ${pick.otmPct.toFixed(1)}% OTM` : "";
-    const total = pick.totalPremium != null ? pick.totalPremium : premSh * 100 * (data?.contracts || 1);
+    // Scale by the CURRENT contract selection (premium is linear in contracts and
+    // the strike pick doesn't depend on it) — so PR tracks the count you chose above
+    // without needing to re-score the chain.
+    const total = premSh * 100 * (contracts || 1);
     return (
       <>
         {`$${pick.strike} · ${expText(pick.exp)} · ${pick.dte}d · ${fmt$(premSh)}/sh · ${fmtPct(pick.annualized)} ann${otm}`}
@@ -127,7 +130,7 @@ export default function BestReturns({ symbol, contracts, onApply, onData }) {
             {chosenMeta.emoji} {chosenMeta.label} — applied
           </div>
           <div style={{ color: T.text, fontFamily: font, fontSize: 12, lineHeight: 1.6 }}>
-            Sell {data.contracts}× <strong>${chosen.strike}</strong> call{data.contracts > 1 ? "s" : ""} expiring <strong>{expText(chosen.exp)}</strong> ({chosen.dte}d) for ~<strong>{fmt$((chosen.prem || chosen.bid) * 100 * data.contracts)}</strong> total premium (<strong>{fmtPct(chosen.annualized)}</strong> annualized).
+            Sell {contracts || 1}× <strong>${chosen.strike}</strong> call{(contracts || 1) > 1 ? "s" : ""} expiring <strong>{expText(chosen.exp)}</strong> ({chosen.dte}d) for ~<strong>{fmt$((chosen.prem || chosen.bid) * 100 * (contracts || 1))}</strong> total premium (<strong>{fmtPct(chosen.annualized)}</strong> annualized).
             {chosen.gtc != null && <> Suggested buy-to-close GTC at <strong>{fmt$(chosen.gtc)}</strong>.</>}
             {selected === "sale" && chosen.stockGain > 0 && <> If assigned you also keep <strong>{fmt$(chosen.stockGain)}</strong> of stock gain up to the strike.</>}
           </div>
