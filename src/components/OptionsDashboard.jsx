@@ -11,6 +11,7 @@ import { getPriceHistory } from "../services/priceHistory";
 import { useExpirations, useOptionsChain } from "../hooks/useMarketData";
 import { SYMBOL_GROUPS, CATALOG_SYMBOLS } from "../data/optionsSymbols";
 import MinuteCompareChart from "./MinuteCompareChart";
+import StrategyBuilder from "./StrategyBuilder";
 
 const GRAN = [{ k: "D", range: "1Y", label: "Day" }, { k: "W", range: "2Y", label: "Week" }, { k: "M", range: "ALL", label: "Month" }];
 const COUNTS = [10, 20, 40, 0]; // 0 = All
@@ -111,12 +112,15 @@ function StrikesBrowser({ symbol, T, onUseTLT }) {
   // (matches the existing OptionChain behavior) — fall back to the first key.
   const chainKey = chain?.chain ? (chain.chain[exp] ? exp : Object.keys(chain.chain)[0]) : null;
   const legs = chainKey ? chain.chain[chainKey] : null;
-  const rows = useMemo(() => {
+  const allRows = useMemo(() => {
     if (!legs) return [];
     const byStrike = {};
     (legs.calls || []).forEach((c) => { (byStrike[c.strike] = byStrike[c.strike] || { strike: c.strike }).call = c; });
     (legs.puts || []).forEach((p) => { (byStrike[p.strike] = byStrike[p.strike] || { strike: p.strike }).put = p; });
-    let all = Object.values(byStrike).sort((a, b) => a.strike - b.strike);
+    return Object.values(byStrike).sort((a, b) => a.strike - b.strike);
+  }, [legs]);
+  const rows = useMemo(() => {
+    let all = allRows;
     if (count > 0 && all.length > count && under > 0) {
       let atm = 0, best = Infinity;
       all.forEach((r, i) => { const d = Math.abs(r.strike - under); if (d < best) { best = d; atm = i; } });
@@ -124,7 +128,7 @@ function StrikesBrowser({ symbol, T, onUseTLT }) {
       all = all.slice(Math.max(0, atm - half), Math.max(0, atm - half) + count);
     }
     return all;
-  }, [legs, count, under]);
+  }, [allRows, count, under]);
 
   const font = T.fontMono;
   const card = { background: T.surface, border: `1px solid ${T.border}`, borderRadius: T.r || 10, padding: "16px 18px", marginBottom: 16 };
@@ -133,7 +137,7 @@ function StrikesBrowser({ symbol, T, onUseTLT }) {
   const cell = { fontFamily: font, fontSize: 12, padding: "5px 8px", textAlign: "right", whiteSpace: "nowrap" };
   const noChain = !optionable || (!loading && (error || (years.length === 0 && (expirations || []).length === 0)));
 
-  return (
+  return (<>
     <div style={card} role="region" aria-label="Strikes and expirations">
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
         <button onClick={() => setCollapsed((c) => !c)} style={{ display: "flex", alignItems: "baseline", gap: 10, background: "none", border: "none", cursor: "pointer", padding: 0, textAlign: "left" }}>
@@ -200,7 +204,8 @@ function StrikesBrowser({ symbol, T, onUseTLT }) {
         </>)}
       </>)}
     </div>
-  );
+    {!noChain && !loading && <StrategyBuilder rows={allRows} under={under} mult={100} T={T} />}
+  </>);
 }
 
 export default function OptionsDashboard() {

@@ -1,4 +1,14 @@
-## [2.3.1] — 2026-10-23
+## [2.4.0] — 2026-10-29
+
+### Added
+- **Options Dashboard → Strategy Builder.** Prices common multi-leg strategies (verticals, straddle, strangle, iron condor, butterfly, single legs) off the live chain using bid/ask mids, with net debit/credit, max profit/loss, breakevens, and a payoff-at-expiration chart.
+- **Working Options → strategy grouping + analysis.** Imported legs now group into recognized strategies (e.g. a straddle shows as one card) with a live net P&L, % of max, DTE, and a health chip. Expand a card for a **Strategy Position chart** — payoff at expiration + current (mark-to-model) P&L curve, breakevens, each leg's strike, a "now" line, **profit-take / stop zones**, and a **time-decay strip** (P&L if price holds, today → expiry).
+- **Mechanical profit-taking guidance.** Credit strategies: take profit at 50% of max, manage at 21 DTE, defensive stop at 2× credit. Debit: scale out at +50% / +100%, soft stop at −50%, theta caution ≤21 DTE. Surfaced as a per-strategy recommendation + target lines on the chart.
+- **Sync from Schwab (Working Options).** One tap imports new positions, refreshes marks, and archives anything no longer at the broker into history. Live marks auto-refresh (~60s, Schwab-first / Yahoo fallback) with a source badge.
+- **Sample straddle** button on the empty Working Options state to try the strategy chart without a live position.
+
+### Changed
+- `useOptionsChain` normalizer (`normalizeSchwabChain`) is now exported for reuse by the options live-marks hook.
 
 ### Fixed
 - **Working tab: Schwab call marks now actually apply.** `useLivePortfolio` read the option-chain callable result without `.data`, so live Schwab call prices silently fell back to Yahoo. Now reads `res.data` as intended.

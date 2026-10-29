@@ -10,7 +10,13 @@ import { optionCalcs, moneyness, daysToExpiry, optType, isLong } from "../lib/op
 import { useBrokerConnection } from "../hooks/useBrokerConnection";
 import { schwabGetPositions } from "../services/schwabApi";
 import { parseSchwabOptionPositions } from "../lib/schwabPositions";
+import { useOptionLive } from "../hooks/useOptionLive";
+import { groupIntoStrategies, strategyCalcs, profitTargets } from "../lib/optionStrategies";
 import OptionPositionChart from "./OptionPositionChart";
+import StrategyPositionChart from "./StrategyPositionChart";
+
+// Comparable key for a leg (ignores account) — used to diff against Schwab's live set.
+const legKey = (p) => `${String(p.sym || "").toUpperCase()}|${String(p.type || "").toUpperCase()}|${Number(p.strike) || 0}|${p.expiry}|${String(p.direction || "long").toLowerCase()}`;
 
 const usd = (n, signed) => {
   const a = Math.abs(n || 0);
@@ -33,42 +39,76 @@ export default function OptionsWorkingTab() {
   const [importing, setImporting] = useState(false);
   const [importMsg, setImportMsg] = useState(null);
 
+  // Live marks (Schwab-first, Yahoo fallback), merged over stored prices for display.
+  const { live, status: liveStatus } = useOptionLive(positions);
+  const livePositions = useMemo(() => positions.map((p) => {
+    const lv = live[p.id];
+    return lv ? { ...p, livePrice: lv.livePrice ?? p.livePrice, liveUnderlying: lv.liveUnderlying ?? p.liveUnderlying } : p;
+  }), [positions, live]);
+  const groups = useMemo(() => groupIntoStrategies(livePositions), [livePositions]);
+  const multiGroups = useMemo(() => groups.filter((g) => g.multiLeg), [groups]);
+  const singleLegs = useMemo(() => groups.filter((g) => !g.multiLeg).map((g) => g.legs[0]), [groups]);
+
   const acctShort = (p) => { if (!p?.acct && !p?.acctId) return null; const a = (accounts || []).find((x) => x.accountId === p?.acctId) || (accounts || []).find((x) => String(x.accountId || "").slice(-4) === p?.acct); return a?.label || (p.acct ? `··${p.acct}` : null); };
 
-  const importFromSchwab = async () => {
+  // Sync = import new positions + refresh marks + archive anything Schwab no longer
+  // shows (closed/expired/assigned at the broker) so working + history stay current.
+  const syncFromSchwab = async () => {
     const accts = (accounts && accounts.length) ? accounts : (activeAccount ? [activeAccount] : []);
     if (!accts.some((a) => a?.hashValue)) { setImportMsg({ ok: false, text: "No linked Schwab account — reconnect in the APIs tab." }); return; }
-    setImporting(true); setImportMsg({ ok: true, text: "Pulling option positions…" });
+    setImporting(true); setImportMsg({ ok: true, text: "Syncing with Schwab…" });
     try {
-      let added = 0, acctsHit = 0, seen = 0;
+      let added = 0, acctsHit = 0, closedCt = 0;
+      const pulledByAcct = {}; // acctId -> Set(legKey) of what Schwab currently holds
       for (const acct of accts) {
         if (!acct?.hashValue) continue;
         const acctTag = String(acct.accountId || "").slice(-4);
         const data = await schwabGetPositions({ accountHash: acct.hashValue }).then((r) => r.data).catch(() => null);
         if (!data) continue;
         acctsHit++;
+        const keys = new Set();
         for (const o of parseSchwabOptionPositions(data)) {
-          seen++;
+          keys.add(legKey(o));
           const r = await savePosition({ ...o, acct: acctTag, acctId: acct.accountId });
           if (r.ok) added++;
         }
+        pulledByAcct[acct.accountId] = keys;
       }
-      setImportMsg({ ok: true, text: acctsHit ? `Imported ${added} option position${added === 1 ? "" : "s"} from ${acctsHit} account${acctsHit === 1 ? "" : "s"}${seen && !added ? " (all already tracked)" : ""}.` : "Couldn't reach Schwab." });
-    } catch (e) { setImportMsg({ ok: false, text: e?.message || "Import failed." }); }
+      // Archive tracked positions that are no longer open at an account we pulled.
+      for (const p of positions) {
+        if (!p.acctId || !(p.acctId in pulledByAcct)) continue; // only reconcile accounts we reached
+        if (pulledByAcct[p.acctId].has(legKey(p))) continue;     // still open at the broker
+        const dte = daysToExpiry(p.expiry);
+        await closePosition(p.id, dte != null && dte < 0 ? "expired" : "sold", { exitPrice: Number(p.livePrice) || 0 });
+        closedCt++;
+      }
+      setImportMsg({ ok: true, text: acctsHit ? `Synced ${acctsHit} account${acctsHit === 1 ? "" : "s"}: ${added} imported/updated${closedCt ? `, ${closedCt} moved to history` : ""}.` : "Couldn't reach Schwab." });
+    } catch (e) { setImportMsg({ ok: false, text: e?.message || "Sync failed." }); }
     finally { setImporting(false); }
   };
 
-  const rows = useMemo(() => positions.map((p) => {
+  // Seed a sample TLT long straddle (two legs, same strike/expiry) so the
+  // strategy card + chart can be previewed without a live multi-leg position.
+  const addSampleStraddle = async () => {
+    const d = new Date(); d.setDate(d.getDate() + 45);
+    const expiry = d.toISOString().slice(0, 10);
+    const base = { sym: "TLT", strike: "90", expiry, contracts: "1", multiplier: "100", underlyingType: "equity", fillUnderlying: "90", liveUnderlying: "90" };
+    await savePosition({ ...base, type: "CALL", direction: "long", fillPrice: "1.80", livePrice: "2.40" });
+    await savePosition({ ...base, type: "PUT", direction: "long", fillPrice: "1.70", livePrice: "0.90" });
+    setImportMsg({ ok: true, text: "Added a sample TLT long straddle — expand the card to see the chart. Delete the legs when you're done." });
+  };
+
+  const rows = useMemo(() => singleLegs.map((p) => {
     const c = optionCalcs(p);
     const m = moneyness(p, p.liveUnderlying ?? p.fillUnderlying);
     const dte = daysToExpiry(p.expiry);
     return { p, c, m, dte };
-  }).sort((a, b) => (a.dte ?? 1e9) - (b.dte ?? 1e9)), [positions]);
+  }).sort((a, b) => (a.dte ?? 1e9) - (b.dte ?? 1e9)), [singleLegs]);
 
-  const totals = useMemo(() => rows.reduce((a, { c }) => ({
+  const totals = useMemo(() => livePositions.reduce((a, p) => { const c = optionCalcs(p); return {
     cost: a.cost + (c.long ? c.cost : 0), credit: a.credit + (c.long ? 0 : c.cost),
     value: a.value + c.value, pl: a.pl + c.pl,
-  }), { cost: 0, credit: 0, value: 0, pl: 0 }), [rows]);
+  }; }, { cost: 0, credit: 0, value: 0, pl: 0 }), [livePositions]);
 
   const card = { background: T.surface, border: `1px solid ${T.border}`, borderRadius: T.r || 10, padding: "18px 20px", marginBottom: 16 };
   const h3 = { color: T.text, fontFamily: T.fontDisplay, fontSize: 16, margin: 0 };
@@ -78,10 +118,15 @@ export default function OptionsWorkingTab() {
     <div role="region" aria-label="Working options">
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16, flexWrap: "wrap", gap: 8 }}>
         <h2 style={{ ...h3, fontSize: 20 }}>Working Options</h2>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+          {livePositions.length > 0 && (
+            <span style={{ color: liveStatus.source === "schwab" ? T.success : T.textDim, fontSize: 10, fontFamily: T.fontMono }}>
+              {liveStatus.loading ? "updating…" : liveStatus.source === "schwab" ? "● Schwab live" : "Yahoo · delayed"}
+            </span>
+          )}
           {schwabConnected && (
-            <button onClick={importFromSchwab} disabled={importing} style={{ padding: "10px 16px", borderRadius: 8, border: `1px solid ${T.accent}`, cursor: "pointer", background: "transparent", color: T.accent, fontFamily: T.fontMono, fontSize: 13, fontWeight: 700, opacity: importing ? 0.6 : 1 }}>
-              {importing ? "Importing…" : "⬇ Import options from Schwab"}
+            <button onClick={syncFromSchwab} disabled={importing} style={{ padding: "10px 16px", borderRadius: 8, border: `1px solid ${T.accent}`, cursor: "pointer", background: "transparent", color: T.accent, fontFamily: T.fontMono, fontSize: 13, fontWeight: 700, opacity: importing ? 0.6 : 1 }}>
+              {importing ? "Syncing…" : "⟳ Sync from Schwab"}
             </button>
           )}
           <button onClick={() => setShowAdd((v) => !v)} style={{ padding: "10px 16px", borderRadius: 8, border: `1px solid ${T.accent}`, cursor: "pointer", background: showAdd ? "transparent" : T.accent, color: showAdd ? T.accent : "#0A0A0A", fontFamily: T.fontMono, fontSize: 13, fontWeight: 700 }}>{showAdd ? "Close" : "+ Add"}</button>
@@ -91,7 +136,7 @@ export default function OptionsWorkingTab() {
       {importMsg && <div style={{ marginBottom: 12, color: importMsg.ok ? T.textDim : T.danger, fontFamily: T.fontMono, fontSize: 12 }}>{importMsg.text}</div>}
       {showAdd && <AddOptionForm T={T} onSave={savePosition} onDone={() => setShowAdd(false)} />}
 
-      {rows.length > 0 && (
+      {livePositions.length > 0 && (
         <div style={{ ...card, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 12 }}>
           <Tot T={T} label="Debit (paid)" value={usd(totals.cost)} tip="Total premium paid for your long options (price × multiplier × contracts)." />
           <Tot T={T} label="Credit (received)" value={usd(totals.credit)} color={T.success} tip="Total premium received for options you sold (short positions)." />
@@ -102,16 +147,28 @@ export default function OptionsWorkingTab() {
 
       {loading ? (
         <div style={{ ...card, color: T.textDim }}>Loading positions…</div>
-      ) : rows.length === 0 ? (
+      ) : livePositions.length === 0 ? (
         <div style={{ ...card, textAlign: "center", padding: "48px 20px" }}>
           <div style={{ fontSize: 40, marginBottom: 12 }}>🧩</div>
           <div style={{ color: T.text, fontFamily: T.fontDisplay, fontSize: 16, marginBottom: 6 }}>No working options yet</div>
           <div style={{ color: T.textDim, fontSize: 13, maxWidth: 440, margin: "0 auto" }}>
-            {schwabConnected ? "Use “Import options from Schwab” to pull your open option positions, or add one by hand." : "Add an option by hand, or connect Schwab in the APIs tab to import your positions."}
+            {schwabConnected ? "Use “Sync from Schwab” to pull your open option positions, or add one by hand." : "Add an option by hand, or connect Schwab in the APIs tab to import your positions."}
           </div>
+          <button onClick={addSampleStraddle} style={{ marginTop: 18, padding: "9px 16px", borderRadius: 8, border: `1px dashed ${T.accent}`, background: "transparent", color: T.accent, fontFamily: T.fontMono, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+            + Add a sample straddle (to try the chart)
+          </button>
         </div>
-      ) : (
+      ) : (<>
+        {multiGroups.length > 0 && (
+          <div style={{ marginBottom: 4 }}>
+            {multiGroups.map((g) => (
+              <StrategyCard key={g.key} T={T} group={g} onClose={closePosition} acctLabel={acctShort(g.legs[0])} />
+            ))}
+          </div>
+        )}
+        {rows.length > 0 && (
         <div style={{ ...card, padding: 0, overflowX: "auto" }}>
+          {multiGroups.length > 0 && <div style={{ padding: "12px 16px 0", color: T.textDim, fontSize: 10, fontFamily: T.fontMono, letterSpacing: 0.5, textTransform: "uppercase" }}>Single-leg positions</div>}
           <div style={{ minWidth: 760 }}>
             <div style={{ display: "grid", gridTemplateColumns: COLS, padding: "9px 16px", borderBottom: `1px solid ${T.border}` }}>
               {["Contract", "Side", "Strike", "Expiry", "DTE", "Entry → Live", "Open P&L", ""].map((h, i) => (
@@ -144,10 +201,77 @@ export default function OptionsWorkingTab() {
             })}
           </div>
         </div>
+        )}
+      </>)}
+    </div>
+  );
+}
+
+function StrategyCard({ T, group, onClose, acctLabel }) {
+  const [open, setOpen] = useState(false);
+  const calc = strategyCalcs(group, {});
+  const tgt = profitTargets(calc);
+  const { kind, openPL, credit, debit, dte } = calc;
+  const hc = ({ good: T.success, warn: T.warn, bad: T.danger, neutral: T.textDim })[tgt.health.color] || T.textDim;
+  const netStr = kind === "credit" ? `Credit ${usd(credit)}` : `Debit ${usd(debit)}`;
+  const pct = (kind === "credit" ? credit : debit) > 0 ? Math.round((openPL / (kind === "credit" ? credit : debit)) * 100) : 0;
+  const cell = { fontFamily: T.fontMono, fontSize: 12.5, color: T.text, whiteSpace: "nowrap" };
+  const closeAll = () => group.legs.forEach((l) => onClose(l.id, "sold", { exitPrice: Number(l.livePrice ?? l.fillPrice) || 0 }));
+
+  return (
+    <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: T.r || 10, marginBottom: 12, overflow: "hidden" }}>
+      <div onClick={() => setOpen((v) => !v)} style={{ cursor: "pointer", padding: "14px 18px", display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 180 }}>
+          <span style={{ color: T.text, fontFamily: T.fontDisplay, fontSize: 15, fontWeight: 600 }}>{group.sym} {group.strategy}</span>
+          {acctLabel && <span style={{ fontSize: 9, fontWeight: 700, color: T.accent, background: T.accentDim, padding: "1px 5px", borderRadius: 4, fontFamily: T.fontMono }}>{acctLabel}</span>}
+        </div>
+        <span style={{ ...cell, color: T.textDim }}>{group.legs.length} legs · {csExp(group.expiry)}</span>
+        <span style={{ ...cell }}>{netStr}</span>
+        <span style={{ ...cell, color: dte <= tgt.manageDte ? T.warn : T.textDim }}>{dte}d</span>
+        <span style={{ ...cell, color: openPL >= 0 ? T.success : T.danger, fontWeight: 700 }}>{usd(openPL, true)} <span style={{ fontSize: 10 }}>({pct >= 0 ? "+" : ""}{pct}%)</span></span>
+        <span style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 10 }}>
+          <span style={{ fontSize: 10, fontWeight: 700, color: hc, background: `${hc}22`, padding: "2px 8px", borderRadius: 5, fontFamily: T.fontMono }}>{tgt.health.label}</span>
+          <span style={{ color: T.textDim, transform: open ? "rotate(180deg)" : "none" }}>▾</span>
+        </span>
+      </div>
+
+      {open && (
+        <div style={{ padding: "0 18px 18px", borderTop: `1px solid ${T.border}` }}>
+          <div style={{ background: `${hc}12`, border: `1px solid ${hc}44`, borderRadius: 8, padding: "9px 12px", color: T.text, fontSize: 12.5, fontFamily: T.fontMono, margin: "14px 0 6px" }}>
+            {tgt.recommendation}
+          </div>
+
+          <StrategyPositionChart calc={calc} targets={tgt} T={T} />
+
+          <div style={{ color: T.textDim, fontSize: 10, fontFamily: T.fontMono, letterSpacing: 1, textTransform: "uppercase", margin: "6px 0 6px" }}>Legs</div>
+          {group.legs.map((l) => {
+            const c = optionCalcs(l);
+            return (
+              <div key={l.id} style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", padding: "6px 0", borderBottom: `1px solid ${T.border}55` }}>
+                <span style={{ ...cell, color: c.long ? T.success : T.danger, fontWeight: 700, minWidth: 92 }}>{c.long ? "LONG" : "SHORT"} ×{c.qty}</span>
+                <span style={{ ...cell, minWidth: 120 }}>{usd(l.strike)} {optType(l)}</span>
+                <span style={{ ...cell, color: T.textDim }}>{usd(c.fill)} → {usd(c.live)}</span>
+                <span style={{ ...cell, color: c.pl >= 0 ? T.success : T.danger }}>{usd(c.pl, true)}</span>
+                <span style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
+                  <button onClick={() => onClose(l.id, "sold", { exitPrice: Number(l.livePrice ?? l.fillPrice) || 0 })} style={legBtn(T)}>Close</button>
+                  <button onClick={() => onClose(l.id, "expired")} style={legBtn(T)}>Expire</button>
+                </span>
+              </div>
+            );
+          })}
+
+          <div style={{ marginTop: 14, display: "flex", justifyContent: "flex-end" }}>
+            <button onClick={closeAll} style={{ padding: "8px 16px", borderRadius: 8, border: `1px solid ${T.accent}`, background: "transparent", color: T.accent, fontFamily: T.fontMono, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>
+              Close entire strategy (record at live marks)
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );
 }
+
+const legBtn = (T) => ({ padding: "5px 10px", borderRadius: 6, border: `1px solid ${T.border}`, background: T.card, color: T.text, fontFamily: T.fontMono, fontSize: 11, cursor: "pointer" });
 
 function OptionDetail({ T, p, c, m, dte, onUpdate, onClose, onDelete, acctShort }) {
   const [exit, setExit] = useState(String(p.livePrice ?? p.fillPrice ?? ""));

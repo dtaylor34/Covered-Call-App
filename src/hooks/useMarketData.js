@@ -71,7 +71,7 @@ export function useStockQuote(symbol, refreshInterval = 60000) {
  * Schwab maps are keyed "YYYY-MM-DD:dte"; each strike → [leg]. Schwab reports
  * IV as a percent, so we divide by 100 to match Yahoo's decimal.
  */
-function normalizeSchwabChain(raw) {
+export function normalizeSchwabChain(raw) {
   const out = { underlyingPrice: raw?.underlyingPrice || 0, chain: {} };
   const leg = (l, kStr) => ({
     strike: l?.strikePrice ?? parseFloat(kStr),
