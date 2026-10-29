@@ -18,6 +18,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useTheme } from "../contexts/ThemeContext";
 import { useStockQuote } from "../hooks/useMarketData";
+import { useSchwabQuote } from "../hooks/useSchwabQuote";
 import { PRELOADED_TICKERS } from "../data/tickers";
 import CoveredCallExitCard from "./CoveredCallExitCard";
 import OptionChain from "./OptionChain";
@@ -163,6 +164,7 @@ export default function SelectionTab({ onNavigateToGlossary, sharedSymbol, onSym
     if (onSymbolChange) onSymbolChange(sym);
   }, [onSymbolChange]);
   const { quote: liveQuote } = useStockQuote(symbol);
+  const schwabQuote = useSchwabQuote(symbol);   // real-time overlay when Schwab connected
   const [customStocks, setCustomStocks] = useState({});
   const [hiddenPresets, setHiddenPresets] = useState([]);
   const [hoveredSymbol, setHoveredSymbol] = useState(null);
@@ -258,12 +260,13 @@ export default function SelectionTab({ onNavigateToGlossary, sharedSymbol, onSym
   // through the getStockQuote Cloud Function via useStockQuote.
   const staticStock = allStocks[symbol] || STOCK_DATA.META;
   const hasLiveQuote = !!(liveQuote && liveQuote.price > 0 && !liveQuote.error);
-  const stock = hasLiveQuote
+  const schwabLive = !!(schwabQuote && schwabQuote.price > 0);   // Schwab real-time overlay
+  const stock = (schwabLive || hasLiveQuote)
     ? {
         ...staticStock,
-        price: liveQuote.price,
-        high52: liveQuote.fiftyTwoWeekHigh || staticStock.high52,
-        low52: liveQuote.fiftyTwoWeekLow || staticStock.low52,
+        price: schwabLive ? schwabQuote.price : liveQuote.price,
+        high52: liveQuote?.fiftyTwoWeekHigh || staticStock.high52,
+        low52: liveQuote?.fiftyTwoWeekLow || staticStock.low52,
       }
     : staticStock;
   const contracts = Math.floor(shares / 100);
@@ -873,19 +876,20 @@ export default function SelectionTab({ onNavigateToGlossary, sharedSymbol, onSym
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
           {(() => {
             const changeHash = symbol.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-            const isUp = hasLiveQuote ? liveQuote.change >= 0 : changeHash % 2 === 0;
-            const changePct = hasLiveQuote ? Math.abs(liveQuote.changePercent).toFixed(2) : ((changeHash % 300) / 100).toFixed(2);
-            const changeAmt = hasLiveQuote ? Math.abs(liveQuote.change).toFixed(2) : (stock.price * (changePct / 100)).toFixed(2);
+            const isUp = schwabLive ? schwabQuote.change >= 0 : hasLiveQuote ? liveQuote.change >= 0 : changeHash % 2 === 0;
+            const changePct = schwabLive ? Math.abs(schwabQuote.changePct).toFixed(2) : hasLiveQuote ? Math.abs(liveQuote.changePercent).toFixed(2) : ((changeHash % 300) / 100).toFixed(2);
+            const changeAmt = schwabLive ? Math.abs(schwabQuote.change).toFixed(2) : hasLiveQuote ? Math.abs(liveQuote.change).toFixed(2) : (stock.price * (changePct / 100)).toFixed(2);
             const changeStr = `${isUp ? "▲" : "▼"} $${changeAmt} (${changePct}%) Today`;
             const changeColor = isUp ? palette.profit : palette.danger;
+            const live = schwabLive || hasLiveQuote;
             const priceBadge = (
               <span style={{
                 fontSize: 10, fontWeight: 600, marginLeft: 6, padding: "1px 6px", borderRadius: 4,
                 verticalAlign: "middle",
-                color: hasLiveQuote ? palette.profit : palette.textDim,
-                background: `${hasLiveQuote ? palette.profit : palette.textDim}22`,
+                color: live ? palette.profit : palette.textDim,
+                background: `${live ? palette.profit : palette.textDim}22`,
               }}>
-                {hasLiveQuote ? `LIVE · ${liveQuote.delay || 15}m delay` : "EST."}
+                {schwabLive ? "LIVE · Schwab real-time" : hasLiveQuote ? `LIVE · ${liveQuote.delay || 15}m delay` : "EST."}
               </span>
             );
             return (

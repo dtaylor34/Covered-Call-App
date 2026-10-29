@@ -1,3 +1,13 @@
+## [2.5.0] — 2026-10-29
+
+### Added
+- **Schwab real-time price on the covered-calls Selection view.** When your broker is connected, the Current Price card (and everything derived from it — cost to enter, breakeven, ROI tables, the price-trend chart) now uses a live Schwab quote via `useSchwabQuote` (refresh ~45s), badged "LIVE · Schwab real-time". Falls back to Yahoo ("15m delay") when not connected. Resolves the price reading ~15 min stale even with Schwab linked.
+
+### Fixed
+- **Risk-free-rate fetch no longer fails on every scoring call.** `riskFreeRate.js` used a cache doc id of `meta/riskFreeRate`, producing the 3-segment path `marketData/meta/riskFreeRate` that Firestore's `.doc()` rejects — so every `getCoveredCalls` silently fell back to a hardcoded 4.5% rate. Fixed to a single-segment id (`meta_riskFreeRate`).
+
+---
+
 ## [2.4.1] — 2026-10-29
 
 ### Fixed

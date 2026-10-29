@@ -6,7 +6,9 @@
 
 const admin = require("firebase-admin");
 
-const CACHE_KEY = "meta/riskFreeRate";
+// Single-segment doc id — "meta/riskFreeRate" would make the path
+// marketData/meta/riskFreeRate (3 segments) and .doc() rejects odd paths.
+const CACHE_KEY = "meta_riskFreeRate";
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 // Fallback rate if Treasury API is unreachable
