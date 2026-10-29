@@ -46,12 +46,23 @@ export default function PriceTrendChart({ symbol, strike, breakeven, currentPric
   const pts = data?.points || [];
   const n = pts.length;
   const base = n ? pts[0].c : 0;
-  const last = n ? pts[n - 1].c : (currentPrice || 0);
+  // The series' final bar is the last *completed* day (e.g. yesterday's close), so
+  // the headline/last point must use the LIVE price when we have it — otherwise the
+  // chart lags a day and contradicts the live current-price shown elsewhere.
+  const last = currentPrice > 0 ? currentPrice : (n ? pts[n - 1].c : 0);
+
+  // Closes with the final point pinned to the live price, so the line, header, and
+  // % change all agree with the live quote.
+  const closes = useMemo(() => {
+    const c = pts.map((p) => p.c);
+    if (n && currentPrice > 0) c[n - 1] = currentPrice;
+    return c;
+  }, [pts, n, currentPrice]);
 
   // Values to plot depend on the view.
   const values = useMemo(
-    () => (view === "pct" ? pts.map((p) => (base ? ((p.c - base) / base) * 100 : 0)) : pts.map((p) => p.c)),
-    [pts, view, base]
+    () => (view === "pct" ? closes.map((c) => (base ? ((c - base) / base) * 100 : 0)) : closes),
+    [closes, view, base]
   );
 
   // Overlays (strike / breakeven) only in strike view, and only when valid.

@@ -1,3 +1,10 @@
+## [2.4.1] — 2026-10-29
+
+### Fixed
+- **Price trend chart headline now matches the live price.** `PriceTrendChart` showed the last *completed* daily bar (e.g. yesterday's close) as its headline price and badged it "real-time," which contradicted the live Current Price card (e.g. chart $612.49 vs card $629.06). The headline, the line's final point, and the % change now pin to the live `currentPrice` when available.
+
+---
+
 ## [2.4.0] — 2026-10-29
 
 ### Added
