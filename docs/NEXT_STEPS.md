@@ -4,9 +4,13 @@
 > To resume: `cd` into this repo and run `claude --resume` (or `--continue`),
 > or just say: **"read docs/NEXT_STEPS.md and continue."**
 
-_Last updated: 2026-10-23 · Live version: **v2.3.1** · Branch: `api-integration` (pushed to origin; tags `v2.3.0`, `v2.3.1`)_
-_Live app: https://covered-calls-prod.web.app_
+_Last updated: 2026-11-05 · Live version: **v2.6.0** · Branch: `api-integration` (pushed to origin; latest tag `v2.6.0`)_
+_Live app: https://covered-calls-prod.web.app (now branded **RivetTrade**)_
 _Source of truth is git log + the code — if this doc and the repo disagree, trust the repo._
+
+## 🟢 Current state (2026-11-05, v2.6.0 — deployed)
+Shipped & live: **RivetTrade rebrand** (title/header/manifest/auth screen + new tagline & "Craftsman Approach" positioning). **Options Working tab revamp** — intent-based grouping (combine/ungroup), per-position **free-roll plan** + one-tap "Sell N now" scale-out, sell-to-gain ladder + chart target lines, Call/Put/Total value + realized/open P&L strip, after-hours "as of close" badge, bulk delete, Roboto font, Material chevrons, info tooltips; covered calls excluded from the Options tab. **Covered-call fixes:** Best Return Hint / Auto-Optimize no longer recommend ITM strikes; `getBestReturns` now caches the last good chain and serves it when the provider (Yahoo) throttles the Cloud Function (root cause of the empty "Best Returns" — datacenter IP rate-limiting). Both hosting + `getBestReturns` function deployed.
+Possible follow-ups: broaden provider (Tradier/Polygon API key) to avoid Yahoo throttling entirely; RivetTrade app icons/favicon (still the old graphics); the standing "C" idea (theoretical after-hours option value).
 
 ## 🟢 Current state (2026-10-23)
 Schwab is **connected and live**. Shipped today across v2.3.0 + v2.3.1:
