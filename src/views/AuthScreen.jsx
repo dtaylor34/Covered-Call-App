@@ -148,9 +148,9 @@ export default function AuthScreen() {
               background: `linear-gradient(135deg, ${T.accent}, #00b894)`,
               display: "flex", alignItems: "center", justifyContent: "center",
               fontSize: 18, fontWeight: 900, color: T.bg, fontFamily: T.fontDisplay,
-            }}>CC</div>
+            }}>RT</div>
             <div>
-              <div style={{ fontSize: 18, fontWeight: 800, color: T.text, fontFamily: T.fontDisplay }}>Covered Calls</div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: T.text, fontFamily: T.fontDisplay }}>RivetTrade</div>
               <div style={{ fontSize: 11, color: T.textDim, fontFamily: T.fontMono, letterSpacing: 1 }}>STRATEGY DASHBOARD</div>
             </div>
           </div>
@@ -160,15 +160,16 @@ export default function AuthScreen() {
             fontSize: isMobile ? 28 : 38, fontWeight: 800, color: T.text,
             lineHeight: 1.15, fontFamily: T.fontDisplay, marginBottom: isMobile ? 14 : 20,
           }}>
-            Master covered calls<br />
-            <span style={{ color: T.accent }}>without the risk.</span>
+            Trading is a craft.<br />
+            Build your strategy.<br />
+            <span style={{ color: T.accent }}>Capture the momentum.</span>
           </h1>
 
           <p style={{
             fontSize: isMobile ? 14 : 15, color: T.textDim, lineHeight: 1.7,
             marginBottom: isMobile ? 20 : 36,
           }}>
-            Paper trade, backtest strategies, and learn to write covered calls using real market data — all without risking a dime.
+            <strong style={{ color: T.text }}>The Craftsman Approach:</strong> Trading is a deliberate craft. RivetTrade provides the workbench to construct resilient income streams. You analyze the environment, assemble your options strategies with structural precision, and capture market momentum at exactly the right moment.
           </p>
 
           {/* Feature list — hidden on mobile to save space */}

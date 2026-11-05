@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseSchwabPositions, parseOccSymbol, parseSchwabOrders, parseSchwabGtcOrders } from "./schwabPositions";
+import { parseSchwabPositions, parseSchwabOptionPositions, parseOccSymbol, parseSchwabOrders, parseSchwabGtcOrders } from "./schwabPositions";
 
 // Mock Schwab Trader API response: 200 META shares + 2 short $820 calls (the META example).
 const DATA = {
@@ -20,6 +20,27 @@ const DATA = {
 describe("parseOccSymbol", () => {
   it("parses a Schwab OCC option symbol", () => {
     expect(parseOccSymbol("META  261023C00820000")).toEqual({ underlying: "META", expiry: "2026-10-23", putCall: "CALL", strike: 820 });
+  });
+});
+
+describe("parseSchwabOptionPositions — covered-call flagging", () => {
+  it("flags a share-backed short call as a covered call (kept out of the options book)", () => {
+    const legs = parseSchwabOptionPositions(DATA); // 200 META shares + 2 short $820 calls
+    expect(legs).toHaveLength(1);
+    expect(legs[0]).toMatchObject({ sym: "META", type: "CALL", direction: "short", contracts: 2 });
+    expect(legs[0].coveredCall).toBe(true); // 200 shares ≥ 2 × 100
+  });
+
+  it("does NOT flag a long option or a share-less (naked) short call", () => {
+    const data = { securitiesAccount: { positions: [
+      { longQuantity: 6, shortQuantity: 0, averagePrice: 0.9, marketValue: 636,
+        instrument: { assetType: "OPTION", symbol: "GOOG  261204C00325000", putCall: "CALL", underlyingSymbol: "GOOG" } },
+      { longQuantity: 0, shortQuantity: 1, averagePrice: 2.0, marketValue: -200, // no shares held
+        instrument: { assetType: "OPTION", symbol: "TSLA  261204C00500000", putCall: "CALL", underlyingSymbol: "TSLA" } },
+    ] } };
+    const legs = parseSchwabOptionPositions(data);
+    expect(legs.find((l) => l.sym === "GOOG").coveredCall).toBe(false); // long call
+    expect(legs.find((l) => l.sym === "TSLA").coveredCall).toBe(false); // short call but unbacked → naked
   });
 });
 

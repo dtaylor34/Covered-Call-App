@@ -89,9 +89,15 @@ export default function BestReturns({ symbol, contracts, onApply, onData }) {
   return (
     <div style={card} role="region" aria-label="Best returns">
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginBottom: 12, flexWrap: "wrap" }}>
-        <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
+        <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
           <h3 style={{ color: T.text, fontFamily: displayFont, fontSize: 16, margin: 0, fontWeight: 600 }}>Best Returns</h3>
-          <span style={{ color: T.textDim, fontSize: 11, fontFamily: font }}>live chain · {symbol}</span>
+          <span title={data?.stale ? "Showing the last good option chain — the live data provider is briefly throttling our server. Hit Refresh in a moment." : undefined} style={{ color: data?.stale ? (T.warn || T.textDim) : T.textDim, fontSize: 11, fontFamily: font, cursor: data?.stale ? "help" : "default" }}>
+            {data?.stale ? "cached" : "live chain"} · {symbol}
+          </span>
+          <span title={`All totals below (PR / premium) are for ${contracts || 1} contract${(contracts || 1) > 1 ? "s" : ""} — ${(contracts || 1) * 100} shares — matching the contract count you picked above.`}
+            style={{ color: T.accent, background: `${T.accent}1f`, fontSize: 11, fontFamily: font, fontWeight: 700, padding: "2px 8px", borderRadius: 5, cursor: "help", alignSelf: "center" }}>
+            {contracts || 1}× · {(contracts || 1) * 100} sh
+          </span>
         </div>
         <button onClick={load} disabled={loading} style={{ background: "none", border: `1px solid ${T.border}`, color: T.textDim, cursor: loading ? "default" : "pointer", fontFamily: font, fontSize: 11, padding: "4px 10px", borderRadius: 6, opacity: loading ? 0.6 : 1 }}>
           {loading ? "Scoring…" : "↻ Refresh"}
@@ -140,7 +146,9 @@ export default function BestReturns({ symbol, contracts, onApply, onData }) {
 
       {!loading && !error && data && !data.bestReturn && !data.noSale && !data.sale && (
         <div style={{ color: T.textDim, fontSize: 12, fontFamily: font, marginTop: 10 }}>
-          No liquid strikes qualified for {symbol} right now (wide spreads or thin bids). Try again during market hours.
+          {data.dataUnavailable
+            ? `Live option data for ${symbol} is temporarily unavailable (the market-data provider is throttling our server). Tap Refresh in a moment — recent results are cached and will return.`
+            : `No liquid strikes qualified for ${symbol} right now (wide spreads or thin bids). Try again during market hours.`}
         </div>
       )}
     </div>

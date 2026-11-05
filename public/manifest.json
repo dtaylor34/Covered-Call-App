@@ -1,6 +1,6 @@
 {
-  "name": "Covered Calls Manager",
-  "short_name": "CoveredCalls",
+  "name": "RivetTrade",
+  "short_name": "RivetTrade",
   "description": "Score and rank covered call options with real-time market data",
   "start_url": "/",
   "display": "standalone",

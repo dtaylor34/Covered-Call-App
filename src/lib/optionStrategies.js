@@ -19,21 +19,46 @@ const firstVal = (legs, k) => { for (const l of legs) { const v = Number(l?.[k])
 
 // ── Grouping + classification ─────────────────────────────────────────────────
 
+const soonestExpiry = (legs) => (legs || []).map((l) => l.expiry).filter(Boolean).sort()[0] || null;
+
 /**
- * Group flat option legs into strategies by (symbol, account, expiry).
+ * Group flat option legs into strategies by INTENT, not shape.
+ *
+ * A position only joins a multi-leg card when the user explicitly combined it
+ * (legs share a `groupId`). Everything else — including legs that merely happen
+ * to share a symbol + expiry, or that look like a straddle/vertical — stays an
+ * individual single-leg position. This mirrors how trades were actually opened:
+ * bought as individuals ⇒ shown as individuals, until you "Combine into strategy".
+ *
  * @param {Array} positions  optionPositions docs
- * @returns {Array} [{ key, sym, acct, expiry, legs, strategy, multiLeg }]
+ * @returns {Array} [{ key, groupId, sym, acct, acctId, expiry, legs, strategy, multiLeg }]
  */
 export function groupIntoStrategies(positions) {
   const groups = {};
+  const order = [];
+  let i = 0;
   for (const p of positions || []) {
-    const sym = String(p.sym || "").toUpperCase();
-    const key = `${sym}|${p.acct || p.acctId || ""}|${p.expiry || ""}`;
-    (groups[key] = groups[key] || { key, sym, acct: p.acct || null, acctId: p.acctId || null, expiry: p.expiry, legs: [] }).legs.push(p);
+    const gid = p.groupId ? `g:${p.groupId}` : `s:${p.id ?? `#${i}`}`; // ungrouped ⇒ unique per leg
+    i++;
+    if (!groups[gid]) { groups[gid] = { key: gid, groupId: p.groupId || null, legs: [] }; order.push(gid); }
+    groups[gid].legs.push(p);
   }
-  return Object.values(groups)
-    .map((g) => ({ ...g, ...classifyLegs(g.legs) }))
-    .sort((a, b) => (daysToExpiry(a.expiry) ?? 1e9) - (daysToExpiry(b.expiry) ?? 1e9));
+  return order.map((gid) => {
+    const g = groups[gid];
+    const first = g.legs[0] || {};
+    const sameExp = g.legs.every((l) => l.expiry === first.expiry);
+    return {
+      key: g.key,
+      groupId: g.groupId,
+      sym: String(first.sym || "").toUpperCase(),
+      acct: first.acct || null,
+      acctId: first.acctId || null,
+      expiry: sameExp ? first.expiry : soonestExpiry(g.legs), // mixed expiries → manage by the nearest
+      legs: g.legs,
+      strategy: classifyLegs(g.legs).strategy,
+      multiLeg: g.legs.length > 1, // explicit: >1 combined leg, regardless of shape
+    };
+  }).sort((a, b) => (daysToExpiry(a.expiry) ?? 1e9) - (daysToExpiry(b.expiry) ?? 1e9));
 }
 
 /** Name a leg set. Returns { strategy, multiLeg }. */
@@ -62,6 +87,56 @@ export function classifyLegs(legs) {
 }
 
 // ── Black-Scholes helpers ───────────────────────────────────────────────────────
+
+// Solve for the underlying price S where a single option is worth `target`.
+// Monotonic in S (calls rise with S, puts fall), so a plain bisection suffices.
+// Returns null if the solve doesn't converge to the target — which happens when
+// the inputs are inconsistent (e.g. a stale after-hours mark against a moved
+// underlying), so we'd rather draw nothing than a misleading level.
+function underlyingForValue(call, K, days, iv, target, S0) {
+  if (!(target > 0) || !(iv > 0)) return null;
+  const valAt = (s) => (call ? callVal(s, K, days, iv) : putVal(s, K, days, iv));
+  let lo = 0.01, hi = Math.max((S0 || K) * 6, K * 6, 10);
+  if (call ? valAt(hi) < target : valAt(lo) < target) return null; // target beyond reach in range
+  for (let i = 0; i < 60; i++) {
+    const mid = (lo + hi) / 2;
+    const v = valAt(mid);
+    if (call ? v < target : v > target) lo = mid; else hi = mid;
+  }
+  const s = (lo + hi) / 2;
+  if (!(s > 0.05)) return null;
+  // Convergence check: the solved price must actually reprice to ~the target.
+  if (Math.abs(valAt(s) - target) > Math.max(0.02, target * 0.02)) return null;
+  return s;
+}
+
+/**
+ * Sell-to-gain targets for one position: for each % gain on the entry premium,
+ * the option price you'd sell (or buy back, for a short) at, the dollars that
+ * returns, and — via Black-Scholes at the current IV — the underlying price the
+ * stock would need to reach to get there. `free` marks the free-roll rung (+100%).
+ * @param {object} p   optionPosition (needs fillPrice, strike, expiry, live/underlying)
+ * @param {number[]} pcts  gain percentages, e.g. [25, 50, 75, 100]
+ */
+export function sellTargets(p, pcts = [25, 50, 75, 100]) {
+  const c = optionCalcs(p);
+  const { fill, live, long, call, K, mult, qty } = c;
+  if (!(fill > 0)) return [];
+  const days = Math.max(0.5, daysToExpiry(p.expiry) ?? 30);
+  const S = Number(p.liveUnderlying) || Number(p.fillUnderlying) || 0;
+  const iv = S > 0 ? ivFromMark(call ? "CALL" : "PUT", S, K, days, live > 0 ? live : fill) : null;
+  // A saturated IV (hit the solver's 1%/300% rails) means the mark and the
+  // underlying disagree — e.g. a stale after-hours option mark against a moved
+  // stock. The backed-out vol is meaningless, so don't derive stock levels from it.
+  const ivReliable = iv != null && iv > 0.011 && iv < 2.99;
+  return pcts.map((pct) => {
+    // Long: sell higher (premium up). Short: buy back lower to bank % of the credit.
+    const premium = long ? fill * (1 + pct / 100) : Math.max(0, fill * (1 - pct / 100));
+    const proceeds = premium * mult * qty;
+    const underlying = ivReliable ? underlyingForValue(call, K, days, iv, premium, S) : null;
+    return { pct, premium, proceeds, underlying, free: long && pct >= 100, ivReliable };
+  });
+}
 
 /** Back out implied vol (decimal) from a live mark by bisecting the BS value. */
 export function ivFromMark(type, S, K, days, mark) {

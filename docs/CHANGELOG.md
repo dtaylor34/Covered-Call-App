@@ -1,3 +1,18 @@
+## [2.6.0] — 2026-11-05
+
+### Added
+- **Rebrand → RivetTrade.** New app name across the title bar, in-app header (RT logo), PWA manifest, and sign-in screen. New tagline ("Trading is a craft. Build your strategy. Capture the momentum.") and "The Craftsman Approach" positioning statement. The Covered Calls / Options product toggle is unchanged.
+- **Options Working — per-position management.** Each leg is now tracked individually (intent-based grouping: combine selected legs into a strategy / ungroup, instead of auto-grouping by symbol+expiry). New **free-roll plan** per position: cost at risk, free-roll price (2× entry), progress, and a one-tap **"Sell N now"** scale-out that banks a partial close and flags the remainder *free-running*. **Sell-to-gain ladder** (+25/50/75/100%) with sell price, profit, and the underlying price needed — also drawn as target lines on the price chart (per type, with a guard that hides them when the mark/underlying are out of sync).
+- **Options Working — clearer summary + rows.** Stacked top strip split into **Call value / Put value / Total value / Open P&L** (direction-aware net; realized over open P&L), plain-English "Paid / Received" labels, a "Sell to gain (vs paid)" column, info-dot tooltips, multi-select **bulk delete**, and a **Delete strategy** action. Covered calls are now **kept out** of the Options tab (tracked where they belong). Roboto font, Material chevrons, even column spacing.
+- **Best Returns** now shows the active **contract multiplier** badge (reflects the 1×/10× selection above).
+
+### Fixed
+- **Covered-call optimizers no longer recommend in-the-money strikes.** The Best Return Hint and Auto-Optimize were scoring ITM strikes whose premium is mostly *intrinsic value* (not income) and would get shares called away below market — both now only consider strikes at/above the current price.
+- **Best Returns resilience.** `getBestReturns` now caches the last good option chain and falls back to it when the data provider throttles the Cloud Function (previously returned an empty "no qualifying strike"). UI shows a *cached* indicator when serving the fallback.
+- **Options P&L / after-hours.** Net value no longer counts a short's buy-back cost as an asset; free-roll progress starts at 0% at entry (was ~50%); after-hours marks are badged "as of close" instead of "live."
+
+---
+
 ## [2.5.2] — 2026-10-29
 
 ### Changed

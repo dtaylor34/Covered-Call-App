@@ -238,10 +238,10 @@ export default function Dashboard() {
               background: `linear-gradient(135deg, ${T.accent}, #00b894)`,
               display: "flex", alignItems: "center", justifyContent: "center",
               fontSize: 12, fontWeight: 900, color: T.bg, fontFamily: T.fontDisplay,
-            }}>{isOptions ? "OM" : "CC"}</div>
+            }}>RT</div>
             <div>
               <div style={{ fontSize: isMobile ? 12 : 14, fontWeight: 700, color: T.text, fontFamily: T.fontDisplay }}>
-                {isOptions ? "Options Manager" : "Covered Calls Manager"}
+                RivetTrade
               </div>
               <div style={{ fontSize: 10, color: T.textDim, fontFamily: T.fontMono }}>{email}</div>
             </div>

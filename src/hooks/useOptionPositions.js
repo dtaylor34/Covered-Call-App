@@ -8,7 +8,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot, serverTimestamp } from "firebase/firestore";
 import { useAuth } from "../contexts/AuthContext";
-import { optionId } from "../lib/optionsMath";
+import { optionId, isLong } from "../lib/optionsMath";
 
 const num = (v) => { const n = Number(String(v ?? "").replace(/[^0-9.\-]/g, "")); return Number.isFinite(n) ? n : null; };
 
@@ -71,6 +71,7 @@ export function useOptionPositions() {
     if (acct) next.acct = acct;
     if (form.acctId) next.acctId = String(form.acctId);
     if (form.occSymbol) next.occSymbol = form.occSymbol;
+    if (form.groupId !== undefined) next.groupId = form.groupId || null; // explicit strategy tag
 
     try { await setDoc(posRef(id), next, { merge: true }); }
     catch (e) { console.error("saveOptionPosition:", e); return { ok: false, error: e?.message }; }
@@ -100,6 +101,55 @@ export function useOptionPositions() {
     await deleteDoc(posRef(id));
   }, [uid, positions]);
 
+  // Scale out: sell `sellQty` of an open position at `exitPrice`. Records the sold
+  // slice to history and shrinks the open lot. When the cumulative proceeds cover
+  // the lot's original cost, the remainder is flagged `freeRunning` (house money).
+  // Entry price (`fillPrice`) is left untouched so per-contract P&L stays honest.
+  const scaleOut = useCallback(async (id, sellQty, exitPrice) => {
+    if (!uid) return { ok: false };
+    const p = positions.find((x) => x.id === id);
+    if (!p) return { ok: false };
+    const total = Math.max(1, Math.round(p.contracts || 1));
+    const qty = Math.max(1, Math.min(Math.round(Number(sellQty) || 0), total));
+    const mult = Number(p.multiplier) || 100;
+    const px = Number(exitPrice) || 0;
+    const long = isLong(p);
+
+    const rec = {
+      sym: p.sym, type: p.type, direction: p.direction, strike: p.strike, expiry: p.expiry,
+      contracts: qty, multiplier: mult, underlyingType: p.underlyingType || "equity",
+      fillPrice: p.fillPrice ?? null, exitPrice: px, how: "sold", partial: true,
+      openedAtMs: p.openedAtMs ?? null, fillUnderlying: p.fillUnderlying ?? null, exitUnderlying: p.liveUnderlying ?? null,
+      closedOnMs: Date.now(), closedOn: new Date().toISOString().slice(0, 10),
+      acct: p.acct ?? null, acctId: p.acctId ?? null, occSymbol: p.occSymbol ?? null, closedAt: serverTimestamp(),
+    };
+    await setDoc(closedRef(`${id}-${Date.now()}`), rec);
+
+    const remain = total - qty;
+    if (remain <= 0) { await deleteDoc(posRef(id)); return { ok: true, closed: true }; }
+
+    const scaledOut = (Math.max(0, Math.round(Number(p.scaledOut) || 0))) + qty;
+    const recovered = (Math.max(0, Number(p.recovered) || 0)) + (long ? px * mult * qty : 0);
+    const origCost = (Number(p.fillPrice) || 0) * mult * (remain + scaledOut);
+    const freeRunning = long && recovered >= origCost - 1e-6;
+    await setDoc(posRef(id), { contracts: remain, scaledOut, recovered, freeRunning, updatedAt: serverTimestamp() }, { merge: true });
+    return { ok: true, remain, freeRunning };
+  }, [uid, positions]);
+
+  // Explicit strategy grouping: tag the given positions with a shared groupId so
+  // the Working tab renders them as one multi-leg card. Ungroup clears the tag.
+  const combineIntoStrategy = useCallback(async (ids, label) => {
+    if (!uid || !(ids && ids.length)) return { ok: false };
+    const groupId = `grp-${Date.now().toString(36)}`;
+    await Promise.all(ids.map((id) => setDoc(posRef(id), { groupId, groupLabel: label || null, updatedAt: serverTimestamp() }, { merge: true })));
+    return { ok: true, groupId };
+  }, [uid]);
+
+  const ungroupStrategy = useCallback(async (ids) => {
+    if (!uid || !(ids && ids.length)) return;
+    await Promise.all(ids.map((id) => setDoc(posRef(id), { groupId: null, groupLabel: null, updatedAt: serverTimestamp() }, { merge: true })));
+  }, [uid]);
+
   const deletePosition = useCallback(async (id) => { if (uid) await deleteDoc(posRef(id)); }, [uid]);
   const addClosedRecord = useCallback(async (rec, id) => {
     if (!uid) return { ok: false };
@@ -112,6 +162,7 @@ export function useOptionPositions() {
 
   return {
     positions, closed, loading: posLoading || closedLoading,
-    savePosition, updateLive, closePosition, deletePosition, addClosedRecord, updateClosed, deleteClosed,
+    savePosition, updateLive, closePosition, scaleOut, combineIntoStrategy, ungroupStrategy,
+    deletePosition, addClosedRecord, updateClosed, deleteClosed,
   };
 }

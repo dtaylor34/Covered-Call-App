@@ -56,7 +56,7 @@ export default function PaywallScreen() {
     subtitleText = (
       <>
         Trial for <strong style={{ color: T.text }}>{email}</strong> has expired.
-        <br />Subscribe to continue using Covered Calls Manager.
+        <br />Subscribe to continue using RivetTrade.
       </>
     );
     ctaText = "Subscribe Now — $10/mo →";

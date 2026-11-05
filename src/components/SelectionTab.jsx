@@ -405,6 +405,10 @@ export default function SelectionTab({ onNavigateToGlossary, sharedSymbol, onSym
   const bestStrike = useMemo(() => {
     let best = null, bestScore = -Infinity;
     strikes.forEach(k => {
+      // Income hint: never recommend an IN-THE-MONEY strike. An ITM call's premium
+      // is mostly INTRINSIC value (your own stock's value), not real income, and it
+      // caps you below today's price — so only score strikes at/above the stock.
+      if (k < stock.price) return;
       const prem = blackScholesCall(stock.price, k, timeToExpiry, riskFreeRate, stock.iv);
       const otmPct = (k - stock.price) / stock.price;
       const roi = (prem / stock.price) * 100;
@@ -440,6 +444,7 @@ export default function SelectionTab({ onNavigateToGlossary, sharedSymbol, onSym
     let optDate = null, optDateScore = -Infinity;
     const strikeCandidates = generateStrikePrices(stock.price);
     strikeCandidates.forEach(k => {
+      if (k < stock.price) return; // don't auto-pick an ITM strike (intrinsic ≠ income; caps you below today's price)
       expirations.forEach(d => {
         const days = daysBetween(today, d);
         if (days < 14 || days > 55) return;

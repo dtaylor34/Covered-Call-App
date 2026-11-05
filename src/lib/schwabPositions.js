@@ -112,14 +112,18 @@ function finishCandidates(calls, equities) {
  */
 export function parseSchwabOptionPositions(data) {
   const positions = data?.securitiesAccount?.positions || data?.positions || [];
-  const underlyingPx = {}; // symbol -> price
+  const underlyingPx = {};     // symbol -> price
+  const underlyingShares = {}; // symbol -> long shares held (to detect covered calls)
   const out = [];
   for (const p of positions) {
     const inst = p.instrument || {};
     const at = String(inst.assetType || "").toUpperCase();
     if (at === "EQUITY" || at === "ETF" || at === "COLLECTIVE_INVESTMENT") {
       const sh = Number(p.longQuantity) || 0;
-      if (sh > 0 && p.marketValue) underlyingPx[inst.symbol] = Math.abs(Number(p.marketValue)) / sh;
+      if (sh > 0) {
+        underlyingShares[inst.symbol] = (underlyingShares[inst.symbol] || 0) + sh;
+        if (p.marketValue) underlyingPx[inst.symbol] = Math.abs(Number(p.marketValue)) / sh;
+      }
       continue;
     }
     const isOption = at === "OPTION" || at === "FUTURE_OPTION" || !!inst.putCall;
@@ -145,7 +149,15 @@ export function parseSchwabOptionPositions(data) {
       occSymbol: inst.symbol || null, assetType: at || "OPTION",
     });
   }
-  for (const o of out) { if (o.sym && underlyingPx[o.sym] != null) o.liveUnderlying = underlyingPx[o.sym]; }
+  for (const o of out) {
+    if (o.sym && underlyingPx[o.sym] != null) o.liveUnderlying = underlyingPx[o.sym];
+    // A short call fully backed by shares in this account is a COVERED CALL — it
+    // belongs to the covered-call tracker, not the standalone options book. Flag
+    // it so the Options Working sync can keep it out.
+    o.coveredCall = o.type === "CALL" && o.direction === "short"
+      && o.underlyingType !== "future"
+      && (underlyingShares[o.sym] || 0) >= o.contracts * 100;
+  }
   return out.filter((o) => o.strike != null && o.expiry);
 }
 

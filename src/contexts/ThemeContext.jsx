@@ -115,6 +115,8 @@ const TYPOGRAPHY = {
   fontDisplay: "'Roboto', 'Space Mono', 'JetBrains Mono', monospace",
   fontBody: "'Roboto', 'IBM Plex Sans', -apple-system, sans-serif",
   fontMono: "'JetBrains Mono', 'Fira Code', monospace",
+  // Charts + Options Working numbers: Roboto family (loaded app-wide, plain zero).
+  fontChart: "'Roboto', system-ui, -apple-system, sans-serif",
   r: 12,
   rL: 16,
   rS: 8,

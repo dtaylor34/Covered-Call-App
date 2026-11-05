@@ -7,6 +7,7 @@
 const admin = require("firebase-admin");
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const { getQuote, getFullChain } = require("./providers");
+const { setCache, getCachedOrStale } = require("./cache/firestore");
 const YahooFinance = require("yahoo-finance2").default;
 
 const yf = new YahooFinance({ suppressNotices: ["yahooSurvey"] });
@@ -157,20 +158,47 @@ function currentAtmIv(calls) {
   return best ? best.iv : 0;
 }
 
+const CHAIN_TTL = 15 * 60; // seconds before a cached chain is flagged stale
+
 exports.getBestReturns = onCall({ cors: true, timeoutSeconds: 60 }, async (request) => {
   requireAuth(request);
   const symbol = cleanSymbol(request.data.symbol);
   const contracts = Math.max(1, Math.round(request.data.contracts || 1));
-  const quote = await getQuote(symbol);
-  const price = quote.price || 0;
-  if (!(price > 0)) throw new HttpsError("internal", `No price for ${symbol}.`);
-  const calls = flattenCalls(await getFullChain(symbol, 10), price);
+  const cacheKey = `bestReturnsChain_${symbol}`;
+
+  // Live fetch (quote + full chain). Yahoo frequently throttles the Cloud
+  // Function's datacenter IP — when that happens getFullChain comes back empty.
+  // Rather than return "no strikes", fall back to the last good cached chain.
+  let price = 0, calls = [], stale = false, asOf = null;
+  try {
+    const quote = await getQuote(symbol);
+    price = quote.price || 0;
+    if (price > 0) {
+      const flat = flattenCalls(await getFullChain(symbol, 10), price);
+      if (flat.length) calls = flat;
+    }
+  } catch (e) { /* fall through to cache */ }
+
+  if (calls.length && price > 0) {
+    await setCache(cacheKey, { price, calls, savedAt: new Date().toISOString() }); // remember this good chain
+  } else {
+    const cached = await getCachedOrStale(cacheKey, CHAIN_TTL);
+    if (cached && Array.isArray(cached.calls) && cached.calls.length) {
+      price = cached.price; calls = cached.calls; stale = true; asOf = cached.savedAt || null;
+    }
+  }
+
+  if (!(price > 0) || !calls.length) {
+    // No live data and no cached fallback — report unavailable (don't hard-error).
+    return { symbol, price, contracts, bestReturn: null, noSale: null, sale: null, dataUnavailable: true };
+  }
+
   const fund = await fetchFund(symbol);
   const currentIv = currentAtmIv(calls);
   const ivPct = await ivPercentile(symbol, currentIv);
   const ctx = { earningsDate: fund.earningsDate, exDivDate: fund.exDivDate, ivPct };
   return {
-    symbol, price, contracts,
+    symbol, price, contracts, stale, asOf,
     earningsDate: fund.earningsDate,
     exDivDate: fund.exDivDate,
     dividendRate: fund.dividendRate,

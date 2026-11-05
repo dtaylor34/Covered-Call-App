@@ -5,7 +5,7 @@
 
 import { describe, it, expect } from "vitest";
 import {
-  groupIntoStrategies, classifyLegs, strategyCalcs, profitTargets,
+  groupIntoStrategies, classifyLegs, strategyCalcs, profitTargets, sellTargets,
 } from "./optionStrategies";
 
 const leg = (o) => ({
@@ -55,15 +55,28 @@ describe("classifyLegs", () => {
 });
 
 describe("groupIntoStrategies", () => {
-  it("groups legs with the same sym/acct/expiry into one strategy", () => {
-    const groups = groupIntoStrategies(longStraddle);
+  it("keeps un-grouped legs individual, even when they'd look like a strategy", () => {
+    const groups = groupIntoStrategies(longStraddle.map((l, i) => ({ ...l, id: `L${i}` })));
+    expect(groups).toHaveLength(2);
+    expect(groups.every((g) => !g.multiLeg)).toBe(true);
+  });
+  it("combines legs that share an explicit groupId into one strategy card", () => {
+    const combined = longStraddle.map((l, i) => ({ ...l, id: `L${i}`, groupId: "g1" }));
+    const groups = groupIntoStrategies(combined);
     expect(groups).toHaveLength(1);
     expect(groups[0].legs).toHaveLength(2);
+    expect(groups[0].multiLeg).toBe(true);
     expect(groups[0].strategy).toBe("Long straddle");
   });
-  it("splits different expiries into separate groups", () => {
-    const mixed = [...longStraddle, leg({ type: "CALL", direction: "long", strike: 90, fillPrice: 1, expiry: "2027-03-19" })];
-    expect(groupIntoStrategies(mixed)).toHaveLength(2);
+  it("separates legs that carry different (or no) groupIds", () => {
+    const legs = [
+      { ...leg({ type: "CALL", direction: "long", strike: 90, fillPrice: 1 }), id: "a", groupId: "g1" },
+      { ...leg({ type: "PUT", direction: "long", strike: 90, fillPrice: 1 }), id: "b", groupId: "g1" },
+      { ...leg({ type: "CALL", direction: "long", strike: 95, fillPrice: 1 }), id: "c" },
+    ];
+    const groups = groupIntoStrategies(legs);
+    expect(groups).toHaveLength(2);             // one combined pair + one standalone
+    expect(groups.filter((g) => g.multiLeg)).toHaveLength(1);
   });
 });
 
@@ -84,6 +97,43 @@ describe("strategyCalcs", () => {
     expect(c.credit).toBeCloseTo(210, 0);              // (1.0 + 1.1) × 100
     expect(c.openPL).toBeCloseTo(120, 0);              // +60 put, +60 call
     expect(c.maxProfit).toBeCloseTo(210, 0);           // keep full credit
+  });
+});
+
+describe("sellTargets", () => {
+  const put = { sym: "GOOG", type: "PUT", direction: "long", strike: 230, expiry: "2027-06-18", contracts: 6, multiplier: 100, fillPrice: 0.8, livePrice: 0.84, fillUnderlying: 280, liveUnderlying: 280 };
+  const call = { ...put, type: "CALL", strike: 325, fillPrice: 0.9, livePrice: 1.06 };
+
+  it("prices each gain rung off the entry premium, with proceeds for the whole lot", () => {
+    const [t50, t100] = sellTargets(put, [50, 100]);
+    expect(t50.premium).toBeCloseTo(1.2, 2);           // $0.80 × 1.5
+    expect(t50.proceeds).toBeCloseTo(720, 0);          // $1.20 × 100 × 6
+    expect(t100.premium).toBeCloseTo(1.6, 2);          // 2× entry
+    expect(t100.proceeds).toBeCloseTo(960, 0);
+    expect(t100.free).toBe(true);                      // +100% is the free-roll rung
+  });
+
+  it("puts need the stock BELOW today's price to gain; calls need it ABOVE", () => {
+    const putT = sellTargets(put, [100])[0];
+    const callT = sellTargets(call, [100])[0];
+    expect(putT.underlying).toBeLessThan(280);
+    expect(callT.underlying).toBeGreaterThan(280);
+  });
+
+  it("a short's targets are buy-back prices below the credit taken", () => {
+    const short = { ...put, direction: "short", fillPrice: 2.0 };
+    const [t50] = sellTargets(short, [50]);
+    expect(t50.premium).toBeCloseTo(1.0, 2);           // buy back at 50% of the $2.00 credit
+    expect(t50.free).toBe(false);
+  });
+
+  it("hides stock-price targets when the mark and underlying disagree (stale/after-hours)", () => {
+    // ITM call marked at $1.00 while intrinsic is ~$15 → IV floors out → unreliable.
+    const stale = { ...call, strike: 325, fillUnderlying: 340, liveUnderlying: 340, fillPrice: 0.9, livePrice: 1.0 };
+    const [t] = sellTargets(stale, [50]);
+    expect(t.ivReliable).toBe(false);
+    expect(t.underlying).toBeNull();                   // no misleading line
+    expect(t.premium).toBeCloseTo(1.35, 2);            // premium target still exact
   });
 });
 

@@ -17,7 +17,7 @@ export default function StrategyPositionChart({ calc, targets, T }) {
   const [hoverX, setHoverX] = useState(null);
   const { per, S, dte, breakevens = [] } = calc;
   if (!per?.length || !(S > 0)) return null;
-  const font = T.fontMono;
+  const font = T.fontChart || T.fontMono;
 
   const strikes = per.map((x) => x.c.K).filter((k) => k > 0);
   const span = (Math.max(...strikes) - Math.min(...strikes)) || S * 0.1 || 1;
@@ -133,7 +133,7 @@ export default function StrategyPositionChart({ calc, targets, T }) {
 
 function Legend({ T, color, dash, children }) {
   return (
-    <span style={{ display: "inline-flex", alignItems: "center", gap: 5, color: T.textDim, fontSize: 11, fontFamily: T.fontMono }}>
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 5, color: T.textDim, fontSize: 11, fontFamily: T.fontChart || T.fontMono }}>
       <svg width="18" height="8"><line x1="0" y1="4" x2="18" y2="4" stroke={color} strokeWidth="2" strokeDasharray={dash ? "5 3" : "0"} /></svg>
       {children}
     </span>

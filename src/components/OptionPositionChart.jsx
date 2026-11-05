@@ -20,7 +20,7 @@ const parseISO = (iso) => { const [y, m, d] = String(iso || "").split("-").map(N
 const fmtDate = (t) => new Date(t).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "2-digit" });
 const fmtDateTime = (t) => new Date(t).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 
-export default function OptionPositionChart({ symbol, strike, breakeven, currentUnderlying, entryUnderlying, expiry, openedAtMs, type = "CALL", onSetEntry }) {
+export default function OptionPositionChart({ symbol, strike, breakeven, currentUnderlying, entryUnderlying, expiry, openedAtMs, type = "CALL", onSetEntry, targetLevels = [] }) {
   const { T } = useTheme();
   const [daily, setDaily] = useState([]);
   const [intra, setIntra] = useState([]);
@@ -54,7 +54,8 @@ export default function OptionPositionChart({ symbol, strike, breakeven, current
   const showFuture = !sel.intraday && futureMs > 0;
   const tMax = showFuture ? expMs : nowMs;
 
-  const overlays = [strike, breakeven, entryUnderlying, currentUnderlying].map(Number).filter((v) => Number.isFinite(v) && v > 0);
+  const tgtLines = (targetLevels || []).filter((t) => Number.isFinite(Number(t.price)) && Number(t.price) > 0);
+  const overlays = [strike, breakeven, entryUnderlying, currentUnderlying, ...tgtLines.map((t) => t.price)].map(Number).filter((v) => Number.isFinite(v) && v > 0);
   const prices = pts.map((p) => p.c).concat(overlays);
   let lo = Math.min(...prices), hi = Math.max(...prices);
   if (!Number.isFinite(lo) || !Number.isFinite(hi)) { lo = 0; hi = 1; }
@@ -82,7 +83,7 @@ export default function OptionPositionChart({ symbol, strike, breakeven, current
     setHoverI(best);
   };
 
-  const font = T.fontMono;
+  const font = T.fontChart || T.fontMono;
   const card = { background: T.surface, border: `1px solid ${T.border}`, borderRadius: T.r || 10, padding: "14px 16px", marginBottom: 14 };
   const amber = T.warn || T.warning || "#E6A23C";
   const entryColor = T.pro || "#6366f1";
@@ -125,6 +126,14 @@ export default function OptionPositionChart({ symbol, strike, breakeven, current
               : <rect x={PL} y={yP(strike)} width={RX - PL} height={Math.max(0, PB - yP(strike))} fill={T.accent} opacity="0.06" />)}
             {K > 0 && (<><line x1={PL} y1={yP(strike)} x2={RX} y2={yP(strike)} stroke={T.danger} strokeWidth="1.5" strokeDasharray="5 4" /><text x={RX - 4} y={yP(strike) - 4} textAnchor="end" fontSize="10" fontFamily={font} fill={T.danger} fontWeight="700">Strike {money(strike)}</text></>)}
             {Number(breakeven) > 0 && (<><line x1={PL} y1={yP(breakeven)} x2={RX} y2={yP(breakeven)} stroke={amber} strokeWidth="1.25" strokeDasharray="5 4" /><text x={RX - 4} y={yP(breakeven) + 12} textAnchor="end" fontSize="10" fontFamily={font} fill={amber} fontWeight="700">Breakeven {money(breakeven)}</text></>)}
+
+            {/* Sell-to-gain targets: the stock price needed to reach each % gain. Labels sit on the left to clear strike/breakeven on the right. */}
+            {tgtLines.map((t, i) => { const col = t.color || T.success; const y = yP(t.price); return (
+              <g key={`tgt${i}`}>
+                <line x1={PL} y1={y} x2={RX} y2={y} stroke={col} strokeWidth={t.free ? 1.75 : 1} strokeDasharray={t.free ? "2 3" : "1 4"} opacity={t.free ? 0.95 : 0.7} />
+                <text x={PL + 4} y={y - 4} textAnchor="start" fontSize="9.5" fontFamily={font} fill={col} fontWeight="700">{t.label} ≈ {money(t.price)}</text>
+              </g>
+            ); })}
 
             <path d={area} fill="url(#opcArea)" />
             <path d={line} fill="none" stroke={T.accent} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />

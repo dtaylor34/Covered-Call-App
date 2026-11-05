@@ -33,6 +33,41 @@ export function optionCalcs(p) {
   return { qty, mult, fill, live, long, call, K, cost, value, pl, plPct, breakeven, maxProfit, maxLoss };
 }
 
+// Free-roll / scale-out plan for a (primarily long) option position.
+// The idea: once you can sell PART of the position for enough to recover your
+// entire cost, the contracts you keep are "free-running" — house money, with no
+// original capital left at risk. For an even lot that break-even is simply 2×
+// entry (sell half, get your money back); this generalizes to any lot size and
+// to positions that have already been partly scaled out (`scaledOut`/`recovered`).
+export function freeRollPlan(p) {
+  const c = optionCalcs(p);
+  const { qty, mult, fill, live, long } = c;
+  const scaledOut = Math.max(0, Math.round(Number(p.scaledOut) || 0)); // contracts already sold
+  const recovered = Math.max(0, Number(p.recovered) || 0);             // $ already pulled back out
+  const origQty = qty + scaledOut;
+  const origCost = fill * mult * origQty;              // what the whole lot cost to put on
+  const remainingCost = Math.max(0, origCost - recovered);
+  const sellQty = Math.max(1, Math.floor(qty / 2));    // "sell half" (keep the larger half on odd lots)
+  const keepQty = qty - sellQty;
+  // Price at which selling `sellQty` now recovers the remaining unrecovered cost.
+  const freeRollPrice = sellQty > 0 && mult > 0 ? remainingCost / (sellQty * mult) : null;
+  const proceedsNow = sellQty * live * mult;           // cash if you sold half at the live mark
+  const recoverPct = origCost > 0 ? ((recovered + proceedsNow) / origCost) * 100 : 0;
+  // Progress toward free-roll, measured on the premium you still need to capture:
+  // 0% at your entry price, 100% once the mark reaches the free-roll price. (Using
+  // live/freeRollPrice would wrongly read ~50% the moment you open the trade.)
+  const denom = (freeRollPrice != null ? freeRollPrice : 2 * fill) - fill;
+  const progressPct = denom > 0 ? Math.max(0, Math.min(100, ((live - fill) / denom) * 100)) : 100;
+  const freeRunning = long && recovered >= origCost - 1e-6 && qty >= 1; // whole cost already back out
+  const applicable = long && qty >= 2;                 // need ≥2 contracts to sell half and keep some
+  const ready = applicable && keepQty >= 1 && freeRollPrice != null && live >= freeRollPrice;
+  return {
+    applicable, freeRunning, ready, sellQty, keepQty,
+    origQty, origCost, remainingCost, recovered, scaledOut,
+    freeRollPrice, proceedsNow, recoverPct, progressPct, long,
+  };
+}
+
 // In/out-of-the-money + distance for a quick status chip.
 export function moneyness(p, underlying) {
   const K = Number(p.strike) || 0;
