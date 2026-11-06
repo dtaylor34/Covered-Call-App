@@ -51,6 +51,7 @@ export default function TradeHistory({ closed = [], accounts = [], onUpdate, onD
   const [txAt, setTxAt] = useState(0);      // when the reconcile was last run (ms)
   const [txRaw, setTxRaw] = useState(null); // raw payloads (for the raw view)
   const [showTxRaw, setShowTxRaw] = useState(false);
+  const [showReconDetail, setShowReconDetail] = useState(false); // the per-contract breakdown is collapsed by default
   const autoRan = useRef(false);
   const font = T.fontMono;
   const RECON_KEY = "rt:reconcile:v1";
@@ -130,13 +131,18 @@ export default function TradeHistory({ closed = [], accounts = [], onUpdate, onD
             </button>
           )}
           {onSync && (
-            <button onClick={onSync} disabled={syncing} style={{ padding: "8px 14px", borderRadius: 8, border: `1px solid ${T.accent}`, cursor: "pointer", background: "transparent", color: T.accent, fontFamily: font, fontSize: 12, fontWeight: 700, opacity: syncing ? 0.6 : 1 }}>
+            <button onClick={onSync} disabled={syncing} title="Pull your closed covered calls from Schwab's order history (~60 days) and ADD them as trade rows below. Writes records." style={{ padding: "8px 14px", borderRadius: 8, border: `1px solid ${T.accent}`, cursor: "pointer", background: "transparent", color: T.accent, fontFamily: font, fontSize: 12, fontWeight: 700, opacity: syncing ? 0.6 : 1 }}>
               {syncing ? "Syncing…" : "⬇ Import closed trades from Schwab"}
             </button>
           )}
           {schwabConnected && (
-            <button onClick={() => reconcile()} disabled={txBusy} title="Refresh realized P&L from your Schwab transactions (auto-refreshes when you open this tab; this forces it now)." style={{ padding: "8px 14px", borderRadius: 8, border: `1px solid ${T.border}`, cursor: "pointer", background: "transparent", color: T.textDim, fontFamily: font, fontSize: 12, fontWeight: 700, opacity: txBusy ? 0.6 : 1 }}>
+            <button onClick={() => reconcile()} disabled={txBusy} title="Recompute Realized P&L from your Schwab transactions (read-only, 1-year, net of real fees). Auto-refreshes when you open this tab — this forces it now. NOT the same as Import: it doesn't add trade rows, it just updates the realized total." style={{ padding: "8px 14px", borderRadius: 8, border: `1px solid ${T.border}`, cursor: "pointer", background: "transparent", color: T.textDim, fontFamily: font, fontSize: 12, fontWeight: 700, opacity: txBusy ? 0.6 : 1 }}>
               {txBusy ? "Refreshing…" : tx && !tx.error ? "⟲ Refresh from Schwab" : "⟲ Reconcile realized (full history)"}
+            </button>
+          )}
+          {tx && !tx.error && (
+            <button onClick={() => setShowReconDetail((v) => !v)} style={{ background: "none", border: "none", color: T.textDim, fontSize: 11, cursor: "pointer", padding: "4px 2px" }}>
+              {showReconDetail ? "hide details" : "details"}
             </button>
           )}
           {onSync && !schwabConnected && <span style={{ color: T.warn || T.warning, fontFamily: font, fontSize: 11 }}>Schwab not connected — reconnect in the APIs tab first.</span>}
@@ -144,7 +150,7 @@ export default function TradeHistory({ closed = [], accounts = [], onUpdate, onD
         </div>
       </div>
 
-      {tx && (
+      {tx && (tx.error || showReconDetail) && (
         <div style={{ ...card, fontFamily: font, fontSize: 12.5 }}>
           {tx.error ? (
             <span style={{ color: T.danger }}>{tx.error}</span>
@@ -304,7 +310,7 @@ export default function TradeHistory({ closed = [], accounts = [], onUpdate, onD
       </>
       )}
 
-      {showMonthly && <MonthlyPnL closed={rows} onBack={() => setShowMonthly(false)} />}
+      {showMonthly && <MonthlyPnL closed={rows} recon={tx && !tx.error ? tx : null} onBack={() => setShowMonthly(false)} />}
     </div>
   );
 }
@@ -313,7 +319,7 @@ export default function TradeHistory({ closed = [], accounts = [], onUpdate, onD
 const MONTH3 = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const monthLabel = (key) => { const [y, m] = key.split("-").map(Number); return `${MONTH3[(m || 1) - 1]} '${String(y).slice(-2)}`; };
 
-function MonthlyPnL({ closed, onBack }) {
+function MonthlyPnL({ closed, recon, onBack }) {
   const { T } = useTheme();
   const font = T.fontMono;
   const [year, setYear] = useState("all");
@@ -326,20 +332,33 @@ function MonthlyPnL({ closed, onBack }) {
 
   const allMonths = useMemo(() => {
     const m = new Map();
-    for (const r of closed) {
-      const key = (r.closedOn && /^\d{4}-\d{2}/.test(r.closedOn)) ? r.closedOn.slice(0, 7)
-        : (Number.isFinite(r.closedOnMs) ? new Date(r.closedOnMs).toISOString().slice(0, 7) : null);
-      if (!key) continue;
-      const p = closedPnL(r);
-      if (!m.has(key)) m.set(key, { key, realized: 0, premium: 0, trades: 0, wins: 0, known: 0, unknown: 0 });
-      const o = m.get(key);
-      o.trades++;
-      o.premium += p.premium || 0;
-      if (p.net == null) o.unknown++;
-      else { o.realized += p.net; o.known++; if (p.net > 0) o.wins++; }
+    const bucket = (key) => { if (!m.has(key)) m.set(key, { key, realized: 0, premium: 0, trades: 0, wins: 0, known: 0, unknown: 0 }); return m.get(key); };
+    if (recon?.closed) {
+      // Schwab-reconciled: each closed OPTION contract's realized (net of fees),
+      // bucketed by the month it closed — the covered-call income track record.
+      for (const c of recon.closed) {
+        if (c.kind !== "option") continue; // income = option premium; called-away stock tracked separately
+        const key = Number.isFinite(c.whenMs) ? new Date(c.whenMs).toISOString().slice(0, 7) : null;
+        if (!key) continue;
+        const o = bucket(key);
+        o.trades++; o.known++; o.realized += c.realized || 0; o.premium += c.realized || 0;
+        if ((c.realized || 0) > 0) o.wins++;
+      }
+    } else {
+      for (const r of closed) {
+        const key = (r.closedOn && /^\d{4}-\d{2}/.test(r.closedOn)) ? r.closedOn.slice(0, 7)
+          : (Number.isFinite(r.closedOnMs) ? new Date(r.closedOnMs).toISOString().slice(0, 7) : null);
+        if (!key) continue;
+        const p = closedPnL(r);
+        const o = bucket(key);
+        o.trades++;
+        o.premium += p.premium || 0;
+        if (p.net == null) o.unknown++;
+        else { o.realized += p.net; o.known++; if (p.net > 0) o.wins++; }
+      }
     }
     return [...m.values()].sort((a, b) => (a.key < b.key ? -1 : 1));
-  }, [closed]);
+  }, [closed, recon]);
 
   const years = useMemo(() => [...new Set(allMonths.map((o) => o.key.slice(0, 4)))].sort().reverse(), [allMonths]);
   const months = useMemo(() => {

@@ -1,3 +1,11 @@
+## [2.6.7] — 2026-11-06
+
+### Changed
+- **Monthly P&L reflects the Schwab reconcile.** When reconciled, the Monthly P&L track record is built from your actual Schwab transactions (option realized, net of fees, by close month) instead of the gross order-based estimate.
+- **Reconcile detail is collapsed by default.** The per-contract breakdown is now behind a "details" toggle; the Realized P&L tile and the Refresh button stay visible. Clarified that **Import** (adds closed-trade rows, ~60-day orders) and **Refresh** (recomputes realized from transactions, read-only, 1-year) are different, via their tooltips.
+
+---
+
 ## [2.6.6] — 2026-11-05
 
 ### Changed
