@@ -52,19 +52,21 @@ export default function TradeHistory({ closed = [], accounts = [], onUpdate, onD
   const [txRaw, setTxRaw] = useState(null); // raw payloads (for the raw view)
   const [showTxRaw, setShowTxRaw] = useState(false);
   const [showReconDetail, setShowReconDetail] = useState(false); // the per-contract breakdown is collapsed by default
+  const [reconAcct, setReconAcct] = useState("all"); // which Schwab account to include (accountId, or "all")
   const autoRan = useRef(false);
   const font = T.fontMono;
   const RECON_KEY = "rt:reconcile:v1";
 
   // Restore the last reconcile on load so the Schwab number sticks across reloads.
   useEffect(() => {
-    try { const s = JSON.parse(localStorage.getItem(RECON_KEY) || "null"); if (s?.result) { setTx(s.result); setTxAt(s.at || 0); } } catch { /* ignore */ }
+    try { const s = JSON.parse(localStorage.getItem(RECON_KEY) || "null"); if (s?.result) { setTx(s.result); setTxAt(s.at || 0); if (s.acct) setReconAcct(s.acct); } } catch { /* ignore */ }
   }, []);
 
   // Pull full-history transactions (with real fees) from Schwab and compute a
   // realized that ties out to Schwab's Gain/Loss report. Persists the result.
-  const reconcile = async ({ silent = false } = {}) => {
-    const accts = (accounts || []).filter((a) => a?.hashValue);
+  const reconcile = async ({ silent = false, acct = reconAcct } = {}) => {
+    let accts = (accounts || []).filter((a) => a?.hashValue);
+    if (acct !== "all") accts = accts.filter((a) => String(a.accountId) === String(acct)); // scope to one account
     if (!accts.length) { if (!silent) setTx({ error: "No linked Schwab account found — reconnect in the APIs tab." }); return; }
     setTxBusy(true); if (!silent) { setTxRaw(null); setShowTxRaw(false); }
     try {
@@ -75,7 +77,7 @@ export default function TradeHistory({ closed = [], accounts = [], onUpdate, onD
       }
       const result = realizedFromTransactions(payloads);
       setTxRaw(payloads); setTx(result); setTxAt(Date.now());
-      try { localStorage.setItem(RECON_KEY, JSON.stringify({ at: Date.now(), result })); } catch { /* quota */ }
+      try { localStorage.setItem(RECON_KEY, JSON.stringify({ at: Date.now(), result, acct })); } catch { /* quota */ }
     } catch (e) { if (!silent) setTx({ error: e?.message || "Couldn't pull transactions from Schwab." }); }
     finally { setTxBusy(false); }
   };
@@ -134,6 +136,14 @@ export default function TradeHistory({ closed = [], accounts = [], onUpdate, onD
             <button onClick={onSync} disabled={syncing} title="Pull your closed covered calls from Schwab's order history (~60 days) and ADD them as trade rows below. Writes records." style={{ padding: "8px 14px", borderRadius: 8, border: `1px solid ${T.accent}`, cursor: "pointer", background: "transparent", color: T.accent, fontFamily: font, fontSize: 12, fontWeight: 700, opacity: syncing ? 0.6 : 1 }}>
               {syncing ? "Syncing…" : "⬇ Import closed trades from Schwab"}
             </button>
+          )}
+          {schwabConnected && (accounts || []).filter((a) => a?.hashValue).length > 1 && (
+            <select value={reconAcct} onChange={(e) => { const v = e.target.value; setReconAcct(v); reconcile({ acct: v }); }} title="Which Schwab account's trades to include in Realized P&L" style={{ padding: "7px 10px", borderRadius: 8, border: `1px solid ${T.border}`, background: T.inputBg || T.card, color: T.text, fontFamily: font, fontSize: 12, cursor: "pointer" }}>
+              <option value="all">All accounts</option>
+              {(accounts || []).filter((a) => a?.hashValue).map((a) => (
+                <option key={a.accountId} value={String(a.accountId)}>{a.label || `··${String(a.accountId).slice(-4)}`}</option>
+              ))}
+            </select>
           )}
           {schwabConnected && (
             <button onClick={() => reconcile()} disabled={txBusy} title="Recompute Realized P&L from your Schwab transactions (read-only, 1-year, net of real fees). Auto-refreshes when you open this tab — this forces it now. NOT the same as Import: it doesn't add trade rows, it just updates the realized total." style={{ padding: "8px 14px", borderRadius: 8, border: `1px solid ${T.border}`, cursor: "pointer", background: "transparent", color: T.textDim, fontFamily: font, fontSize: 12, fontWeight: 700, opacity: txBusy ? 0.6 : 1 }}>

@@ -1,3 +1,10 @@
+## [2.6.8] — 2026-11-06
+
+### Added
+- **Account picker on the realized reconcile.** When more than one Schwab account is linked, a dropdown scopes Realized P&L to a single account (or All) — so it matches a per-account Schwab Gain/Loss report instead of combining every account's trades. The selection persists.
+
+---
+
 ## [2.6.7] — 2026-11-06
 
 ### Changed
