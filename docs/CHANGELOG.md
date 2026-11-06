@@ -1,3 +1,10 @@
+## [2.6.3] — 2026-11-05
+
+### Changed
+- **Reconcile now updates the Realized P&L tile.** After running "Reconcile realized (full history)," the Realized P&L tile shows the Schwab-matched figure (closed positions only, net of real fees) and is labeled "Realized P&L · Schwab," instead of only appearing in a separate line.
+
+---
+
 ## [2.6.2] — 2026-11-05
 
 ### Fixed

@@ -163,7 +163,16 @@ export default function TradeHistory({ closed = [], accounts = [], onUpdate, onD
       <div style={{ ...card, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 12 }}>
         <Tot T={T} label="Closed trades" value={String(totals.n)} tip="Number of covered calls you've closed." />
         <Tot T={T} label="Total premiums" value={usd(totals.premium)} color={T.success} tip="Premium collected across every closed covered call (fill × 100 × contracts)." />
-        <Tot T={T} label="Realized P&L" value={usd(totals.realized, true)} color={totals.realized >= 0 ? T.success : T.danger} tip={`Net realized profit/loss: premium kept minus buy-back cost, plus stock gain on any called-away trades.${totals.known < totals.n ? ` Excludes ${totals.n - totals.known} buy-back(s) whose opening premium isn't known yet — add it in the row.` : ""}`} />
+        {(() => {
+          const reconciled = tx && !tx.error;                 // a successful Schwab reconcile overrides the gross estimate
+          const val = reconciled ? tx.realized : totals.realized;
+          return (
+            <Tot T={T} label={reconciled ? "Realized P&L · Schwab" : "Realized P&L"} value={usd(val, true)} color={val >= 0 ? T.success : T.danger}
+              tip={reconciled
+                ? `Matched to Schwab from your actual transactions — closed positions only, net of real fees. ${tx.closedCount} closed contract${tx.closedCount === 1 ? "" : "s"}, ${tx.openCount} open position${tx.openCount === 1 ? "" : "s"} excluded. (App-tracked gross estimate: ${usd(totals.realized, true)}.)`
+                : `Net realized P&L (gross estimate): premium kept minus buy-back cost, plus stock gain on called-away trades. Click “⟲ Reconcile realized (full history)” above to match Schwab exactly.${totals.known < totals.n ? ` Excludes ${totals.n - totals.known} buy-back(s) whose opening premium isn't known yet.` : ""}`} />
+          );
+        })()}
         <Tot T={T} label="Win rate" value={`${totals.wins}/${totals.known} (${totals.known ? Math.round((totals.wins / totals.known) * 100) : 0}%)`} tip="Closed trades with a positive realized P&L (of those with a known premium)." />
       </div>
 
