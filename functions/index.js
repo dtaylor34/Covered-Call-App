@@ -269,6 +269,7 @@ exports.schwabDisconnect     = schwab.schwabDisconnect;
 exports.schwabGetPositions   = schwab.schwabGetPositions;
 exports.schwabGetBuyingPower = schwab.schwabGetBuyingPower;
 exports.schwabGetOrders      = schwab.schwabGetOrders;
+exports.schwabGetTransactions = schwab.schwabGetTransactions;
 exports.schwabGetQuotes      = schwab.schwabGetQuotes;
 exports.schwabGetOptionChain = schwab.schwabGetOptionChain;
 

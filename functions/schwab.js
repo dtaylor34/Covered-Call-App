@@ -407,6 +407,38 @@ exports.schwabGetOrders = onCall(CRYPTO_OPTS, async (request) => {
   return await res.json();
 });
 
+/**
+ * schwabGetTransactions — executed transactions (with actual commissions/fees)
+ * over a date range. Unlike orders (~60-day cap) Schwab allows up to a 1-year
+ * window here, so this is the authoritative source for realized P&L that ties
+ * out to Schwab's Gain/Loss report. `netAmount` on each transaction is already
+ * net of fees. Input: { accountHash, startDate?, endDate? } (ISO-8601).
+ */
+exports.schwabGetTransactions = onCall(CRYPTO_OPTS, async (request) => {
+  const uid = requireAuth(request);
+  const { accountHash, startDate, endDate } = request.data;
+  if (!accountHash) throw new HttpsError("invalid-argument", "accountHash required.");
+
+  const secret = await getSecret(uid);
+  const accessToken = await ensureFreshToken(uid, secret);
+
+  // Schwab allows at most a 1-year span per call; default to the last year.
+  const start = startDate || new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString();
+  const end = endDate || new Date().toISOString();
+  const params = new URLSearchParams({ startDate: start, endDate: end, types: "TRADE" });
+
+  const res = await fetch(`${SCHWAB_TRADER_URL}/accounts/${accountHash}/transactions?${params}`, {
+    headers: { "Authorization": `Bearer ${accessToken}` },
+  });
+
+  if (!res.ok) {
+    console.error("schwabGetTransactions failed with status", res.status);
+    throw new HttpsError("internal", "Failed to fetch transactions from Schwab.");
+  }
+
+  return await res.json();
+});
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // Market Data Functions
 // ═══════════════════════════════════════════════════════════════════════════════

@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { parseSchwabPositions, parseSchwabOptionPositions, parseOccSymbol, parseSchwabOrders, parseSchwabGtcOrders } from "./schwabPositions";
+import { positionCalcs } from "./coveredCallMath";
 
 // Mock Schwab Trader API response: 200 META shares + 2 short $820 calls (the META example).
 const DATA = {
@@ -58,6 +59,65 @@ describe("parseSchwabPositions", () => {
     expect(c.fillStock).toBeCloseTo(34.6799, 3);   // avg cost (held shares)
     expect(c.liveStock).toBeCloseTo(775.75, 2);    // 155150 / 200
     expect(c.covered).toBe(true);                  // 200 shares >= 2*100
+  });
+});
+
+// The reported bug: 200 META shares + two short calls (680 & 700, same expiry).
+// Must produce TWO covered-call rows, each with its own 100-share lot.
+const EQ = (sym, shares, avg, mv) => ({ longQuantity: shares, shortQuantity: 0, averagePrice: avg, marketValue: mv, instrument: { assetType: "EQUITY", symbol: sym } });
+const SC = (occ, sym, qty, avg, mv) => ({ longQuantity: 0, shortQuantity: qty, averagePrice: avg, marketValue: mv, instrument: { assetType: "OPTION", symbol: occ, putCall: "CALL", underlyingSymbol: sym } });
+const META_TWO = { securitiesAccount: { positions: [
+  EQ("META", 200, 34.6799, 122860),                         // 200 sh @ 34.6799, price 614.30
+  SC("META  261218C00680000", "META", 1, 16.30, -1122.50),  // 680C sold 16.30, now 11.225
+  SC("META  261218C00700000", "META", 1, 10.55, -1055),     // 700C sold 10.55
+] } };
+
+describe("parseSchwabPositions — share allocation across multiple short calls", () => {
+  it("pairs each short call with its OWN 100-share lot (no merge, nothing dropped)", () => {
+    const { candidates } = parseSchwabPositions(META_TWO);
+    expect(candidates).toHaveLength(2);
+    const [c680, c700] = candidates; // stable order: same expiry → strike 680 before 700
+    expect(c680).toMatchObject({ sym: "META", strike: 680, contracts: 1, shares: 100, covered: true });
+    expect(c700).toMatchObject({ sym: "META", strike: 700, contracts: 1, shares: 100, covered: true });
+    expect(c680.fillCall).toBeCloseTo(16.30, 2);
+    expect(c700.fillCall).toBeCloseTo(10.55, 2);
+    expect(c680.fillStock).toBeCloseTo(34.6799, 4);
+  });
+
+  it("per-row calcs use that row's own shares/contracts — money in trade, premium, best case, kept", () => {
+    const [c680, c700] = parseSchwabPositions(META_TWO).candidates;
+    const r680 = positionCalcs(c680);
+    expect(r680.basis).toBeCloseTo(1837.99, 2);      // money in trade = 34.6799×100 − 16.30×100
+    expect(r680.premium).toBeCloseTo(1630.00, 2);
+    expect(r680.maxProfit).toBeCloseTo(66162.01, 2); // best case = (680−34.6799)×100 + 1630
+    expect(r680.kept).toBeCloseTo(507.50, 2);        // (16.30 − 11.225) × 100 — formula is correct
+    const r700 = positionCalcs(c700);
+    expect(r700.basis).toBeCloseTo(2412.99, 2);
+    expect(r700.premium).toBeCloseTo(1055.00, 2);
+    expect(r700.maxProfit).toBeCloseTo(67587.01, 2);
+  });
+
+  it("aggregates N contracts at the same strike into one row (qty −N / +N×100)", () => {
+    const data = { securitiesAccount: { positions: [
+      EQ("META", 200, 34.6799, 122860),
+      SC("META  261218C00680000", "META", 2, 16.30, -2245),
+    ] } };
+    const { candidates } = parseSchwabPositions(data);
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0]).toMatchObject({ strike: 680, contracts: 2, shares: 200, covered: true });
+  });
+
+  it("marks leftover short calls UNCOVERED when shares run out (not hidden)", () => {
+    const data = { securitiesAccount: { positions: [
+      EQ("META", 200, 34.6799, 122860),                        // only 200 shares = 2 lots
+      SC("META  261218C00680000", "META", 1, 16.30, -1122.50),
+      SC("META  261218C00700000", "META", 1, 10.55, -1055),
+      SC("META  261218C00720000", "META", 1, 6.00, -600),      // 3rd call → no shares left
+    ] } };
+    const { candidates } = parseSchwabPositions(data);
+    expect(candidates).toHaveLength(3);                          // nothing hidden
+    expect(candidates.map((c) => c.covered)).toEqual([true, true, false]);
+    expect(candidates[2]).toMatchObject({ strike: 720, contracts: 1, shares: 0, covered: false });
   });
 });
 

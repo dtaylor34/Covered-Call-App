@@ -35,6 +35,7 @@ const usd = (n, signed) => {
   if (signed) return a < 0.005 ? "$0.00" : (n > 0 ? "+" : "−") + s;
   return (n < -0.005 ? "−" : "") + s;
 };
+const usd0 = (n) => "$" + Math.round(Math.abs(n || 0)).toLocaleString("en-US"); // whole-dollar, for the "= $value" line
 const expShort = (iso) => {
   const [y, m, d] = String(iso || "").split("-").map(Number);
   if (!y) return iso || "—";
@@ -383,7 +384,13 @@ export default function WorkingPositionsTab() {
                       <div />
                       <div />
                       <div style={cellBase}>STOCK</div>
-                      <div style={dim}>DEBIT</div>
+                      {/* Live stock price now — the points, and the dollars those +shares are worth */}
+                      {p.liveStock > 0 ? (
+                        <div style={{ ...cellBase, lineHeight: 1.25 }} title={`${p.sym} is trading at ${usd(p.liveStock)} now — your ${n * 100} shares are worth ${usd(c.marketValue)}.`}>
+                          <div>{usd(p.liveStock)} <span style={{ color: T.textDim, fontSize: 9 }}>now</span></div>
+                          <div style={{ color: T.textDim, fontSize: 10 }}>= {usd0(c.marketValue)}</div>
+                        </div>
+                      ) : <div style={dim}>DEBIT</div>}
                       <div />
                       <div />
                       <div />
@@ -407,7 +414,12 @@ export default function WorkingPositionsTab() {
                         <div style={cellBase}>{csExp(p.expiry)}</div>
                         <div style={cellBase}>{p.strike}</div>
                         <div style={cellBase}>CALL</div>
-                        <div style={cellBase}>{Number(p.gtc).toFixed(2)} <span style={{ color: T.textDim }}>LMT</span></div>
+                        {/* Buy-back limit + the call's LIVE mark now (points = dollars), so you see how close it is to filling at the GTC */}
+                        <div style={{ ...cellBase, lineHeight: 1.25 }}
+                          title={p.liveCall > 0 ? `The ${p.sym} ${p.strike} call is trading at ${usd(p.liveCall)} now (${usd(c.buyback)} to close ${n === 1 ? "it" : `all ${n}`}). Your GTC buys it back at ${usd(p.gtc)}.` : undefined}>
+                          <div>{Number(p.gtc).toFixed(2)} <span style={{ color: T.textDim }}>LMT</span></div>
+                          {p.liveCall > 0 && <div style={{ color: T.textDim, fontSize: 10 }}>now {Number(p.liveCall).toFixed(2)} = {usd0(c.buyback)}</div>}
+                        </div>
                         <div style={gtcWorking(p) ? { ...cellBase, color: T.success, fontWeight: 700 } : dim} title={gtcWorking(p) ? `Confirmed at Schwab: this buy-back order is ${p.gtcStatus} (not filled)${p.gtcCheckedMs ? ` as of ${new Date(p.gtcCheckedMs).toLocaleDateString()}` : ""}.` : undefined}>{gtcWorking(p) ? p.gtcStatus : "LIMIT"}</div>
                         <div style={{ ...cellBase, color: T.warn, fontWeight: 700 }}>GTC</div>
                         <div style={dim}>BEST</div>

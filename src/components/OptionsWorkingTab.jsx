@@ -4,6 +4,7 @@
 // and exit actions. Mirrors the Covered Calls Working tab for general options.
 
 import { useState, useMemo } from "react";
+import { createPortal } from "react-dom";
 import { useTheme } from "../contexts/ThemeContext";
 import { useOptionPositions } from "../hooks/useOptionPositions";
 import { optionCalcs, moneyness, daysToExpiry, optType, isLong, freeRollPlan, closedOptionPnL } from "../lib/optionsMath";
@@ -25,7 +26,30 @@ const usd = (n, signed) => {
   return (n < -0.005 ? "−" : "") + s;
 };
 const usd0 = (n) => "$" + Math.round(Math.abs(n || 0)).toLocaleString("en-US"); // whole-dollar, for the "= $total" line
-const FEE_PER_CONTRACT = 0.69; // $0.65 option commission + $0.04 regulatory, per contract (matches CoveredCallExitCard)
+const FEE_PER_CONTRACT = 0.69; // sell/close estimate ($0.65 commission + ~$0.04 regulatory) — used by the Sell-N-now net gain
+
+// Every fee that DEBITS the account over a round trip (open buy + close sell) of an
+// equity-option position. Regulatory/exchange rates are approximate and change over
+// time. `closePremium` drives the SEC fee (charged on the sale proceeds).
+function optionFees(contracts, closePremium) {
+  const n = Math.max(1, Math.round(contracts || 1));
+  const sellProceeds = Math.max(0, Number(closePremium) || 0) * 100 * n;
+  const items = [
+    { label: "Commission — $0.65/ct, open + close", amount: 0.65 * n * 2 },
+    { label: "Options reg. + clearing (ORF/OCC), both sides", amount: 0.04 * n * 2 },
+    { label: "FINRA TAF — on close sale", amount: 0.00279 * n },
+    { label: "SEC fee — on close sale", amount: 0.0000278 * sellProceeds },
+  ];
+  const total = items.reduce((s, it) => s + it.amount, 0);
+  return { total, items };
+}
+function feeTooltipText(fees) {
+  return [
+    `Fees that debit your account, round trip — ${usd(fees.total)}:`,
+    ...fees.items.map((it) => `• ${it.label}: ${usd(it.amount)}`),
+    "Regulatory/exchange rates are estimates and change over time.",
+  ].join("\n");
+}
 
 // Google Material "expand_more" chevron (inline SVG path) — rotates 180° when open.
 function Chevron({ open, color, size = 20 }) {
@@ -188,7 +212,7 @@ export default function OptionsWorkingTab() {
   const h3 = { color: T.text, fontFamily: T.fontDisplay, fontSize: 16, margin: 0 };
   // Flexible (fr) columns so content spreads evenly across the full width instead
   // of bunching to the left; min widths keep each cell readable before scrolling.
-  const COLS = "28px minmax(150px,2.1fr) minmax(92px,1fr) minmax(100px,1.15fr) minmax(165px,1.95fr) minmax(74px,0.95fr) 32px";
+  const COLS = "28px minmax(150px,2.1fr) minmax(92px,1fr) minmax(100px,1.15fr) minmax(78px,0.85fr) minmax(165px,1.9fr) minmax(74px,0.9fr) 32px";
 
   return (
     <div role="region" aria-label="Working options" style={{ fontVariantNumeric: "tabular-nums" }}>
@@ -279,9 +303,9 @@ export default function OptionsWorkingTab() {
               </span>
             )}
           </div>
-          <div style={{ minWidth: 760 }}>
+          <div style={{ minWidth: 840 }}>
             <div style={{ display: "grid", gridTemplateColumns: COLS, padding: "9px 16px", borderBottom: `1px solid ${T.border}` }}>
-              {["", "Contract", "Paid in", "Now", "Sell to gain (vs paid)", "Manage", ""].map((h, i) => (
+              {["", "Contract", "Paid in", "Now", "Fees", "Sell to gain (vs paid)", "Manage", ""].map((h, i) => (
                 <div key={i} style={{ color: T.textDim, fontSize: 9, fontFamily: T.fontChart, letterSpacing: 0.5, textTransform: "uppercase", fontWeight: 600 }}>{h}</div>
               ))}
             </div>
@@ -289,6 +313,7 @@ export default function OptionsWorkingTab() {
               const isOpen = !!open[p.id];
               const isSel = !!selected[p.id];
               const chip = manageChip(T, p, c);
+              const fees = optionFees(c.qty, c.live);
               const main = { fontFamily: T.fontChart, fontSize: 13, color: T.text, fontWeight: 700, whiteSpace: "nowrap" };
               const sub = { fontFamily: T.fontChart, fontSize: 10.5, color: T.textDim, whiteSpace: "nowrap", marginTop: 1 };
               return (
@@ -319,6 +344,12 @@ export default function OptionsWorkingTab() {
                     <div style={{ minWidth: 0 }}>
                       <div style={main}>{usd(c.value)}</div>
                       <div style={sub}>{usd(c.live)}/sh · <span style={{ color: c.pl >= 0 ? T.success : T.danger, fontWeight: 700 }}>{c.plPct >= 0 ? "+" : ""}{c.plPct.toFixed(0)}%</span></div>
+                    </div>
+
+                    {/* Fees — every broker/regulatory fee that debits the account, round trip (open + close); itemized in the ⓘ */}
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ ...main, display: "inline-flex", alignItems: "baseline" }}>{usd(fees.total)}<InfoDot T={T} text={feeTooltipText(fees)} /></div>
+                      <div style={sub}>in + out</div>
                     </div>
 
                     {/* Sell to gain — sell price for each TOTAL gain vs what you paid, + the $ profit */}
@@ -433,20 +464,32 @@ const mInput = (T, w) => ({ width: w, minHeight: 34, boxSizing: "border-box", pa
 // Hover-to-reveal info dot with an immediate custom tooltip (native `title` is
 // slow/unreliable). Placed on labels, so it resets inherited uppercase/spacing.
 function InfoDot({ T, text }) {
-  const [show, setShow] = useState(false);
+  const [pos, setPos] = useState(null); // viewport coords while hovering, else null
   if (!text) return null;
+  // Render through a portal with fixed positioning so the table's overflow:auto
+  // can't clip it. Width = max-content (capped) so short lists don't wrap but long
+  // sentences still wrap inside the cap.
+  const open = (e) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    const maxW = Math.min(window.innerWidth * 0.92, 460);
+    const estH = 170;
+    const top = (r.bottom + estH > window.innerHeight - 8) ? Math.max(8, r.top - estH) : r.bottom + 6;
+    const left = Math.max(8, Math.min(r.left, window.innerWidth - maxW - 8));
+    setPos({ top, left, maxW });
+  };
   return (
-    <span style={{ position: "relative", display: "inline-flex" }} onMouseEnter={() => setShow(true)} onMouseLeave={() => setShow(false)}>
+    <span style={{ display: "inline-flex" }} onMouseEnter={open} onMouseLeave={() => setPos(null)}>
       <span style={{ marginLeft: 3, opacity: 0.65, cursor: "help" }}>ⓘ</span>
-      {show && (
+      {pos && createPortal(
         <span role="tooltip" style={{
-          position: "absolute", top: "calc(100% + 6px)", left: 0, zIndex: 100,
-          width: 240, maxWidth: "76vw", padding: "8px 10px", borderRadius: 8,
+          position: "fixed", top: pos.top, left: pos.left, zIndex: 9999,
+          width: "max-content", maxWidth: pos.maxW, padding: "9px 12px", borderRadius: 8,
           background: T.surface, color: T.text, border: `1px solid ${T.border}`,
-          fontFamily: T.fontChart, fontSize: 11, fontWeight: 400, lineHeight: 1.5,
-          letterSpacing: "normal", textTransform: "none", whiteSpace: "normal", textAlign: "left",
-          boxShadow: "0 10px 30px rgba(0,0,0,0.45)", pointerEvents: "none",
-        }}>{text}</span>
+          fontFamily: T.fontChart, fontSize: 11, fontWeight: 400, lineHeight: 1.55,
+          letterSpacing: "normal", textTransform: "none", whiteSpace: "pre-line", textAlign: "left",
+          boxShadow: "0 12px 34px rgba(0,0,0,0.5)", pointerEvents: "none",
+        }}>{text}</span>,
+        document.body,
       )}
     </span>
   );

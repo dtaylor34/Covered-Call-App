@@ -9,6 +9,8 @@ import { useState, useMemo, useEffect } from "react";
 import { useTheme } from "../contexts/ThemeContext";
 import ClosedTradeChart from "./ClosedTradeChart";
 import { isCoveredCallUnderlying } from "../lib/schwabPositions";
+import { schwabGetTransactions } from "../services/schwabApi";
+import { realizedFromTransactions } from "../lib/schwabTransactions";
 
 const usd = (n, signed) => {
   const a = Math.abs(n || 0);
@@ -44,7 +46,29 @@ export default function TradeHistory({ closed = [], accounts = [], onUpdate, onD
   const { T } = useTheme();
   const [open, setOpen] = useState({});
   const [showMonthly, setShowMonthly] = useState(false);
+  const [txBusy, setTxBusy] = useState(false);
+  const [tx, setTx] = useState(null);       // realizedFromTransactions result, or { error }
+  const [txRaw, setTxRaw] = useState(null); // raw payloads (for calibration)
+  const [showTxRaw, setShowTxRaw] = useState(false);
   const font = T.fontMono;
+
+  // Pull full-history transactions (with real fees) straight from Schwab and
+  // compute a realized that ties out to Schwab's Gain/Loss report.
+  const reconcile = async () => {
+    const accts = (accounts || []).filter((a) => a?.hashValue);
+    if (!accts.length) { setTx({ error: "No linked Schwab account found — reconnect in the APIs tab." }); return; }
+    setTxBusy(true); setTx(null); setTxRaw(null); setShowTxRaw(false);
+    try {
+      const payloads = [];
+      for (const a of accts) {
+        const data = await schwabGetTransactions({ accountHash: a.hashValue }).then((r) => r.data).catch((e) => ({ _error: e?.message || "fetch failed" }));
+        payloads.push(data);
+      }
+      setTxRaw(payloads);
+      setTx(realizedFromTransactions(payloads));
+    } catch (e) { setTx({ error: e?.message || "Couldn't pull transactions from Schwab." }); }
+    finally { setTxBusy(false); }
+  };
 
   const acctShort = (r) => {
     if (!r?.acct && !r?.acctId) return null;
@@ -90,10 +114,40 @@ export default function TradeHistory({ closed = [], accounts = [], onUpdate, onD
               {syncing ? "Syncing…" : "⬇ Import closed trades from Schwab"}
             </button>
           )}
+          {schwabConnected && (
+            <button onClick={reconcile} disabled={txBusy} title="Pull up to a year of executed trades (with real fees) straight from Schwab to reconcile realized P&L to Schwab's Gain/Loss report." style={{ padding: "8px 14px", borderRadius: 8, border: `1px solid ${T.border}`, cursor: "pointer", background: "transparent", color: T.textDim, fontFamily: font, fontSize: 12, fontWeight: 700, opacity: txBusy ? 0.6 : 1 }}>
+              {txBusy ? "Pulling…" : "⟲ Reconcile realized (full history)"}
+            </button>
+          )}
           {onSync && !schwabConnected && <span style={{ color: T.warn || T.warning, fontFamily: font, fontSize: 11 }}>Schwab not connected — reconnect in the APIs tab first.</span>}
           {syncMsg && <span style={{ color: syncMsg.ok ? T.textDim : T.danger, fontFamily: font, fontSize: 12 }}>{syncMsg.text}</span>}
         </div>
       </div>
+
+      {tx && (
+        <div style={{ ...card, fontFamily: font, fontSize: 12.5 }}>
+          {tx.error ? (
+            <span style={{ color: T.danger }}>{tx.error}</span>
+          ) : (
+            <>
+              <div style={{ color: T.text }}>
+                Schwab transactions: <b>{tx.count}</b> total · <b>{tx.optionCount}</b> option trades · net cash <b style={{ color: tx.realized >= 0 ? T.success : T.danger }}>{usd(tx.realized, true)}</b> (fees {usd(tx.fees)}).
+              </div>
+              <div style={{ color: T.textDim, fontSize: 11, marginTop: 4 }}>
+                Compare the net to Schwab's “Net Gain.” This includes trades older than the 60-day order window and real fees. (Exact open/close pairing is being calibrated — share the raw view below if the number’s off.)
+              </div>
+              <button onClick={() => setShowTxRaw((v) => !v)} style={{ background: "none", border: "none", color: T.textDim, fontSize: 11, cursor: "pointer", padding: "6px 0 0" }}>
+                {showTxRaw ? "Hide" : "Show"} raw transactions
+              </button>
+              {showTxRaw && (
+                <pre style={{ marginTop: 6, maxHeight: 320, overflow: "auto", background: T.card, border: `1px solid ${T.border}`, borderRadius: 8, padding: 10, fontSize: 11, color: T.textDim, whiteSpace: "pre-wrap" }}>
+                  {JSON.stringify(txRaw, null, 2)}
+                </pre>
+              )}
+            </>
+          )}
+        </div>
+      )}
 
       {!rows.length ? (
         <div style={{ ...card, textAlign: "center", padding: "36px 20px" }}>

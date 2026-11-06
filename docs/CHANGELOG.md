@@ -1,3 +1,16 @@
+## [2.6.1] — 2026-11-05
+
+### Added
+- **Options Working — Fees column.** New column totaling every fee that debits the account on a round trip (commission open + close, ORF/OCC, FINRA TAF, SEC fee on the sale), itemized in a tooltip, so you can confirm the gain clears the fees.
+- **Covered Calls — live prices in each row.** The stock leg shows the **live price + dollar value** of the shares; the GTC buy-back leg shows the **call's live mark (points + dollars)** next to your buy-back limit, so you can see how close it is to filling.
+- **Realized P&L reconcile (beta).** New `schwabGetTransactions` function pulls up to a year of executed trades (with real fees) — the authoritative source for realized P&L — with a "Reconcile realized (full history)" action in Trade History. Captures trades older than the 60-day order window so realized ties out to Schwab's Gain/Loss report. (Exact open/close pairing is being calibrated.)
+- Tooltips now render through a portal (no longer clipped by the table frame) and size to their content (no wrapping).
+
+### Fixed
+- **Covered-call share allocation.** `finishCandidates` now pairs each short call with its own 100-share lot (aggregates by symbol+expiry+strike, allocates 100 shares/contract in a stable order, and shows leftover calls as uncovered instead of dropping them) — fixes two calls on one symbol merging/vanishing.
+
+---
+
 ## [2.6.0] — 2026-11-05
 
 ### Added

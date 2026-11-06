@@ -82,24 +82,47 @@ export function parseSchwabPositions(data) {
 
 function finishCandidates(calls, equities) {
   const candidates = [], unmatchedCalls = [];
+
+  // 1) Aggregate identical short calls (same underlying + expiry + strike) so a
+  //    multi-contract position shows as ONE row with the summed contract count
+  //    (qty −N / +N×100). Fill/live prices are contract-weighted when merged.
+  const byKey = new Map();
   for (const c of calls) {
-    const eq = c.underlying ? equities[c.underlying] : null;
-    if (eq && c.strike && c.expiry) {
-      candidates.push({
-        sym: c.underlying,
-        contracts: c.contracts,
-        strike: c.strike,
-        expiry: c.expiry,
-        fillCall: c.fillCall,
-        liveCall: c.liveCall,
-        fillStock: eq.avgCost,
-        liveStock: eq.price,
-        shares: eq.shares,
-        covered: eq.shares >= c.contracts * 100,
-      });
-    } else {
-      unmatchedCalls.push(c);
-    }
+    if (!(c.underlying && c.strike && c.expiry)) { unmatchedCalls.push(c); continue; }
+    const key = `${c.underlying}|${c.expiry}|${c.strike}`;
+    const prev = byKey.get(key);
+    if (!prev) { byKey.set(key, { ...c }); continue; }
+    const tot = prev.contracts + c.contracts;
+    prev.fillCall = tot ? (prev.fillCall * prev.contracts + c.fillCall * c.contracts) / tot : prev.fillCall;
+    if (c.liveCall != null) prev.liveCall = prev.liveCall != null ? (prev.liveCall * prev.contracts + c.liveCall * c.contracts) / tot : c.liveCall;
+    prev.contracts = tot;
+  }
+
+  // 2) Allocate shares to each short call in a STABLE order (nearest expiry, then
+  //    lowest strike): 100 shares per contract, drawn from that underlying's pool.
+  //    Calls whose shares run out are kept as UNCOVERED (covered:false), not hidden.
+  const groups = [...byKey.values()].sort((a, b) =>
+    (a.expiry < b.expiry ? -1 : a.expiry > b.expiry ? 1 : 0) || (a.strike - b.strike));
+  const poolLeft = {}; // underlying -> shares not yet allocated
+  for (const g of groups) {
+    const eq = equities[g.underlying];
+    if (!eq) { unmatchedCalls.push(g); continue; } // no stock at all → truly naked, no underlying
+    if (poolLeft[g.underlying] == null) poolLeft[g.underlying] = eq.shares;
+    const need = g.contracts * 100;
+    const shares = Math.max(0, Math.min(need, poolLeft[g.underlying]));
+    poolLeft[g.underlying] -= shares;
+    candidates.push({
+      sym: g.underlying,
+      contracts: g.contracts,
+      strike: g.strike,
+      expiry: g.expiry,
+      fillCall: g.fillCall,
+      liveCall: g.liveCall,
+      fillStock: eq.avgCost,
+      liveStock: eq.price,
+      shares,
+      covered: shares >= need,
+    });
   }
   return { candidates, unmatchedCalls, equities };
 }

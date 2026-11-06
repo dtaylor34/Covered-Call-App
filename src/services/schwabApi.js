@@ -82,6 +82,12 @@ export const schwabGetBuyingPower = (data) => call("schwabGetBuyingPower")(data)
  */
 export const schwabGetOrders      = (data) => call("schwabGetOrders")(data);
 
+/**
+ * Executed transactions (with actual fees) over a date range — up to 1 year,
+ * the authoritative source for realized P&L. Input: { accountHash, startDate?, endDate? }
+ */
+export const schwabGetTransactions = (data) => call("schwabGetTransactions")(data);
+
 // ── Market data ───────────────────────────────────────────────────────────────
 
 /**
