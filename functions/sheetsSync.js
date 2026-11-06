@@ -9,10 +9,17 @@
 
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { getFirestore } = require('firebase-admin/firestore');
-const { google } = require('googleapis');
-
-const auth = new google.auth.GoogleAuth({ scopes: ['https://www.googleapis.com/auth/spreadsheets'] });
-const sheets = google.sheets({ version: 'v4', auth });
+// Lazy-load googleapis (~5s to require) only when a Sheets function actually runs,
+// so it doesn't block Firebase's function-analysis step (10s cap) during deploy.
+let _g = null;
+function gsheets() {
+  if (!_g) {
+    const { google } = require('googleapis');
+    const auth = new google.auth.GoogleAuth({ scopes: ['https://www.googleapis.com/auth/spreadsheets'] });
+    _g = { auth, sheets: google.sheets({ version: 'v4', auth }) };
+  }
+  return _g;
+}
 
 const TABS = { txn: 'Transactions', pos: 'Positions', lots: 'Lots', setup: 'Setup' };
 const ACTIONS = ['Buy shares', 'Sell shares', 'Sell call', 'Buy to close', 'Expired', 'Assigned'];
@@ -31,12 +38,12 @@ function parseSheetId(input) {
 }
 
 async function serviceAccountEmail() {
-  const creds = await auth.getCredentials();
+  const creds = await gsheets().auth.getCredentials();
   return creds.client_email || null;
 }
 
 async function readColumn(spreadsheetId, range) {
-  const res = await sheets.spreadsheets.values.get({ spreadsheetId, range });
+  const res = await gsheets().sheets.spreadsheets.values.get({ spreadsheetId, range });
   return (res.data.values || []).map((r) => (r[0] ?? '').toString());
 }
 
@@ -61,7 +68,7 @@ exports.connectSheet = onCall(async (req) => {
 
   let meta;
   try {
-    meta = await sheets.spreadsheets.get({ spreadsheetId, fields: 'properties.title,sheets.properties.title' });
+    meta = await gsheets().sheets.spreadsheets.get({ spreadsheetId, fields: 'properties.title,sheets.properties.title' });
   } catch {
     throw new HttpsError('permission-denied', `Can't open that sheet. Share it with ${email} as an Editor, then try again.`, { serviceAccount: email });
   }
@@ -73,7 +80,7 @@ exports.connectSheet = onCall(async (req) => {
 
   const stamp = req.data?.clientTime || new Date().toISOString().slice(0, 16).replace('T', ' ');
   try {
-    await sheets.spreadsheets.values.update({
+    await gsheets().sheets.spreadsheets.values.update({
       spreadsheetId, range: `${TABS.setup}!B3`, valueInputOption: 'USER_ENTERED', requestBody: { values: [[stamp]] },
     });
   } catch {
@@ -151,6 +158,6 @@ exports.syncSheet = onCall(async (req) => {
   }
 
   data.push({ range: `${TABS.setup}!B3`, values: [[stamp]] });
-  await sheets.spreadsheets.values.batchUpdate({ spreadsheetId, requestBody: { valueInputOption: 'USER_ENTERED', data } });
+  await gsheets().sheets.spreadsheets.values.batchUpdate({ spreadsheetId, requestBody: { valueInputOption: 'USER_ENTERED', data } });
   return { appended, positionsUpdated: marks.length };
 });
