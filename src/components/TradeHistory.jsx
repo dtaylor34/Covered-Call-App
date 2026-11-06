@@ -131,10 +131,10 @@ export default function TradeHistory({ closed = [], accounts = [], onUpdate, onD
           ) : (
             <>
               <div style={{ color: T.text }}>
-                Schwab transactions: <b>{tx.count}</b> total · <b>{tx.optionCount}</b> option trades · net cash <b style={{ color: tx.realized >= 0 ? T.success : T.danger }}>{usd(tx.realized, true)}</b> (fees {usd(tx.fees)}).
+                Realized (closed positions only): <b style={{ color: tx.realized >= 0 ? T.success : T.danger }}>{usd(tx.realized, true)}</b> across <b>{tx.closedCount}</b> closed contract{tx.closedCount === 1 ? "" : "s"} (fees {usd(tx.fees)}). <b>{tx.openCount}</b> open position{tx.openCount === 1 ? "" : "s"} excluded.
               </div>
               <div style={{ color: T.textDim, fontSize: 11, marginTop: 4 }}>
-                Compare the net to Schwab's “Net Gain.” This includes trades older than the 60-day order window and real fees. (Exact open/close pairing is being calibrated — share the raw view below if the number’s off.)
+                Counts only closed/expired contracts (never working positions), net of real fees — compare to Schwab's “Net Gain.” Share the raw view below if it’s still off.
               </div>
               <button onClick={() => setShowTxRaw((v) => !v)} style={{ background: "none", border: "none", color: T.textDim, fontSize: 11, cursor: "pointer", padding: "6px 0 0" }}>
                 {showTxRaw ? "Hide" : "Show"} raw transactions

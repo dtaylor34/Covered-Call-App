@@ -1,44 +1,54 @@
 // ─── src/lib/schwabTransactions.js ───────────────────────────────────────────
-// Parse Schwab Trader API *transactions* (not orders) to a realized P&L that ties
+// Realized option P&L from Schwab Trader API *transactions* (not orders), to tie
 // out to Schwab's Gain/Loss report. Each TRADE transaction's `netAmount` is
-// already net of commissions + regulatory fees, so summing the option-trade
-// netAmounts over a window that covers both the open and the close of each cycle
-// gives the realized option P&L — including the trades older than the ~60-day
-// order window, and the exact fees.
+// already net of commissions + fees.
 //
-// NOTE: field names/signs are defensive and will be calibrated against the real
-// transactions payload (Schwab's shape varies). `realizedFromTransactions` is a
-// diagnostic sum for now; the exact open/close pairing is finalized once we see
-// the live data.
+// Realized = CLOSED positions only. A contract is counted when it is actually
+// closed — bought/sold back (a CLOSING trade that covers the opened quantity) OR
+// past its expiration (expired worthless / assigned). Anything still open (a
+// sell-to-open with no close, expiry still in the future) is EXCLUDED, so the
+// history never reflects working positions.
+
+import { parseOccSymbol } from "./schwabPositions";
 
 const asArray = (data) => (Array.isArray(data) ? data : (data?.transactions || (data ? [data] : [])));
 const legsOf = (t) => t.transferItems || t.transactionItems || t.items || [];
-const isOptionTx = (t) => legsOf(t).some((it) => String(it?.instrument?.assetType || "").toUpperCase() === "OPTION");
-const underlyingOf = (t) => {
-  const leg = legsOf(t).find((it) => String(it?.instrument?.assetType || "").toUpperCase() === "OPTION");
-  const inst = leg?.instrument || {};
-  return String(inst.underlyingSymbol || inst.symbol || "").toUpperCase();
-};
+const optionLeg = (t) => legsOf(t).find((it) => String(it?.instrument?.assetType || "").toUpperCase() === "OPTION");
 const feesOf = (t) => legsOf(t).reduce((f, it) => f + (String(it?.feeType || "") ? Math.abs(Number(it.cost ?? it.amount) || 0) : 0), 0);
 
 /**
- * Realized option P&L from Schwab transaction payloads (one per account, or merged).
- * @returns {{ realized, fees, optionCount, count, bySym }}
- *   realized = Σ netAmount over option TRADE transactions (net of fees → matches CS)
+ * @param {Array} payloads  one Schwab transactions payload per account (or merged)
+ * @param {number} now      clock (ms) for the expiration check (injectable for tests)
+ * @returns {{ realized, fees, closedCount, openCount, symbols }}
+ *   realized = Σ netAmount over CLOSED option contracts (net of fees → matches CS)
  */
-export function realizedFromTransactions(payloads) {
+export function realizedFromTransactions(payloads, now = Date.now()) {
   const txns = [].concat(...(payloads || []).map(asArray));
-  let realized = 0, fees = 0, optionCount = 0;
-  const bySym = {};
+  const bySym = {}; // occSymbol -> { net, openQty, closeQty, fees, count }
   for (const t of txns) {
     if (String(t.type || "").toUpperCase() !== "TRADE") continue;
-    if (!isOptionTx(t)) continue;
-    const net = Number(t.netAmount) || 0;
-    realized += net;
-    fees += feesOf(t);
-    optionCount++;
-    const sym = underlyingOf(t);
-    if (sym) { bySym[sym] = bySym[sym] || { realized: 0, count: 0 }; bySym[sym].realized += net; bySym[sym].count++; }
+    const leg = optionLeg(t);
+    const sym = String(leg?.instrument?.symbol || "").trim();
+    if (!sym) continue;
+    const g = (bySym[sym] = bySym[sym] || { net: 0, openQty: 0, closeQty: 0, fees: 0, count: 0 });
+    g.net += Number(t.netAmount) || 0;
+    g.fees += feesOf(t);
+    g.count++;
+    const qty = Math.abs(Number(leg.amount ?? leg.quantity) || 0);
+    const effect = String(leg.positionEffect || "").toUpperCase();
+    if (effect.includes("CLOS")) g.closeQty += qty;
+    else if (effect.includes("OPEN")) g.openQty += qty;
   }
-  return { realized, fees, optionCount, count: txns.length, bySym };
+
+  let realized = 0, fees = 0, closedCount = 0, openCount = 0;
+  for (const sym of Object.keys(bySym)) {
+    const g = bySym[sym];
+    const occ = parseOccSymbol(sym);
+    const expMs = occ?.expiry ? Date.parse(`${occ.expiry}T23:59:59Z`) : NaN;
+    const closedByTrade = g.openQty > 0 && g.closeQty >= g.openQty;  // bought/sold back
+    const expired = Number.isFinite(expMs) && expMs < now;           // expired worthless / assigned
+    if (closedByTrade || expired) { realized += g.net; fees += g.fees; closedCount++; }
+    else openCount++;                                                 // still open → not realized
+  }
+  return { realized, fees, closedCount, openCount, symbols: Object.keys(bySym).length };
 }

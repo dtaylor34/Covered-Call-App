@@ -1,3 +1,10 @@
+## [2.6.2] — 2026-11-05
+
+### Fixed
+- **Realized reconcile now counts closed positions only.** The "Reconcile realized (full history)" diagnostic was summing every option trade, which included the premium on still-open positions. It now counts a contract as realized only when it's actually closed — bought/sold back, or past expiration (expired/assigned) — and excludes anything still working, so it ties to Schwab's realized Gain/Loss.
+
+---
+
 ## [2.6.1] — 2026-11-05
 
 ### Added
