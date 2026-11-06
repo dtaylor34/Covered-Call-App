@@ -423,9 +423,13 @@ exports.schwabGetTransactions = onCall(CRYPTO_OPTS, async (request) => {
   const accessToken = await ensureFreshToken(uid, secret);
 
   // Schwab allows at most a 1-year span per call; default to the last year.
+  // No `types` filter → return ALL activity (TRADE, RECEIVE_AND_DELIVER for
+  // assignments/expirations, etc.) so realized P&L can include the stock leg of
+  // called-away covered calls, matching Schwab's Gain/Loss report.
   const start = startDate || new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString();
   const end = endDate || new Date().toISOString();
-  const params = new URLSearchParams({ startDate: start, endDate: end, types: "TRADE" });
+  const params = new URLSearchParams({ startDate: start, endDate: end });
+  if (request.data.types) params.set("types", String(request.data.types));
 
   const res = await fetch(`${SCHWAB_TRADER_URL}/accounts/${accountHash}/transactions?${params}`, {
     headers: { "Authorization": `Bearer ${accessToken}` },
