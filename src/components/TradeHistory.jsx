@@ -5,7 +5,7 @@
 // the realized outcome, and editable entry/exit details. The goal: see
 // everything that happened to a position after it closed.
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, Fragment } from "react";
 import { useTheme } from "../contexts/ThemeContext";
 import ClosedTradeChart from "./ClosedTradeChart";
 import { isCoveredCallUnderlying } from "../lib/schwabPositions";
@@ -134,9 +134,25 @@ export default function TradeHistory({ closed = [], accounts = [], onUpdate, onD
                 Realized (closed positions only): <b style={{ color: tx.realized >= 0 ? T.success : T.danger }}>{usd(tx.realized, true)}</b> across <b>{tx.closedCount}</b> closed contract{tx.closedCount === 1 ? "" : "s"} (fees {usd(tx.fees)}). <b>{tx.openCount}</b> open position{tx.openCount === 1 ? "" : "s"} excluded.
               </div>
               <div style={{ color: T.textDim, fontSize: 11, marginTop: 4 }}>
-                Counts only closed/expired contracts (never working positions), net of real fees — compare to Schwab's “Net Gain.” Share the raw view below if it’s still off.
+                Counts only closed/expired contracts (never working positions), net of real fees — each number is Schwab's own <code>netAmount</code>. Compare the rows below to Schwab's Gain/Loss detail to spot any trade that differs.
               </div>
-              <button onClick={() => setShowTxRaw((v) => !v)} style={{ background: "none", border: "none", color: T.textDim, fontSize: 11, cursor: "pointer", padding: "6px 0 0" }}>
+              {tx.closed?.length > 0 && (
+                <div style={{ marginTop: 10, display: "grid", gridTemplateColumns: "1fr auto auto auto", columnGap: 16, rowGap: 3, fontSize: 11.5, maxHeight: 260, overflow: "auto" }}>
+                  <div style={{ color: T.textDim, fontWeight: 700 }}>Contract</div>
+                  <div style={{ color: T.textDim, fontWeight: 700, textAlign: "right" }}>Realized</div>
+                  <div style={{ color: T.textDim, fontWeight: 700, textAlign: "right" }}>Fees</div>
+                  <div style={{ color: T.textDim, fontWeight: 700, textAlign: "right" }}>Closed</div>
+                  {tx.closed.map((c) => (
+                    <Fragment key={c.symbol}>
+                      <div style={{ color: T.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} title={c.symbol}>{c.desc || c.symbol}{c.via === "expired" ? " · exp/assigned" : ""}</div>
+                      <div style={{ color: c.realized >= 0 ? T.success : T.danger, textAlign: "right", fontWeight: 700 }}>{usd(c.realized, true)}</div>
+                      <div style={{ color: T.textDim, textAlign: "right" }}>{usd(c.fees)}</div>
+                      <div style={{ color: T.textDim, textAlign: "right" }}>{c.whenMs ? new Date(c.whenMs).toLocaleDateString() : "—"}</div>
+                    </Fragment>
+                  ))}
+                </div>
+              )}
+              <button onClick={() => setShowTxRaw((v) => !v)} style={{ background: "none", border: "none", color: T.textDim, fontSize: 11, cursor: "pointer", padding: "8px 0 0" }}>
                 {showTxRaw ? "Hide" : "Show"} raw transactions
               </button>
               {showTxRaw && (

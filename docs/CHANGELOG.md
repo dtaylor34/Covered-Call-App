@@ -1,3 +1,10 @@
+## [2.6.4] — 2026-11-05
+
+### Added
+- **Realized reconcile — per-contract breakdown.** The reconcile now lists each closed contract with its realized amount (Schwab's own `netAmount`), fees, and close date, so the total can be reconciled line-by-line against Schwab's Gain/Loss detail. Supports an optional date window to match a specific Schwab report period.
+
+---
+
 ## [2.6.3] — 2026-11-05
 
 ### Changed
