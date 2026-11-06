@@ -131,10 +131,11 @@ export default function TradeHistory({ closed = [], accounts = [], onUpdate, onD
           ) : (
             <>
               <div style={{ color: T.text }}>
-                Realized (closed positions only): <b style={{ color: tx.realized >= 0 ? T.success : T.danger }}>{usd(tx.realized, true)}</b> across <b>{tx.closedCount}</b> closed contract{tx.closedCount === 1 ? "" : "s"} (fees {usd(tx.fees)}). <b>{tx.openCount}</b> open position{tx.openCount === 1 ? "" : "s"} excluded.
+                Option premium realized: <b style={{ color: tx.optionRealized >= 0 ? T.success : T.danger }}>{usd(tx.optionRealized, true)}</b>
+                {tx.stockRealized !== 0 && <> · stock (called-away): <b style={{ color: tx.stockRealized >= 0 ? T.success : T.danger }}>{usd(tx.stockRealized, true)}</b> · combined: <b style={{ color: tx.realized >= 0 ? T.success : T.danger }}>{usd(tx.realized, true)}</b></>}
               </div>
               <div style={{ color: T.textDim, fontSize: 11, marginTop: 4 }}>
-                Counts only closed/expired contracts (never working positions), net of real fees — each number is Schwab's own <code>netAmount</code>. Compare the rows below to Schwab's Gain/Loss detail to spot any trade that differs.
+                Closed positions only (never working), net of real fees — each number is Schwab's own <code>netAmount</code>. {tx.closedCount} closed, {tx.openCount} open excluded. An assigned call's premium is option income; the called-away shares are a separate stock realization (Schwab's Gain/Loss combines them).
               </div>
               {tx.closed?.length > 0 && (
                 <div style={{ marginTop: 10, display: "grid", gridTemplateColumns: "1fr auto auto auto", columnGap: 16, rowGap: 3, fontSize: 11.5, maxHeight: 260, overflow: "auto" }}>
@@ -144,7 +145,7 @@ export default function TradeHistory({ closed = [], accounts = [], onUpdate, onD
                   <div style={{ color: T.textDim, fontWeight: 700, textAlign: "right" }}>Closed</div>
                   {tx.closed.map((c) => (
                     <Fragment key={c.symbol}>
-                      <div style={{ color: T.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} title={c.symbol}>{c.desc || c.symbol}{c.via === "expired" ? " · exp/assigned" : ""}</div>
+                      <div style={{ color: T.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} title={c.symbol}>{c.desc || c.symbol}{c.kind === "stock" ? " · stock (called away)" : c.via === "expired" ? " · exp/assigned" : ""}</div>
                       <div style={{ color: c.realized >= 0 ? T.success : T.danger, textAlign: "right", fontWeight: 700 }}>{usd(c.realized, true)}</div>
                       <div style={{ color: T.textDim, textAlign: "right" }}>{usd(c.fees)}</div>
                       <div style={{ color: T.textDim, textAlign: "right" }}>{c.whenMs ? new Date(c.whenMs).toLocaleDateString() : "—"}</div>
@@ -176,21 +177,22 @@ export default function TradeHistory({ closed = [], accounts = [], onUpdate, onD
       ) : (
       <>
       {/* realized totals */}
-      <div style={{ ...card, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 12 }}>
-        <Tot T={T} label="Closed trades" value={String(totals.n)} tip="Number of covered calls you've closed." />
-        <Tot T={T} label="Total premiums" value={usd(totals.premium)} color={T.success} tip="Premium collected across every closed covered call (fill × 100 × contracts)." />
-        {(() => {
-          const reconciled = tx && !tx.error;                 // a successful Schwab reconcile overrides the gross estimate
-          const val = reconciled ? tx.realized : totals.realized;
-          return (
-            <Tot T={T} label={reconciled ? "Realized P&L · Schwab" : "Realized P&L"} value={usd(val, true)} color={val >= 0 ? T.success : T.danger}
+      {(() => {
+        const reconciled = tx && !tx.error;                 // a successful Schwab reconcile overrides the gross estimate
+        const realizedVal = reconciled ? tx.optionRealized : totals.realized; // tile = clean option-premium income
+        return (
+          <div style={{ ...card, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 12 }}>
+            <Tot T={T} label="Closed trades" value={String(reconciled ? tx.closedCount : totals.n)}
+              tip={reconciled ? `${tx.closedCount} positions closed in your Schwab transactions (options + any called-away stock).` : "Number of covered calls you've closed."} />
+            <Tot T={T} label="Total premiums" value={usd(totals.premium)} color={T.success} tip="Premium collected across every closed covered call (fill × 100 × contracts)." />
+            <Tot T={T} label={reconciled ? "Realized P&L · Schwab" : "Realized P&L"} value={usd(realizedVal, true)} color={realizedVal >= 0 ? T.success : T.danger}
               tip={reconciled
-                ? `Matched to Schwab from your actual transactions — closed positions only, net of real fees. ${tx.closedCount} closed contract${tx.closedCount === 1 ? "" : "s"}, ${tx.openCount} open position${tx.openCount === 1 ? "" : "s"} excluded. (App-tracked gross estimate: ${usd(totals.realized, true)}.)`
+                ? `Option-premium realized from your actual Schwab transactions — closed trades only, net of real fees (${usd(tx.optionRealized, true)}). Called-away stock P&L is tracked separately (${usd(tx.stockRealized, true)}); combined ${usd(tx.realized, true)}.`
                 : `Net realized P&L (gross estimate): premium kept minus buy-back cost, plus stock gain on called-away trades. Click “⟲ Reconcile realized (full history)” above to match Schwab exactly.${totals.known < totals.n ? ` Excludes ${totals.n - totals.known} buy-back(s) whose opening premium isn't known yet.` : ""}`} />
-          );
-        })()}
-        <Tot T={T} label="Win rate" value={`${totals.wins}/${totals.known} (${totals.known ? Math.round((totals.wins / totals.known) * 100) : 0}%)`} tip="Closed trades with a positive realized P&L (of those with a known premium)." />
-      </div>
+            <Tot T={T} label="Win rate" value={`${totals.wins}/${totals.known} (${totals.known ? Math.round((totals.wins / totals.known) * 100) : 0}%)`} tip="Closed trades with a positive realized P&L (of those with a known premium)." />
+          </div>
+        );
+      })()}
 
       {/* rows — Schwab-style, like the working list */}
       <div style={{ ...card, padding: 0, overflowX: "auto" }}>

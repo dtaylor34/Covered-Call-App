@@ -1,3 +1,10 @@
+## [2.6.5] — 2026-11-05
+
+### Changed
+- **Realized reconcile locks in + adds the stock side.** The Realized P&L tile now shows the Schwab-matched **option-premium realized** (closed trades only, net of real fees) after reconciling, and the Closed-trades count agrees with the reconcile. The reconcile also pairs **equity** buys/sells, so **called-away stock P&L** is broken out separately (option income vs. stock realization) and shown in the per-contract breakdown — matching how Schwab's Gain/Loss combines them. Shares you still hold stay excluded.
+
+---
+
 ## [2.6.4] — 2026-11-05
 
 ### Added
