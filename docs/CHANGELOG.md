@@ -1,3 +1,10 @@
+## [2.6.6] — 2026-11-05
+
+### Changed
+- **Realized reconcile now sticks.** The Schwab-matched Realized P&L persists across reloads (saved locally) and **auto-refreshes** when you open Trade History (if older than 15 min) — no need to click Reconcile each time. The button becomes "Refresh from Schwab" and shows when it was last updated.
+
+---
+
 ## [2.6.5] — 2026-11-05
 
 ### Changed

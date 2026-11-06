@@ -5,7 +5,7 @@
 // the realized outcome, and editable entry/exit details. The goal: see
 // everything that happened to a position after it closed.
 
-import { useState, useMemo, useEffect, Fragment } from "react";
+import { useState, useMemo, useEffect, useRef, Fragment } from "react";
 import { useTheme } from "../contexts/ThemeContext";
 import ClosedTradeChart from "./ClosedTradeChart";
 import { isCoveredCallUnderlying } from "../lib/schwabPositions";
@@ -48,27 +48,47 @@ export default function TradeHistory({ closed = [], accounts = [], onUpdate, onD
   const [showMonthly, setShowMonthly] = useState(false);
   const [txBusy, setTxBusy] = useState(false);
   const [tx, setTx] = useState(null);       // realizedFromTransactions result, or { error }
-  const [txRaw, setTxRaw] = useState(null); // raw payloads (for calibration)
+  const [txAt, setTxAt] = useState(0);      // when the reconcile was last run (ms)
+  const [txRaw, setTxRaw] = useState(null); // raw payloads (for the raw view)
   const [showTxRaw, setShowTxRaw] = useState(false);
+  const autoRan = useRef(false);
   const font = T.fontMono;
+  const RECON_KEY = "rt:reconcile:v1";
 
-  // Pull full-history transactions (with real fees) straight from Schwab and
-  // compute a realized that ties out to Schwab's Gain/Loss report.
-  const reconcile = async () => {
+  // Restore the last reconcile on load so the Schwab number sticks across reloads.
+  useEffect(() => {
+    try { const s = JSON.parse(localStorage.getItem(RECON_KEY) || "null"); if (s?.result) { setTx(s.result); setTxAt(s.at || 0); } } catch { /* ignore */ }
+  }, []);
+
+  // Pull full-history transactions (with real fees) from Schwab and compute a
+  // realized that ties out to Schwab's Gain/Loss report. Persists the result.
+  const reconcile = async ({ silent = false } = {}) => {
     const accts = (accounts || []).filter((a) => a?.hashValue);
-    if (!accts.length) { setTx({ error: "No linked Schwab account found — reconnect in the APIs tab." }); return; }
-    setTxBusy(true); setTx(null); setTxRaw(null); setShowTxRaw(false);
+    if (!accts.length) { if (!silent) setTx({ error: "No linked Schwab account found — reconnect in the APIs tab." }); return; }
+    setTxBusy(true); if (!silent) { setTxRaw(null); setShowTxRaw(false); }
     try {
       const payloads = [];
       for (const a of accts) {
         const data = await schwabGetTransactions({ accountHash: a.hashValue }).then((r) => r.data).catch((e) => ({ _error: e?.message || "fetch failed" }));
         payloads.push(data);
       }
-      setTxRaw(payloads);
-      setTx(realizedFromTransactions(payloads));
-    } catch (e) { setTx({ error: e?.message || "Couldn't pull transactions from Schwab." }); }
+      const result = realizedFromTransactions(payloads);
+      setTxRaw(payloads); setTx(result); setTxAt(Date.now());
+      try { localStorage.setItem(RECON_KEY, JSON.stringify({ at: Date.now(), result })); } catch { /* quota */ }
+    } catch (e) { if (!silent) setTx({ error: e?.message || "Couldn't pull transactions from Schwab." }); }
     finally { setTxBusy(false); }
   };
+
+  // Auto-refresh once when Trade History opens with Schwab connected, so the
+  // number stays current without the user clicking (skips if recently refreshed).
+  useEffect(() => {
+    if (autoRan.current || !schwabConnected) return;
+    if (!(accounts || []).some((a) => a?.hashValue)) return;
+    autoRan.current = true;
+    let lastAt = 0;
+    try { lastAt = JSON.parse(localStorage.getItem(RECON_KEY) || "null")?.at || 0; } catch { /* ignore */ }
+    if (Date.now() - lastAt > 15 * 60 * 1000) reconcile({ silent: true }); // refresh if stale (>15 min)
+  }, [schwabConnected, accounts]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const acctShort = (r) => {
     if (!r?.acct && !r?.acctId) return null;
@@ -115,8 +135,8 @@ export default function TradeHistory({ closed = [], accounts = [], onUpdate, onD
             </button>
           )}
           {schwabConnected && (
-            <button onClick={reconcile} disabled={txBusy} title="Pull up to a year of executed trades (with real fees) straight from Schwab to reconcile realized P&L to Schwab's Gain/Loss report." style={{ padding: "8px 14px", borderRadius: 8, border: `1px solid ${T.border}`, cursor: "pointer", background: "transparent", color: T.textDim, fontFamily: font, fontSize: 12, fontWeight: 700, opacity: txBusy ? 0.6 : 1 }}>
-              {txBusy ? "Pulling…" : "⟲ Reconcile realized (full history)"}
+            <button onClick={() => reconcile()} disabled={txBusy} title="Refresh realized P&L from your Schwab transactions (auto-refreshes when you open this tab; this forces it now)." style={{ padding: "8px 14px", borderRadius: 8, border: `1px solid ${T.border}`, cursor: "pointer", background: "transparent", color: T.textDim, fontFamily: font, fontSize: 12, fontWeight: 700, opacity: txBusy ? 0.6 : 1 }}>
+              {txBusy ? "Refreshing…" : tx && !tx.error ? "⟲ Refresh from Schwab" : "⟲ Reconcile realized (full history)"}
             </button>
           )}
           {onSync && !schwabConnected && <span style={{ color: T.warn || T.warning, fontFamily: font, fontSize: 11 }}>Schwab not connected — reconnect in the APIs tab first.</span>}
@@ -135,7 +155,7 @@ export default function TradeHistory({ closed = [], accounts = [], onUpdate, onD
                 {tx.stockRealized !== 0 && <> · stock (called-away): <b style={{ color: tx.stockRealized >= 0 ? T.success : T.danger }}>{usd(tx.stockRealized, true)}</b> · combined: <b style={{ color: tx.realized >= 0 ? T.success : T.danger }}>{usd(tx.realized, true)}</b></>}
               </div>
               <div style={{ color: T.textDim, fontSize: 11, marginTop: 4 }}>
-                Closed positions only (never working), net of real fees — each number is Schwab's own <code>netAmount</code>. {tx.closedCount} closed, {tx.openCount} open excluded. An assigned call's premium is option income; the called-away shares are a separate stock realization (Schwab's Gain/Loss combines them).
+                Closed positions only (never working), net of real fees — each number is Schwab's own <code>netAmount</code>. {tx.closedCount} closed, {tx.openCount} open excluded. An assigned call's premium is option income; the called-away shares are a separate stock realization (Schwab's Gain/Loss combines them).{txAt ? ` · updated ${new Date(txAt).toLocaleString()}` : ""}
               </div>
               {tx.closed?.length > 0 && (
                 <div style={{ marginTop: 10, display: "grid", gridTemplateColumns: "1fr auto auto auto", columnGap: 16, rowGap: 3, fontSize: 11.5, maxHeight: 260, overflow: "auto" }}>
