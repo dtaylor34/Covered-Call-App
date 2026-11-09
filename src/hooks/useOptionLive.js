@@ -23,6 +23,7 @@ export function useOptionLive(positions, { refreshMs = 60000 } = {}) {
 
   const [live, setLive] = useState({});
   const [status, setStatus] = useState({ source: "yahoo", loading: false, error: null, at: null });
+  const [refreshKey, setRefreshKey] = useState(0); // bump to force an immediate re-fetch
 
   // Unique (symbol, expiry) pairs — one chain fetch covers every leg that shares them.
   const chainKey = useMemo(
@@ -46,7 +47,7 @@ export function useOptionLive(positions, { refreshMs = 60000 } = {}) {
         let norm = null, source = "yahoo";
         if (schwabOn) {
           try {
-            const res = await schwabGetOptionChain({ symbol: sym, expiration: expiry, strikeCount: 50 });
+            const res = await schwabGetOptionChain({ symbol: sym, expiration: expiry, strikeCount: 250 });
             const n = normalizeSchwabChain(res?.data);
             if (Object.keys(n.chain).length) { norm = n; source = "schwab"; anySchwab = true; }
           } catch { /* fall back to Yahoo */ }
@@ -78,7 +79,7 @@ export function useOptionLive(positions, { refreshMs = 60000 } = {}) {
     run();
     const t = refreshMs > 0 ? setInterval(run, refreshMs) : null;
     return () => { cancelled = true; if (t) clearInterval(t); };
-  }, [chainKey, schwabOn, refreshMs, positions]);
+  }, [chainKey, schwabOn, refreshMs, positions, refreshKey]);
 
-  return { live, status };
+  return { live, status, refresh: () => setRefreshKey((k) => k + 1) };
 }

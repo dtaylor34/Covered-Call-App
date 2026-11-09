@@ -106,7 +106,7 @@ export default function OptionsWorkingTab() {
   const [importMsg, setImportMsg] = useState(null);
 
   // Live marks (Schwab-first, Yahoo fallback), merged over stored prices for display.
-  const { live, status: liveStatus } = useOptionLive(positions);
+  const { live, status: liveStatus, refresh: refreshLive } = useOptionLive(positions);
   const livePositions = useMemo(() => positions.map((p) => {
     const lv = live[p.id];
     return lv ? { ...p, livePrice: lv.livePrice ?? p.livePrice, liveUnderlying: lv.liveUnderlying ?? p.liveUnderlying } : p;
@@ -224,9 +224,14 @@ export default function OptionsWorkingTab() {
               style={{ color: liveStatus.loading ? T.textDim : !mktOpen ? (T.warn || T.textDim) : liveStatus.source === "schwab" ? T.success : T.textDim, fontSize: 10, fontFamily: T.fontChart }}>
               {liveStatus.loading ? "updating…"
                 : !mktOpen ? `⏸ marks as of close${liveStatus.at ? " · " + fmtClock(liveStatus.at) : ""}`
-                : liveStatus.source === "schwab" ? "● Schwab live"
-                : "Yahoo · 15-min delayed"}
+                : liveStatus.source === "schwab" ? `● Schwab live${liveStatus.at ? " · " + fmtClock(liveStatus.at) : ""}`
+                : `Yahoo · 15-min delayed${liveStatus.at ? " · " + fmtClock(liveStatus.at) : ""}`}
             </span>
+          )}
+          {livePositions.length > 0 && schwabConnected && (
+            <button onClick={refreshLive} disabled={liveStatus.loading} title="Force a fresh option-mark pull from Schwab right now (marks also auto-refresh every 60s)." style={{ padding: "6px 10px", borderRadius: 7, border: `1px solid ${T.border}`, cursor: "pointer", background: "transparent", color: T.textDim, fontFamily: T.fontChart, fontSize: 11, fontWeight: 700, opacity: liveStatus.loading ? 0.6 : 1 }}>
+              {liveStatus.loading ? "…" : "⟲ Update prices"}
+            </button>
           )}
           {schwabConnected && (
             <button onClick={syncFromSchwab} disabled={importing} style={{ padding: "10px 16px", borderRadius: 8, border: `1px solid ${T.accent}`, cursor: "pointer", background: "transparent", color: T.accent, fontFamily: T.fontChart, fontSize: 13, fontWeight: 700, opacity: importing ? 0.6 : 1 }}>

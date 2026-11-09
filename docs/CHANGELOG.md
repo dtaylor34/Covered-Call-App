@@ -1,3 +1,10 @@
+## [2.6.9] — 2026-11-09
+
+### Changed
+- **Options Working — live marks.** Added a **⟲ Update prices** button to force an immediate Schwab mark pull, the live badge now shows the **source + timestamp** (e.g. "● Schwab live · 10:42:03"), and the Schwab chain request widened from 50 to 250 strikes so deep OTM/ITM positions always get a fresh mark (was falling back to delayed Yahoo).
+
+---
+
 ## [2.6.8] — 2026-11-06
 
 ### Added
