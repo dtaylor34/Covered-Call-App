@@ -1,3 +1,5 @@
+> ⚠️ **Moved.** The living status/resume doc is now **[docs/PROJECT_STATUS.md](PROJECT_STATUS.md)** — read that to pick up. This file is kept for history.
+
 # NEXT STEPS — pick up here
 
 > Handoff note so any new session knows the state and what to do next.
